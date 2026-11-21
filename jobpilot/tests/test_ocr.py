@@ -4,13 +4,17 @@ fixtures/ocr_resume.png 是用字体画出来的合成简历片段，不含真�
 切图和按行合并是纯函数，用构造的图片和坐标单独测，不依赖识别结果。
 """
 
+import asyncio
+import threading
 from io import BytesIO
 from pathlib import Path
 
+import anyio.to_thread
 import httpx
 import pytest
 from PIL import Image, ImageDraw
 
+from jobpilot.api import ocr as ocr_api
 from jobpilot.api.ocr import MAX_UPLOAD_BYTES
 from jobpilot.services import parsing
 from jobpilot.services.parsing import (
@@ -216,3 +220,79 @@ async def test_ocr_endpoint_rejects_bad_uploads(
     response = await signed_in.post("/api/ocr", files=files)
 
     assert response.status_code == status, response.text
+
+
+# ---------- 排队：在事件循环里等，不占线程；名额满了返回 503 ----------
+
+
+class StalledOcr:
+    """替换真实识别：开始后停住，直到测试放行；记录同时在识别的数量。"""
+
+    def __init__(self) -> None:
+        self.running = 0
+        self.release = threading.Event()
+
+    def __call__(self, filename: str, data: bytes) -> list[str]:
+        self.running += 1
+        self.release.wait(timeout=5)
+        self.running -= 1
+        return [filename]
+
+
+@pytest.fixture
+def stalled_ocr(monkeypatch: pytest.MonkeyPatch) -> StalledOcr:
+    fake = StalledOcr()
+    monkeypatch.setattr(ocr_api, "ocr_pages", fake)
+    return fake
+
+
+def upload(name: str) -> list:
+    return [("files", (name, b"x", "image/png"))]
+
+
+async def wait_until_admitted(count: int) -> None:
+    for _ in range(500):
+        if ocr_api.ocr_queue.requests == count:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"等了 5 秒仍没有 {count} 个请求进入队列")
+
+
+async def test_waiting_requests_hold_no_thread(
+    signed_in: httpx.AsyncClient, stalled_ocr: StalledOcr
+) -> None:
+    """3 个请求同时到达：只有 1 个在线程里识别。
+
+    另 2 个在事件循环里等，不占共用线程池。
+    """
+    tasks = [
+        asyncio.create_task(signed_in.post("/api/ocr", files=upload(f"{n}.png")))
+        for n in range(3)
+    ]
+    await wait_until_admitted(3)
+
+    assert stalled_ocr.running == 1
+    assert ocr_api.ocr_queue.limiter.borrowed_tokens == 1
+    assert anyio.to_thread.current_default_thread_limiter().borrowed_tokens == 0
+
+    stalled_ocr.release.set()
+    responses = await asyncio.gather(*tasks)
+    assert [r.status_code for r in responses] == [200, 200, 200]
+
+
+async def test_full_queue_returns_503_and_frees_the_slot(
+    signed_in: httpx.AsyncClient,
+    stalled_ocr: StalledOcr,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ocr_api.ocr_queue, "max_requests", 1)
+    first = asyncio.create_task(signed_in.post("/api/ocr", files=upload("1.png")))
+    await wait_until_admitted(1)
+
+    rejected = await signed_in.post("/api/ocr", files=upload("2.png"))
+    stalled_ocr.release.set()
+
+    assert rejected.status_code == 503
+    assert rejected.headers["retry-after"] == "10"
+    assert (await first).status_code == 200
+    assert ocr_api.ocr_queue.requests == 0  # 请求结束后名额归还

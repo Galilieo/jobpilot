@@ -8,6 +8,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 
@@ -61,8 +62,10 @@ class UserOut(BaseModel):
 @router.post("/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, db: DbSession) -> UserOut:
     """创建账号；不自动登录，前端随后调用登录接口。"""
+    # argon2 故意算得慢（约 20 毫秒），放到线程池，不卡住事件循环上的其他请求。
+    hashed = await run_in_threadpool(hash_password, body.password)
     try:
-        user = await create_account(db, body.email, hash_password(body.password))
+        user = await create_account(db, body.email, hashed)
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
@@ -84,7 +87,9 @@ async def login(body: LoginRequest, response: Response, db: DbSession) -> None:
     """
     user = await find_account_by_email(db, body.email)
     hashed = user.hashed_password if user is not None else None
-    if not verify_password(body.password, hashed) or user is None:
+    # argon2 故意算得慢（约 20 毫秒），放到线程池，不卡住事件循环上的其他请求。
+    password_ok = await run_in_threadpool(verify_password, body.password, hashed)
+    if not password_ok or user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误"
         )

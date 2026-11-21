@@ -3,10 +3,13 @@
 简历和 JD 共用这个接口。用户在文本框里核对、修改后，再把文字提交给各自的上传接口。
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated
 
+import anyio
+import anyio.to_thread
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
-from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from jobpilot.api.deps import CurrentUser
@@ -20,6 +23,46 @@ from jobpilot.services.parsing import (
 router = APIRouter(prefix="/api", tags=["ocr"])
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+class OcrQueue:
+    """OCR 请求在事件循环里排队，轮到了才借一个线程去识别。
+
+    等待中的请求只是暂停的协程，不占线程；共用线程池（默认 40 个）不会被排队的请求占满。
+    识别一次就占满全部 CPU 核心，并行没有好处，所以同时只识别一个文件。
+    """
+
+    def __init__(self, max_requests: int) -> None:
+        self.max_requests = max_requests  # 正在识别的加上排队的
+        self.requests = 0
+        self.limiter = anyio.CapacityLimiter(1)
+
+    @asynccontextmanager
+    async def admit(self) -> AsyncIterator[None]:
+        """名额已满时直接返回 503，不让请求无限等下去。
+
+        检查和加一之间没有 await，单线程的事件循环不会在中间切到别的请求，计数不用加锁。
+        """
+        if self.requests >= self.max_requests:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="识别繁忙，请稍后再试",
+                headers={"Retry-After": "10"},
+            )
+        self.requests += 1
+        try:
+            yield
+        finally:
+            self.requests -= 1
+
+    async def run(self, filename: str, data: bytes) -> list[str]:
+        return await anyio.to_thread.run_sync(
+            ocr_pages, filename, data, limiter=self.limiter
+        )
+
+
+# 1 个正在识别，最多再排 3 个；单张截图约 1 秒，排在最后的请求等几秒。
+ocr_queue = OcrQueue(max_requests=4)
 
 
 class OcrOut(BaseModel):
@@ -45,21 +88,21 @@ async def recognize(
         )
 
     pages: list[str] = []
-    for upload in files:
-        data = await _read_limited(upload)
-        try:
-            # 识别要几秒且占满 CPU，放到线程池里，事件循环继续处理其他请求。
-            pages += await run_in_threadpool(ocr_pages, upload.filename or "", data)
-        except UnsupportedFormatError as error:
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail=f"{upload.filename}：{error}",
-            ) from None
-        except ParseError as error:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"{upload.filename}：{error}",
-            ) from None
+    async with ocr_queue.admit():
+        for upload in files:
+            data = await _read_limited(upload)
+            try:
+                pages += await ocr_queue.run(upload.filename or "", data)
+            except UnsupportedFormatError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    detail=f"{upload.filename}：{error}",
+                ) from None
+            except ParseError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"{upload.filename}：{error}",
+                ) from None
     return OcrOut(text="\n\n".join(page for page in pages if page), pages=pages)
 
 
