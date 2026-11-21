@@ -27,6 +27,7 @@ PUBLIC_ROUTES: set[Route] = {
 SELF_ROUTES: set[Route] = {
     ("POST", "/api/auth/logout"),
     ("GET", "/api/me"),
+    ("POST", "/api/ocr"),  # 识别结果直接返回，不读写任何已保存的数据
 }
 
 
@@ -122,6 +123,14 @@ def test_every_api_route_is_classified() -> None:
         f"这些接口还没登记到隔离测试：{sorted(unclassified)}，"
         "请加入 PUBLIC_ROUTES、SELF_ROUTES 或 OWNED_RESOURCES"
     )
+
+
+def test_self_routes_take_no_resource_id() -> None:
+    """SELF 接口只能从登录态知道「是谁」。路径一旦带 {id}，就可能访问别人的资源，
+    必须改登记到 OWNED_RESOURCES，接受 404 隔离测试。"""
+    with_id = sorted(route for route in SELF_ROUTES if "{" in route[1])
+
+    assert not with_id, f"这些 SELF 接口带路径参数：{with_id}"
 
 
 @pytest.mark.parametrize(

@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.auth import router as auth_router
+from jobpilot.api.ocr import router as ocr_router
 from jobpilot.config import settings
 from jobpilot.db.session import check_database, create_database_engine, get_session
 
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="JobPilot", lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(ocr_router)
 
 
 @app.get("/api/health")

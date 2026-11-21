@@ -1,19 +1,25 @@
-"""把上传的简历文件变成纯文本；只做格式转换，不连数据库、不调用模型。
+"""把上传的简历和 JD 文件变成纯文本；只做格式转换，不连数据库、不调用模型。
 
-支持 TXT、Markdown、HTML、DOCX 和文字版 PDF。图片和提取不到文字的 PDF 抛出
-NeedsOcrError，由调用方转去 OCR，识别结果经用户核对后再提交。
+extract_text 处理 TXT、Markdown、HTML、DOCX 和文字版 PDF。图片和提取不到文字的 PDF
+抛出 NeedsOcrError，改走 ocr_pages：在本机用 RapidOCR 识别，识别结果经用户核对后再提交。
 所有结果都经过 normalize_text，粘贴的文本也走同一个函数，保证引用位置按同一份文本计算。
 """
 
 import re
+import threading
+from functools import cache
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import PurePath
 
+import numpy as np
+import pypdfium2 as pdfium
 from docx import Document
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader
+from rapidocr import RapidOCR
 
 TEXT_SUFFIXES = frozenset({".txt", ".md", ".markdown"})
 HTML_SUFFIXES = frozenset({".html", ".htm"})
@@ -27,8 +33,8 @@ _PDF_MAGIC = b"%PDF-"
 _ZIP_MAGIC = b"PK\x03\x04"  # DOCX 本质是 zip 包
 
 # NUL 不能存进 PostgreSQL 的 text；零宽字符看不见，却会让原文片段对不上。
-_INVISIBLE = dict.fromkeys(map(ord, "\x00​‌‍⁠﻿"))
-_TRAILING_SPACES = re.compile(r"[ \t　]+\n")
+_INVISIBLE = dict.fromkeys(map(ord, "\x00\u200b\u200c\u200d\u2060\ufeff"))
+_TRAILING_SPACES = re.compile(r"[ \t\u3000]+\n")
 _EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
 
 
@@ -219,3 +225,150 @@ def _pdf_to_text(data: bytes) -> str:
     if visible_chars < _MIN_CHARS_PER_PAGE * max(page_count, 1):
         raise NeedsOcrError("PDF 中几乎没有可提取的文字，可能是扫描件")
     return "\n\n".join(pages)
+
+
+# ---------- OCR：图片与扫描版 PDF ----------
+
+MAX_OCR_IMAGES = 10
+# 手机长截图约 1170×20000，约 2300 万像素；再大的图多半是异常文件或解压炸弹。
+MAX_IMAGE_PIXELS = 40_000_000
+_IMAGE_FORMATS = frozenset({"PNG", "JPEG", "WEBP"})
+_PDF_RENDER_SCALE = 2  # 72 dpi × 2，A4 页渲染成约 1190×1684 像素
+
+# RapidOCR 会把最长边缩到 2000 像素再检测文字。实测宽 1170 的截图高 6000 仍能全部识别，
+# 高 12000 时一行都认不出，所以高图先切成高度不超过宽度 3 倍的几段。
+_MAX_SEGMENT_RATIO = 3
+_MIN_SEGMENT_HEIGHT = 2000
+# 切点优先选在颜色一致的行（行内最亮与最暗相差小于这个值），避免把一行字切成两半。
+_BLANK_ROW_TOLERANCE = 10
+
+# onnxruntime 每次识别会占满全部 CPU 核心；pdfium 不是线程安全的。
+# 所以同一时间只处理一个文件，多个请求排队。
+_OCR_LOCK = threading.Lock()
+
+
+def ocr_pages(filename: str, data: bytes) -> list[str]:
+    """识别一个图片或扫描版 PDF 文件，每张图片或每页 PDF 返回一段文本。
+
+    识别慢且占 CPU，接口层应放到线程里调用，不要直接在事件循环里执行。
+    """
+    suffix = PurePath(filename).suffix.lower()
+    if suffix not in IMAGE_SUFFIXES and suffix != ".pdf":
+        raise UnsupportedFormatError(f"OCR 只支持图片和 PDF：{suffix or '无扩展名'}")
+    with _OCR_LOCK:
+        if suffix == ".pdf":
+            _require_magic(data, _PDF_MAGIC, "PDF")
+            images = _render_pdf(data)
+        else:
+            images = [load_image(data)]
+        return [_ocr_image(image) for image in images]
+
+
+def load_image(data: bytes) -> Image.Image:
+    """按文件内容（不是扩展名）确认图片格式，检查尺寸，按 EXIF 摆正方向。"""
+    try:
+        image = Image.open(BytesIO(data))
+    except UnidentifiedImageError as error:
+        raise UnsupportedFormatError("文件内容不是 PNG、JPEG 或 WebP 图片") from error
+    if image.format not in _IMAGE_FORMATS:
+        raise UnsupportedFormatError(f"不支持的图片格式：{image.format}")
+    # Image.open 只读文件头，这里在解码像素之前拦下超大图片。
+    if image.width * image.height > MAX_IMAGE_PIXELS:
+        raise UnreadableFileError("图片尺寸过大")
+    try:
+        # 手机照片常把方向写在 EXIF 里，不摆正的话文字是横着的。
+        return ImageOps.exif_transpose(image).convert("RGB")
+    except OSError as error:  # 文件头正常但像素数据损坏
+        raise UnreadableFileError("图片已损坏") from error
+
+
+def _ocr_image(image: Image.Image) -> str:
+    """识别一张图片；高图分段识别后按顺序拼接。调用方需持有 _OCR_LOCK。"""
+    lines: list[str] = []
+    for segment in split_tall_image(image):
+        result = _engine()(np.asarray(segment))
+        if result.txts:
+            lines.extend(group_lines(result.boxes.tolist(), list(result.txts)))
+    return normalize_text("\n".join(lines))
+
+
+def split_tall_image(image: Image.Image) -> list[Image.Image]:
+    """把过高的图片按空白行切成几段；不高的图片原样返回。"""
+    limit = max(image.width * _MAX_SEGMENT_RATIO, _MIN_SEGMENT_HEIGHT)
+    if image.height <= limit:
+        return [image]
+
+    gray = np.asarray(image.convert("L"), dtype=np.int16)
+    blank_rows = (gray.max(axis=1) - gray.min(axis=1)) < _BLANK_ROW_TOLERANCE
+    segments: list[Image.Image] = []
+    top = 0
+    while image.height - top > limit:
+        cut = _blank_row_near(blank_rows, low=top + limit // 2, high=top + limit)
+        segments.append(image.crop((0, top, image.width, cut)))
+        top = cut
+    segments.append(image.crop((0, top, image.width, image.height)))
+    return segments
+
+
+def _blank_row_near(blank_rows: np.ndarray, low: int, high: int) -> int:
+    """在 [low, high) 内从下往上找最靠下的空白行；找不到就在 high 处硬切。"""
+    candidates = np.flatnonzero(blank_rows[low:high])
+    return low + int(candidates[-1]) if candidates.size else high
+
+
+_Box = tuple[float, float, float, str]  # (上边 y, 下边 y, 左边 x, 文字)
+
+
+def group_lines(boxes: list[list[list[float]]], texts: list[str]) -> list[str]:
+    """把 RapidOCR 的文字框按行合并。
+
+    同一行左右两块文字（如「公司名」和「2024.07」）是两个框，竖直方向重叠超过一半就算
+    同一行，从左到右用空格连接。每个框是四个角的坐标：左上、右上、右下、左下。
+    """
+    items: list[_Box] = []
+    for box, text in zip(boxes, texts, strict=True):
+        ys = [y for _, y in box]
+        items.append((min(ys), max(ys), box[0][0], text))
+    items.sort(key=lambda item: (item[0], item[2]))  # 先按上边，再按左边
+
+    rows: list[list[_Box]] = []
+    for item in items:
+        if rows and _same_row(rows[-1], item):
+            rows[-1].append(item)
+        else:
+            rows.append([item])
+    return [
+        " ".join(text for *_, text in sorted(row, key=lambda item: item[2]))
+        for row in rows
+    ]
+
+
+def _same_row(row: list[_Box], item: _Box) -> bool:
+    row_top = min(top for top, *_ in row)
+    row_bottom = max(bottom for _, bottom, *_ in row)
+    top, bottom, *_ = item
+    overlap = min(row_bottom, bottom) - max(row_top, top)
+    return overlap > 0.5 * min(row_bottom - row_top, bottom - top)
+
+
+def _render_pdf(data: bytes) -> list[Image.Image]:
+    """把扫描版 PDF 的每一页渲染成图片。"""
+    try:
+        document = pdfium.PdfDocument(data)
+    except pdfium.PdfiumError as error:
+        raise UnreadableFileError("PDF 文件无法解析或已加密") from error
+    try:
+        if len(document) > MAX_PDF_PAGES:
+            raise UnreadableFileError(f"PDF 超过 {MAX_PDF_PAGES} 页")
+        return [
+            page.render(scale=_PDF_RENDER_SCALE).to_pil().convert("RGB")
+            for page in document
+        ]
+    finally:
+        document.close()
+
+
+@cache
+def _engine() -> RapidOCR:
+    """第一次识别时才加载模型，之后复用同一个引擎；模型文件随 rapidocr 安装包自带。"""
+    return RapidOCR(params={"Global.log_level": "warning"})

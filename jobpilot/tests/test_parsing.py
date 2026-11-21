@@ -23,7 +23,10 @@ from jobpilot.services.parsing import (
 
 
 def test_normalize_unifies_newlines_and_removes_invisible_characters() -> None:
-    raw = "﻿项目：课程排班\r\n负责​筛选功能  \r\n\r\n\r\n\r\n技能\x00：Python\t\n"
+    raw = (
+        "\ufeff项目：课程排班\r\n负责\u200b筛选功能  \r\n"
+        "\r\n\r\n\r\n技能\x00：Python\t\n"
+    )
 
     assert normalize_text(raw) == "项目：课程排班\n负责筛选功能\n\n技能：Python"
 
@@ -38,7 +41,7 @@ def test_normalize_keeps_visible_characters_unchanged() -> None:
 
 @pytest.mark.parametrize("filename", ["resume.txt", "简历.MD", "notes.markdown"])
 def test_plain_text_formats_are_read_as_utf8(filename: str) -> None:
-    data = "﻿# 项目经历\n- 实现按周次筛选".encode()
+    data = "\ufeff# 项目经历\n- 实现按周次筛选".encode()
 
     assert extract_text(filename, data) == "# 项目经历\n- 实现按周次筛选"
 
@@ -83,7 +86,7 @@ def test_html_table_cells_are_tab_separated() -> None:
 
 
 def test_html_file_goes_through_normalize() -> None:
-    data = "<p>项目​经历</p>".encode()
+    data = "<p>项目\u200b经历</p>".encode()
 
     assert extract_text("resume.html", data) == "项目经历"
 
