@@ -3,20 +3,20 @@
   "facts": [
     {
       "experience": "教育经历",
-      "kind": "role",
+      "kind": "action",
       "responsibility": "na",
-      "text": "岚江大学电子信息专业硕士，方向为工业图像中的小样本缺陷识别",
+      "text": "研究方向为工业图像中的小样本缺陷识别",
       "has_number": false,
-      "source_quote": "岚江大学，电子信息，硕士。方向：工业图像中的小样本缺陷识别",
+      "source_quote": "方向：工业图像中的小样本缺陷识别",
       "needs_confirmation": false
     },
     {
       "experience": "教育经历",
-      "kind": "role",
+      "kind": "action",
       "responsibility": "na",
-      "text": "东钧工业学院自动化专业本科，毕业设计为传送带零件计数装置",
+      "text": "毕业设计为传送带零件计数装置",
       "has_number": false,
-      "source_quote": "东钧工业学院，自动化，本科。毕业设计：传送带零件计数装置",
+      "source_quote": "毕业设计：传送带零件计数装置",
       "needs_confirmation": false
     },
     {
@@ -224,15 +224,6 @@
       "text": "负责数据处理和实验设置部分",
       "has_number": false,
       "source_quote": "我负责数据处理和实验设置部分",
-      "needs_confirmation": false
-    },
-    {
-      "experience": "学院视觉实验课助教",
-      "kind": "role",
-      "responsibility": "na",
-      "text": "学院视觉实验课助教",
-      "has_number": false,
-      "source_quote": "学院视觉实验课助教",
       "needs_confirmation": false
     },
     {

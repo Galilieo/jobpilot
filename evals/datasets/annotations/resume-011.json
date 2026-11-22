@@ -3,15 +3,6 @@
   "facts": [
     {
       "experience": "教育经历",
-      "kind": "role",
-      "responsibility": "na",
-      "text": "东澜理工学院软件工程专业本科",
-      "has_number": false,
-      "source_quote": "东澜理工学院 ｜ 软件工程 ｜ 本科",
-      "needs_confirmation": false
-    },
-    {
-      "experience": "教育经历",
       "kind": "action",
       "responsibility": "na",
       "text": "主要课程：数据结构、数据库原理、计算机网络、软件工程",
@@ -261,15 +252,6 @@
       "has_number": false,
       "source_quote": "和管理员核对后在录入页加了规格提示",
       "needs_confirmation": true
-    },
-    {
-      "experience": "学院机房开放值班志愿者",
-      "kind": "role",
-      "responsibility": "na",
-      "text": "学院机房开放值班志愿者",
-      "has_number": false,
-      "source_quote": "学院机房开放值班志愿者",
-      "needs_confirmation": false
     },
     {
       "experience": "学院机房开放值班志愿者",

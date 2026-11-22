@@ -4,15 +4,6 @@
   "facts": [
     {
       "experience": "教育经历",
-      "kind": "role",
-      "responsibility": "na",
-      "text": "North Inlet University 应用数学理学学士，辅修计算机科学",
-      "has_number": false,
-      "source_quote": "North Inlet University, Canada Expected May 2027 BSc, Applied Mathematics, minor in Computer Science",
-      "needs_confirmation": false
-    },
-    {
-      "experience": "教育经历",
       "kind": "result",
       "responsibility": "na",
       "text": "GPA 3.63/4.00",
@@ -145,15 +136,6 @@
       "has_number": true,
       "source_quote": "The initial load covered 320 documents",
       "needs_confirmation": true
-    },
-    {
-      "experience": "Quantitative Learning Centre 同伴辅导",
-      "kind": "role",
-      "responsibility": "na",
-      "text": "数学学习中心同伴辅导员",
-      "has_number": false,
-      "source_quote": "Quantitative Learning Centre | Peer Tutor",
-      "needs_confirmation": false
     },
     {
       "experience": "Quantitative Learning Centre 同伴辅导",
