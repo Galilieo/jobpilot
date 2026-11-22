@@ -1,0 +1,86 @@
+{
+  "sample_id": "resume-002",
+  "facts": [
+    {
+      "experience": "校内器材预约系统",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责预约确认接口",
+      "has_number": false,
+      "source_quote": "负责预约确认接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "使用 Spring Boot 和 PostgreSQL 实现同一时段的重复提交检查",
+      "has_number": false,
+      "source_quote": "负责预约确认接口，使用 Spring Boot 和 PostgreSQL 实现同一时段的重复提交检查",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "设计预约请求的幂等键",
+      "has_number": false,
+      "source_quote": "负责设计预约请求的幂等键",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "使用数据库唯一约束处理客户端超时后的重复提交",
+      "has_number": false,
+      "source_quote": "负责设计预约请求的幂等键，使用数据库唯一约束处理客户端超时后的重复提交",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "参与管理端联调",
+      "has_number": false,
+      "source_quote": "参与管理端联调",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "修复取消预约后列表状态更新延迟的问题",
+      "has_number": false,
+      "source_quote": "参与管理端联调，修复取消预约后列表状态更新延迟的问题",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在本地用 20 个并发用户模拟重复预约，连续运行 10 分钟",
+      "has_number": true,
+      "source_quote": "在本地用 20 个并发用户模拟重复预约，连续运行 10 分钟",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "预约确认接口 P95 耗时由 320 毫秒降至 210 毫秒",
+      "has_number": true,
+      "source_quote": "预约确认接口 P95 耗时由 320 毫秒降至 210 毫秒",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校内器材预约系统",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "编写 8 条接口测试，覆盖相同幂等键重试、不同用户抢占同一时段和取消后重新预约",
+      "has_number": true,
+      "source_quote": "编写 8 条接口测试，覆盖相同幂等键重试、不同用户抢占同一时段和取消后重新预约",
+      "needs_confirmation": true
+    }
+  ]
+}

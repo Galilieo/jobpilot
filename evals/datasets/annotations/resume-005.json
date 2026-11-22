@@ -1,0 +1,59 @@
+{
+  "sample_id": "resume-005",
+  "facts": [
+    {
+      "experience": "校园办事材料检查助手",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "参与办事材料检查原型",
+      "has_number": false,
+      "source_quote": "参与办事材料检查原型",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园办事材料检查助手",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 Python 读取文本版材料要求并生成待核对清单",
+      "has_number": false,
+      "source_quote": "负责用 Python 读取文本版材料要求并生成待核对清单",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园办事材料检查助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "协助接入模型接口",
+      "has_number": false,
+      "source_quote": "协助接入模型接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园办事材料检查助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "人工复核 18 份合成表单，记录缺项漏报与字段误判",
+      "has_number": true,
+      "source_quote": "人工复核 18 份合成表单，记录缺项漏报与字段误判",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园办事材料检查助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "根据复核结果补充空字段和同名字段的样例",
+      "has_number": false,
+      "source_quote": "根据复核结果补充了空字段和同名字段的样例",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园办事材料检查助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在页面上提示用户确认不明确的填写项",
+      "has_number": false,
+      "source_quote": "在页面上提示用户确认不明确的填写项",
+      "needs_confirmation": true
+    }
+  ]
+}
