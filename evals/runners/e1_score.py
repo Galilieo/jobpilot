@@ -214,9 +214,12 @@ def score_record(record: dict[str, Any], raw_text: str) -> dict[str, Any]:
         understated = RANK.get(pred["responsibility"], -1) < RANK.get(
             gold["responsibility"], -1
         )
-        wrong_numbers = numbers_missing_from_quote(
-            pred["text"], gold["text"] + " " + gold["source_quote"]
-        )
+        # 拆得比标注粗时，预测里会带上别的标注的数字；只要数字在已通过校验的
+        # 预测片段里，它就来自原文，不算错。
+        evidence = [gold["text"], gold["source_quote"]]
+        if pred["quote_verified"]:
+            evidence.append(pred["source_quote"])
+        wrong_numbers = numbers_missing_from_quote(pred["text"], " ".join(evidence))
         problem = exaggerated or bool(wrong_numbers) or gold["needs_confirmation"]
         flag_rows.append(
             (
