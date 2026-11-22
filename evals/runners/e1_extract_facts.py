@@ -6,6 +6,9 @@
     uv run --project jobpilot python -m evals.runners.e1_extract_facts
     uv run --project jobpilot python -m evals.runners.e1_extract_facts \
         --runs 1 resume-003
+    uv run --project jobpilot python -m evals.runners.e1_extract_facts resume-019
+
+最后一条单独运行英文探针，它不在默认的开发集里。
 
 运行和计分分开：输出保存下来以后，改计分规则只需重新计分，不必再调用模型。
 调用记录写入开发库，归属一个固定的评测账号。
@@ -37,7 +40,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 EVAL_EMAIL = "e1-eval@example.invalid"
 RESUME_DIR = REPO_ROOT / "evals" / "datasets" / "resumes"
 RESULT_DIR = REPO_ROOT / "evals" / "results"
-DEV_SAMPLES = [f"resume-00{n}" for n in range(1, 6)]
+# 开发集：5 份短样本和 2 份完整简历。英文探针 resume-019 需要单独指定。
+DEV_SAMPLES = [*(f"resume-00{n}" for n in range(1, 6)), "resume-011", "resume-015"]
 
 # 一次运行的额度：允许一次 JSON 修复重发。
 # token 按网关的估算方式（输入字节数 + max_tokens）留足。

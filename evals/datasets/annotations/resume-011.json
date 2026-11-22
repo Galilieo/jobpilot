@@ -1,0 +1,329 @@
+{
+  "sample_id": "resume-011",
+  "facts": [
+    {
+      "experience": "教育经历",
+      "kind": "role",
+      "responsibility": "na",
+      "text": "东澜理工学院软件工程专业本科",
+      "has_number": false,
+      "source_quote": "东澜理工学院 ｜ 软件工程 ｜ 本科",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "主要课程：数据结构、数据库原理、计算机网络、软件工程",
+      "has_number": false,
+      "source_quote": "主要课程：数据结构、数据库原理、计算机网络、软件工程",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "获校级二等奖学金（2024–2025 学年）",
+      "has_number": true,
+      "source_quote": "校级二等奖学金（2024–2025 学年）",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "通过大学英语六级",
+      "has_number": false,
+      "source_quote": "大学英语六级",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "参与仓库出库对账工具的维护，主要跟进运营上传运单后找不到匹配记录的问题",
+      "has_number": false,
+      "source_quote": "参与仓库出库对账工具的维护，主要跟进运营上传运单后找不到匹配记录的问题",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 Python 和 openpyxl 实现承运商 Excel 导入，兼容两种表头",
+      "has_number": true,
+      "source_quote": "负责用 Python 和 openpyxl 实现承运商 Excel 导入，兼容两种表头",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "运单号按字符串读取，避免前导零被吞掉",
+      "has_number": false,
+      "source_quote": "负责用 Python 和 openpyxl 实现承运商 Excel 导入，兼容两种表头。运单号按字符串读取，避免前导零被吞掉",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "校验未通过的行可以单独下载给运营修改",
+      "has_number": false,
+      "source_quote": "负责用 Python 和 openpyxl 实现承运商 Excel 导入，兼容两种表头。运单号按字符串读取，避免前导零被吞掉，校验未通过的行可以单独下载给运营修改",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和导师一起排查日志",
+      "has_number": false,
+      "source_quote": "和导师一起排查日志",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补充同一仓库、同一批次的重复导入校验",
+      "has_number": false,
+      "source_quote": "我补了同一仓库、同一批次的重复导入校验",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在测试环境跑了同名不同内容、改名重传等 8 个场景",
+      "has_number": true,
+      "source_quote": "并在测试环境跑了同名不同内容、改名重传等 8 个场景",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "协助运营核对首批两家仓库的导入结果",
+      "has_number": true,
+      "source_quote": "协助运营核对首批两家仓库的导入结果",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "整理字段说明和常见报错",
+      "has_number": false,
+      "source_quote": "整理字段说明和常见报错",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "功能随 9 月版本发布",
+      "has_number": true,
+      "source_quote": "功能随 9 月版本发布",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "处理过历史运单状态查询",
+      "has_number": false,
+      "source_quote": "日常还处理过历史运单状态查询",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "禾栈仓储软件 后端开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "处理过接口日志排查",
+      "has_number": false,
+      "source_quote": "日常还处理过历史运单状态查询和接口日志排查",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 FastAPI 封装分类接口",
+      "has_number": false,
+      "source_quote": "负责用 FastAPI 封装分类接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "校验模型返回的类别、紧急程度和理由",
+      "has_number": false,
+      "source_quote": "负责用 FastAPI 封装分类接口，校验模型返回的类别、紧急程度和理由",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "类别超出枚举或描述过于笼统时转入待人工确认",
+      "has_number": false,
+      "source_quote": "负责用 FastAPI 封装分类接口，校验模型返回的类别、紧急程度和理由。遇到类别超出枚举或描述只有“帮忙看看”之类的情况，转入待人工确认",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "用 60 条仿写报修记录比较两版提示词，按工种推荐与小组标注一致来计分",
+      "has_number": true,
+      "source_quote": "用 60 条仿写报修记录比较两版提示词，按工种推荐与小组标注一致来计分",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "正确条数从 39 条增加到 46 条",
+      "has_number": true,
+      "source_quote": "正确条数从 39 条增加到 46 条",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和组员联调确认页面",
+      "has_number": false,
+      "source_quote": "和组员联调确认页面",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补充修改前后分类的记录",
+      "has_number": false,
+      "source_quote": "补了修改前后分类的记录",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "物业报修工单分流",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "验收时演示模型把门锁问题分到水电、值班员手动改回的流程",
+      "has_number": false,
+      "source_quote": "验收时演示了模型把门锁问题分到水电、值班员手动改回的流程",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "实验室耗材借领小程序",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责借领和归还接口",
+      "has_number": false,
+      "source_quote": "负责借领和归还接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "实验室耗材借领小程序",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "使用 PostgreSQL 记录库存变动",
+      "has_number": false,
+      "source_quote": "负责借领和归还接口，使用 PostgreSQL 记录库存变动",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "实验室耗材借领小程序",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "归还时按原借领单校验剩余可还数量，避免一次借领被多次全额归还",
+      "has_number": false,
+      "source_quote": "负责借领和归还接口，使用 PostgreSQL 记录库存变动。归还时按原借领单校验剩余可还数量，避免一次借领被多次全额归还",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "实验室耗材借领小程序",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在两个实验小组试用期间，处理过同一耗材被不同简称重复录入的问题",
+      "has_number": true,
+      "source_quote": "在学校两个实验小组试用期间，处理过同一耗材被不同简称重复录入的问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "实验室耗材借领小程序",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和管理员核对后在录入页加了规格提示",
+      "has_number": false,
+      "source_quote": "和管理员核对后在录入页加了规格提示",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "学院机房开放值班志愿者",
+      "kind": "role",
+      "responsibility": "na",
+      "text": "学院机房开放值班志愿者",
+      "has_number": false,
+      "source_quote": "学院机房开放值班志愿者",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院机房开放值班志愿者",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "协助登记借用设备",
+      "has_number": false,
+      "source_quote": "协助登记借用设备",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院机房开放值班志愿者",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "汇总故障记录",
+      "has_number": false,
+      "source_quote": "汇总故障记录",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Python、SQL",
+      "has_number": false,
+      "source_quote": "Python、SQL",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能用 FastAPI 编写接口和用 pytest 写接口测试",
+      "has_number": false,
+      "source_quote": "能用 FastAPI 编写接口和用 pytest 写接口测试",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "实习中使用 Git 提交代码、在 Linux 上排查日志",
+      "has_number": false,
+      "source_quote": "实习中使用 Git 提交代码、在 Linux 上排查日志",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "了解 Docker Compose，能按项目文档启动本地环境",
+      "has_number": false,
+      "source_quote": "了解 Docker Compose，能按项目文档启动本地环境",
+      "needs_confirmation": false
+    }
+  ]
+}

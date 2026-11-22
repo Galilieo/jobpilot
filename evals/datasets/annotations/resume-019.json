@@ -1,0 +1,204 @@
+{
+  "sample_id": "resume-019",
+  "language": "en",
+  "facts": [
+    {
+      "experience": "教育经历",
+      "kind": "role",
+      "responsibility": "na",
+      "text": "North Inlet University 应用数学理学学士，辅修计算机科学",
+      "has_number": false,
+      "source_quote": "North Inlet University, Canada Expected May 2027 BSc, Applied Mathematics, minor in Computer Science",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "GPA 3.63/4.00",
+      "has_number": true,
+      "source_quote": "GPA: 3.63/4.00",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "课程：数据库、概率论、线性代数、分布式系统",
+      "has_number": false,
+      "source_quote": "Coursework: databases, probability, linear algebra, distributed systems",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "维护三家班车运营商的每日数据源，供内部客流看板使用",
+      "has_number": true,
+      "source_quote": "Maintained daily feeds from three shuttle operators for an internal ridership dashboard",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Python 添加缺失文件和超出交付窗口的服务日期检查",
+      "has_number": false,
+      "source_quote": "Added checks in Python for missing files and service dates outside the delivery window",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "记录哪些数据源可以从源头回填",
+      "has_number": false,
+      "source_quote": "and documented which feeds could be backfilled from the source",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "负责行程记录的 dbt staging 模型",
+      "has_number": false,
+      "source_quote": "Owned a dbt staging model for trip records",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "发现夜间行程可能被归到下一个日历日",
+      "has_number": false,
+      "source_quote": "Owned a dbt staging model for trip records. Found that overnight trips could be assigned to the following calendar day",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "与分析师协调改用运营商的服务日期",
+      "has_number": false,
+      "source_quote": "Coordinated with the analyst to use the operator's service date",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "为跨午夜的行程添加测试数据",
+      "has_number": false,
+      "source_quote": "Owned a dbt staging model for trip records. Found that overnight trips could be assigned to the following calendar day. Coordinated with the analyst to use the operator's service date, and added fixtures for trips crossing midnight",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "在分析师签收前于 staging 中重建了 12 周的历史数据",
+      "has_number": true,
+      "source_quote": "Owned a dbt staging model for trip records. Found that overnight trips could be assigned to the following calendar day. Coordinated with the analyst to use the operator's service date, and added fixtures for trips crossing midnight. Rebuilt 12 weeks of history in staging before the analyst signed off",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "跟随值班工程师调查了两次延迟交付",
+      "has_number": true,
+      "source_quote": "Investigated two late deliveries while shadowing the on-call engineer",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Harborreed Transit Analytics 数据工程合作实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "撰写简短的交接说明，包含运行 ID、受影响的看板和重放步骤",
+      "has_number": false,
+      "source_quote": "Wrote a short handover note with the run IDs, affected dashboards, and replay instructions",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Municipal Bylaw Tracker",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "维护导入代码",
+      "has_number": false,
+      "source_quote": "I maintain the import code",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Municipal Bylaw Tracker",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "添加变更日志，使网站能显示通过日期和首次看到修订的日期",
+      "has_number": false,
+      "source_quote": "and added a change log so the site can display the adoption date and the date we first saw a revision",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Municipal Bylaw Tracker",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "初次导入覆盖 320 份文档",
+      "has_number": true,
+      "source_quote": "The initial load covered 320 documents",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "Quantitative Learning Centre 同伴辅导",
+      "kind": "role",
+      "responsibility": "na",
+      "text": "数学学习中心同伴辅导员",
+      "has_number": false,
+      "source_quote": "Quantitative Learning Centre | Peer Tutor",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Quantitative Learning Centre 同伴辅导",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "协助每周面向一年级线性代数的答疑时段",
+      "has_number": false,
+      "source_quote": "Supported weekly drop-in sessions for first-year linear algebra",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Quantitative Learning Centre 同伴辅导",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "整理常见问题清单",
+      "has_number": false,
+      "source_quote": "Kept a list of common questions",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "Quantitative Learning Centre 同伴辅导",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "起草例题供协调人审阅",
+      "has_number": false,
+      "source_quote": "and drafted worked examples for the coordinator to review",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Python、SQL、PostgreSQL、dbt、Git、Docker",
+      "has_number": false,
+      "source_quote": "Python, SQL, PostgreSQL, dbt, Git, Docker",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "实习期间用 Airflow 查看运行并重试失败任务",
+      "has_number": false,
+      "source_quote": "Used Airflow to inspect runs and retry failed tasks during co-op",
+      "needs_confirmation": false
+    }
+  ]
+}
