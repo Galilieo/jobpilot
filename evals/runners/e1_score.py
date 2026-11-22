@@ -419,15 +419,20 @@ def render(result: dict[str, Any], runs: list[list[dict[str, Any]]]) -> str:
         lines += tally(entries) or ["无"]
 
     calls = [c for records in result["_records"] for c in records["calls"]]
-    tokens = [c["prompt_tokens"] + c["completion_tokens"] for c in calls]
-    latency = [c["latency_ms"] for c in calls]
+    # 超时或连接失败的调用没有用量，只计入次数，平均值按成功的调用算。
+    succeeded = [c for c in calls if c["outcome"] == "success"]
+    tokens = [c["prompt_tokens"] + c["completion_tokens"] for c in succeeded]
+    latency = [c["latency_ms"] for c in succeeded]
+    others = Counter(c["outcome"] for c in calls if c["outcome"] != "success")
     errors = [r["error"] for r in result["_records"] if r["error"]]
     lines += [
         "",
         "## 成本与失败",
         "",
-        f"- 调用 {len(calls)} 次；平均 {mean(tokens):.0f} token、"
-        f"{mean(latency) / 1000:.1f} 秒",
+        f"- 调用 {len(calls)} 次，成功 {len(succeeded)} 次；成功调用平均 "
+        f"{mean(tokens):.0f} token、{mean(latency) / 1000:.1f} 秒",
+        "- 未成功的调用："
+        + ("、".join(f"{k} {v} 次" for k, v in others.items()) if others else "无"),
         f"- 失败 {len(errors)} 次" + ("：" + "；".join(errors) if errors else ""),
     ]
     return "\n".join(lines) + "\n"
