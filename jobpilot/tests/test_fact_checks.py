@@ -13,6 +13,7 @@ from jobpilot.services.facts import (
     numbers_missing_from_quote,
     parse_extraction,
     responsibility_supported,
+    role_context,
 )
 
 VALID_OUTPUT = {
@@ -106,12 +107,42 @@ def test_malformed_output_raises_validation_error(mutate) -> None:
         (Responsibility.OWN, "使用 FastAPI 编写接口", False),
         (Responsibility.PARTICIPATE, "使用 FastAPI 编写接口", True),
         (Responsibility.NA, "本科 计算机科学与技术", True),
+        # 只看最后出现的职责词：「参与」截断了前面「负责」的作用范围
+        (Responsibility.OWN, "负责接口开发，参与压测", False),
+        (Responsibility.OWN, "参与需求评审，负责接口开发", True),
     ],
 )
 def test_responsibility_needs_role_word_of_its_level(
     responsibility: Responsibility, quote: str, supported: bool
 ) -> None:
     assert responsibility_supported(responsibility, quote) is supported
+
+
+RESUME_LINES = (
+    "主导三人小组交付原型，决定用 PostgreSQL 管理向量。\n"
+    "负责复现基线。召回率从 71% 升到 83%\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("quote", "context"),
+    [
+        # 同一句前面的分句算进来：模型只抄了后半句也能找到「主导」
+        (
+            "决定用 PostgreSQL 管理向量",
+            "主导三人小组交付原型，决定用 PostgreSQL 管理向量",
+        ),
+        # 不越过句号：上一句的「负责」不支撑这一句的结果
+        ("召回率从 71% 升到 83%", "召回率从 71% 升到 83%"),
+        # 不越过换行：上一行的内容不算
+        ("负责复现基线", "负责复现基线"),
+    ],
+)
+def test_role_context_runs_from_sentence_start_to_quote_end(
+    quote: str, context: str
+) -> None:
+    start = RESUME_LINES.index(quote)
+    assert role_context(RESUME_LINES, start, start + len(quote)) == context
 
 
 # ---------- 数字 ----------

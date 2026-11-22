@@ -166,24 +166,51 @@ class ExtractionResult(BaseModel):
 
 # ---------- 转述检查：text 与标签是否有片段支撑 ----------
 
-# 按级别排列：own 级的词也接受 lead 级的词。T2.2 依据检查建立角色词表后改为共用。
-_LEAD_WORDS = ("主导", "牵头", "带领", "主持", "负责人")
-_OWN_WORDS = ("负责", "独立", "承担", *_LEAD_WORDS)
+# 职责词及其级别。参与级的词不支撑任何职责，只用来截断前面职责词的作用范围。
+# T2.2 依据检查建立角色词表后改为共用。
+_ROLE_LEVELS = {
+    "主导": Responsibility.LEAD,
+    "牵头": Responsibility.LEAD,
+    "带领": Responsibility.LEAD,
+    "主持": Responsibility.LEAD,
+    "负责人": Responsibility.LEAD,
+    "负责": Responsibility.OWN,
+    "独立": Responsibility.OWN,
+    "承担": Responsibility.OWN,
+    "参与": Responsibility.PARTICIPATE,
+    "协助": Responsibility.PARTICIPATE,
+    "配合": Responsibility.PARTICIPATE,
+}
+# 同一位置能匹配多个词时，正则取先列出的那个。
+# 按长度从长到短排列，「负责人」才不会被当成「负责」。
+_ROLE_PATTERN = re.compile("|".join(sorted(_ROLE_LEVELS, key=len, reverse=True)))
+_RANK = {Responsibility.PARTICIPATE: 0, Responsibility.OWN: 1, Responsibility.LEAD: 2}
+# 往前查找职责词时不越过句末标点和换行。
+_SENTENCE_BREAK = re.compile(r"[。！？；!?;\n]")
 _NUMBER_PATTERN = re.compile(r"\d+(?:\.\d+)?")
 
 
-def responsibility_supported(responsibility: Responsibility, quote: str) -> bool:
-    """lead、own 必须在片段里找到对应级别的角色词；participate 和 na 不会夸大，不检查。
+def role_context(raw_text: str, start: int, end: int) -> str:
+    """返回片段所在句子从句首到片段结尾的文字，供职责检查使用。
 
+    模型常只抄职责词后面的半句，所以同一句前面的分句也算依据；
+    但不越过句号和换行，上一句的「负责」不支撑这一句。
+    """
+    breaks = _SENTENCE_BREAK.finditer(raw_text, 0, start)
+    sentence_start = max((match.end() for match in breaks), default=0)
+    return raw_text[sentence_start:end]
+
+
+def responsibility_supported(responsibility: Responsibility, context: str) -> bool:
+    """lead、own 要求 context 中最后出现的职责词达到对应级别；participate、na 不检查。
+
+    取最后一个词：「负责接口开发，参与压测」中，压测归「参与」管，不能借用前面的「负责」。
     只看词是否出现，不理解语义：「不负责」也会被当成有「负责」。
     """
-    if responsibility is Responsibility.LEAD:
-        words = _LEAD_WORDS
-    elif responsibility is Responsibility.OWN:
-        words = _OWN_WORDS
-    else:
+    if responsibility not in (Responsibility.LEAD, Responsibility.OWN):
         return True
-    return any(word in quote for word in words)
+    words = _ROLE_PATTERN.findall(context)
+    return bool(words) and _RANK[_ROLE_LEVELS[words[-1]]] >= _RANK[responsibility]
 
 
 def numbers_missing_from_quote(text: str, quote: str) -> list[str]:
@@ -315,7 +342,9 @@ def _to_draft(
         reasons.append(ReviewReason.RESPONSIBILITY_UNSTATED)
 
     # 下面两项比对的是转述与片段；片段没通过校验时比对没有意义，这条本来就要核对
-    elif spans and not responsibility_supported(responsibility, quote):
+    elif spans and not responsibility_supported(
+        responsibility, role_context(raw_text, span_start, span_end)
+    ):
         reasons.append(ReviewReason.RESPONSIBILITY_UNSUPPORTED)
 
     if spans and numbers_missing_from_quote(fact.text, quote):
