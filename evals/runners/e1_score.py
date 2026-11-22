@@ -437,6 +437,7 @@ def main(path: Path | None) -> int:
             print("evals/results/ 下没有 E1 结果，先运行 e1_extract_facts。")
             return 1
         path = found[-1]
+    path = path.resolve()  # 命令行传入的可能是相对路径
     result = json.loads(path.read_text(encoding="utf-8"))
     result["_path"] = str(path.relative_to(REPO_ROOT))
     result["_records"] = result["results"]
