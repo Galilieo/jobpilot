@@ -299,7 +299,7 @@ async def test_request_wraps_and_redacts_resume_and_is_recorded(
     [call] = await calls_of(session_factory, run)
     assert (call.purpose, call.prompt_version, call.outcome) == (
         "extract_facts",
-        "extract_facts@1",
+        load_prompt("extract_facts").label,
         CallOutcome.SUCCESS,
     )
 
