@@ -1,6 +1,6 @@
 # JobPilot 评测数据
 
-E1 评测简历事实拆分，E2 评测 JD 解析。把原文交给待测功能，再将输出与人工标注对照。首批 10 份合成简历中，`resume-001` 至 `resume-005` 用于开发，`resume-006` 至 `resume-010` 留作测试候选。评测口径见 [04 评测方案](../notes/求职助手Agent/04-评测方案.md)。
+E1 评测简历事实拆分，E2 评测 JD 解析。把原文交给待测功能，再将输出与人工标注对照。首批 10 份短样本中，`resume-001` 至 `resume-005` 用于开发，`resume-006` 至 `resume-010` 留作测试候选。另有 `resume-011` 至 `resume-020` 共 10 份完整简历样本，分组见「完整简历样本」一节。评测口径见 [04 评测方案](../notes/求职助手Agent/04-评测方案.md)。
 
 | 目录 | 内容 |
 | --- | --- |
@@ -48,6 +48,27 @@ E1 评测简历事实拆分，E2 评测 JD 解析。把原文交给待测功能�
 | [resume-008](datasets/resumes/resume-008.txt) | 后端 | 薄弱 | 课程作业、局部参与、测试范围 |
 | [resume-009](datasets/resumes/resume-009.txt) | 算法 | 一般 | 调参集与验证集、检索与问答指标 |
 | [resume-010](datasets/resumes/resume-010.txt) | AI 应用 | 薄弱 | 原文缺失字段、小样本、练习场景 |
+
+### 完整简历样本
+
+10 份样本涵盖实习、校招与初级社招，含 9 份中文和 1 份英文。人物、学校、单位和经历均为合成，学校类型为模拟设定，联系方式使用占位值；`resume-011`、`resume-012` 的手机号为全数字的假号码，用来检验外发前的遮蔽。
+
+**分组（2026-11-22）：** `resume-011`、`resume-015`、`resume-019` 归入开发集，其余 7 份与 `resume-006` 至 `resume-010` 一起作为测试集。011 已经用来讨论规则缺口（他人完成的工作、第一人称、局限说明），只能放开发集；019 是唯一的英文样本，放开发集以便调整时能看到英文的表现；015 补一份研究生、校企课题类型。分组在跑模型之前确定。测试集只用来报告结果：看到它的错误后不针对性修改提示词或规则，新发现的问题记录下来，留到下一轮开发集。
+
+| 简历 | 投递方向 | 教育背景（模拟） | 经历特点 |
+| --- | --- | --- | --- |
+| [resume-011](datasets/resumes/resume-011.txt) | AI 应用 / Python 后端实习 | 地方应用型本科，软件工程 | 仓储软件实习、AI 课程项目与校内试用项目 |
+| [resume-012](datasets/resumes/resume-012.txt) | 大模型应用实习 | 双一流研究型本科，计算机 | 研发实习与实验室项目，覆盖离线回放、检索指标和职责分工 |
+| [resume-013](datasets/resumes/resume-013.txt) | Java 后端社招 | 地方公办本科，计算机，已毕业 | 两年多正式工作加一段实习，覆盖发布、重跑和预发布压测 |
+| [resume-014](datasets/resumes/resume-014.txt) | Web 前端实习 | 民办应用型本科，数字媒体技术 | 小团队实习、社团页面和单机体验测试 |
+| [resume-015](datasets/resumes/resume-015.txt) | 视觉算法实习 | 地方工科本科，升读研究型大学硕士 | 校企课题、助教与课程实验，覆盖数据分组和模型取舍 |
+| [resume-016](datasets/resumes/resume-016.txt) | AI 应用实习 | 地方工科本科，工业设计 | 跨专业，经历来自自学、课程设计和工坊值班 |
+| [resume-017](datasets/resumes/resume-017.txt) | Go 后端实习 | 高职专科升地方工科本科 | 勤工助学、个人命令行工具和社团实际使用的项目 |
+| [resume-018](datasets/resumes/resume-018.txt) | Android 客户端校招 | 高职专科，移动应用开发 | 一段持续中的客户端实习、个人应用与校内技能节 |
+| [resume-019](datasets/resumes/resume-019.txt) | 数据工程实习 | 加拿大公立本科，应用数学、辅修计算机 | 英文简历，带薪合作教育实习、进行中的毕业项目与校内辅导 |
+| [resume-020](datasets/resumes/resume-020.txt) | 软件测试 / 测试开发实习 | 地方师范本科，信息与计算科学 | 零售软件测试实习、课程验收项目和门店兼职 |
+
+中文栏目与经历组合参考[上海纽约大学中文简历范例](https://cdn.shanghai.nyu.edu/sites/default/files/career_guidebook-final.pdf)和[华中师范大学计算机学院求职经验分享](https://cs.ccnu.edu.cn/info/1034/11856.htm)。技术经历、课程项目与校园工作的组织方式参考[UC Davis 技术简历范例（第 27 页）](https://icc.ucdavis.edu/sites/g/files/dgvnsk2236/files/files/page/UCD_CRM_18-19_1.5.pdf)、[Cal Poly 软件工程简历范例](https://content-calpoly-edu.s3.amazonaws.com/careerservices/1/documents/resumes/Software%20Engineering%20PRE-CAREER%20sample.pdf)与[UIC 计算机本科简历范例](https://ecc.uic.edu/wp-content/uploads/sites/78/2026/06/Computer-Science-Updated-Summer-2026.docx.pdf)。
 
 ## E2 JD 标注
 

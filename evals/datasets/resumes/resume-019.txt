@@ -1,0 +1,24 @@
+MAYA LIN
+Vancouver, BC | maya.lin@example.invalid | Seeking a data engineering internship
+
+EDUCATION
+North Inlet University, Canada                                         Expected May 2027
+BSc, Applied Mathematics, minor in Computer Science | GPA: 3.63/4.00
+Coursework: databases, probability, linear algebra, distributed systems.
+
+WORK EXPERIENCE
+Harborreed Transit Analytics | Data Engineering Co-op                    May–Aug 2026
+• Maintained daily feeds from three shuttle operators for an internal ridership dashboard. Added checks in Python for missing files and service dates outside the delivery window, and documented which feeds could be backfilled from the source.
+• Owned a dbt staging model for trip records. Found that overnight trips could be assigned to the following calendar day. Coordinated with the analyst to use the operator's service date, and added fixtures for trips crossing midnight. Rebuilt 12 weeks of history in staging before the analyst signed off.
+• Investigated two late deliveries while shadowing the on-call engineer. Wrote a short handover note with the run IDs, affected dashboards, and replay instructions. The platform engineer executed the production replays.
+
+SELECTED PROJECTS
+Municipal Bylaw Tracker | Team capstone, in progress                       Sep 2026–Present
+Four-person team building a searchable history of draft and adopted bylaws from one city. I maintain the import code and added a change log so the site can display the adoption date and the date we first saw a revision. The initial load covered 320 documents. Scanned attachments are currently indexed by title and date.
+
+CAMPUS EMPLOYMENT
+Quantitative Learning Centre | Peer Tutor                                Jan 2025–Apr 2026
+Supported weekly drop-in sessions for first-year linear algebra. Kept a list of common questions and drafted worked examples for the coordinator to review.
+
+TOOLS
+Python, SQL, PostgreSQL, dbt, Git, Docker. Used Airflow to inspect runs and retry failed tasks during co-op.
