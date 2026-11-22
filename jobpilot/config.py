@@ -69,7 +69,10 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     database_connect_timeout_seconds: int = Field(default=5, gt=0)
 
-    extract_facts: ModelSettings = Field(default_factory=ModelSettings)
+    # 一份简历常拆出几十条事实，2048 容易截断输出，默认放宽到 8192。
+    extract_facts: ModelSettings = Field(
+        default_factory=lambda: ModelSettings(max_tokens=8192)
+    )
     parse_jd: ModelSettings = Field(default_factory=ModelSettings)
     match: ModelSettings = Field(default_factory=ModelSettings)
     plan: ModelSettings = Field(default_factory=ModelSettings)

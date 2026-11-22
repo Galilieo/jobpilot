@@ -62,6 +62,7 @@ def completion_response(
     prompt_tokens: int = 12,
     completion_tokens: int = 3,
     response_id: str = "test",
+    finish_reason: str = "stop",
 ) -> httpx.Response:
     """构造一个 HTTP 200 的 chat completion 响应。"""
     return httpx.Response(
@@ -74,7 +75,7 @@ def completion_response(
             "choices": [
                 {
                     "index": 0,
-                    "finish_reason": "stop",
+                    "finish_reason": finish_reason,
                     "message": {"role": "assistant", "content": content},
                 }
             ],
