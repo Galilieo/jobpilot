@@ -1,0 +1,239 @@
+{
+  "sample_id": "resume-023",
+  "facts": [
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责中小客户的工单、审批流程配置和上线交接",
+      "has_number": false,
+      "source_quote": "负责中小客户的工单、审批流程配置和上线交接",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "参与公司内部的客服辅助工具试点",
+      "has_number": false,
+      "source_quote": "参与公司内部的客服辅助工具试点",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "与客服主管确定交接时要保留故障现象、已做操作和待跟进项",
+      "has_number": false,
+      "source_quote": "与客服主管确定交接时要保留故障现象、已做操作和待跟进项",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "把系统工单字段接入内部模型接口",
+      "has_number": false,
+      "source_quote": "我负责把系统工单字段接入内部模型接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "为模型输出加必填项检查",
+      "has_number": false,
+      "source_quote": "我负责把系统工单字段接入内部模型接口、为输出加必填项检查",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "在摘要旁显示原工单入口",
+      "has_number": false,
+      "source_quote": "我负责把系统工单字段接入内部模型接口、为输出加必填项检查，并在摘要旁显示原工单入口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "旧记录缺少故障现象时，页面提示坐席回填后再生成",
+      "has_number": false,
+      "source_quote": "我负责把系统工单字段接入内部模型接口、为输出加必填项检查，并在摘要旁显示原工单入口。遇到旧记录中缺少故障现象的情况，页面提示坐席回填后再生成",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "抽样复核两组坐席的 52 条历史工单",
+      "has_number": true,
+      "source_quote": "抽样复核两组坐席的 52 条历史工单",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "整理出 9 条摘要把转派留言写成处理结论的案例",
+      "has_number": true,
+      "source_quote": "整理出 9 条摘要把转派留言写成处理结论的案例",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "按问题类型整理后交研发调整提示词",
+      "has_number": false,
+      "source_quote": "按问题类型整理后交研发调整提示词",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "用同一批案例复测",
+      "has_number": false,
+      "source_quote": "我负责用同一批案例复测",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "试点最终开放给两组坐席，保留人工确认",
+      "has_number": true,
+      "source_quote": "试点最终开放给两组坐席，保留人工确认",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "为制造客户配置设备报修流程",
+      "has_number": false,
+      "source_quote": "为制造客户配置设备报修流程",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "整理升级路径和通知模板",
+      "has_number": false,
+      "source_quote": "整理升级路径和通知模板",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和客户管理员分批核对导入后的设备部门、值班人",
+      "has_number": false,
+      "source_quote": "和客户管理员分批核对导入后的设备部门、值班人",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "上线后一周内跟进夜班工单误发给白班的问题",
+      "has_number": false,
+      "source_quote": "上线后一周内跟进了夜班工单误发给白班的问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "修正班次条件",
+      "has_number": false,
+      "source_quote": "修正班次条件",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "简序办公软件 实施工程师",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补充跨零点的验收用例",
+      "has_number": false,
+      "source_quote": "并补了跨零点的验收用例",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桥翌网络服务 技术支持",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "处理账号、通知渠道和数据导入问题",
+      "has_number": false,
+      "source_quote": "处理账号、通知渠道和数据导入问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桥翌网络服务 技术支持",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Python 把交付目录中的日志按客户编号和日期归档，方便值班同事找对应版本",
+      "has_number": false,
+      "source_quote": "用 Python 把交付目录中的日志按客户编号和日期归档，方便值班同事找对应版本",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桥翌网络服务 技术支持",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "批量导入失败时协助客户核对模板和字段格式",
+      "has_number": false,
+      "source_quote": "遇到批量导入失败时，协助客户核对模板和字段格式",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "桥翌网络服务 技术支持",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "为常见报错补充操作截图",
+      "has_number": false,
+      "source_quote": "为常见报错补了操作截图",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工具与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Python、SQL、Postman、Git",
+      "has_number": false,
+      "source_quote": "Python、SQL、Postman、Git",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能按接口文档联调和查看服务日志",
+      "has_number": false,
+      "source_quote": "能按接口文档联调和查看服务日志",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "使用过低代码工作流和模型 API",
+      "has_number": false,
+      "source_quote": "使用过低代码工作流和模型 API",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "主要做需求拆解、字段校验、样例回放与客户验收",
+      "has_number": false,
+      "source_quote": "主要做需求拆解、字段校验、样例回放与客户验收",
+      "needs_confirmation": false
+    }
+  ]
+}

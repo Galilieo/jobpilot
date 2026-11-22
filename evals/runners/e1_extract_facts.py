@@ -40,8 +40,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 EVAL_EMAIL = "e1-eval@example.invalid"
 RESUME_DIR = REPO_ROOT / "evals" / "datasets" / "resumes"
 RESULT_DIR = REPO_ROOT / "evals" / "results"
-# 开发集：5 份短样本和 2 份完整简历。英文探针 resume-019 需要单独指定。
-DEV_SAMPLES = [*(f"resume-00{n}" for n in range(1, 6)), "resume-011", "resume-015"]
+# 开发集：5 份短样本和 5 份完整简历。英文探针 resume-019 需要单独指定。
+DEV_SAMPLES = [
+    *(f"resume-00{n}" for n in range(1, 6)),
+    *(f"resume-0{n}" for n in (11, 15, 21, 22, 23)),
+]
 
 # 一次运行的额度：允许一次 JSON 修复重发。
 # token 按网关的估算方式（输入字节数 + max_tokens）留足。

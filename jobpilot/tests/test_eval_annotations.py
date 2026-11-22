@@ -29,7 +29,10 @@ def load(path: Path) -> tuple[str, dict[str, Any]]:
 
 def test_dev_set_is_fully_annotated() -> None:
     """与 evals/runners/e1_extract_facts.py 的 DEV_SAMPLES 保持一致。"""
-    dev_set = {*(f"resume-00{n}" for n in range(1, 6)), "resume-011", "resume-015"}
+    dev_set = {
+        *(f"resume-00{n}" for n in range(1, 6)),
+        *(f"resume-0{n}" for n in (11, 15, 21, 22, 23)),
+    }
     assert dev_set <= {path.stem for path in RESUME_ANNOTATIONS}
 
 

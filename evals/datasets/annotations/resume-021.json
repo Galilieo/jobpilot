@@ -1,0 +1,230 @@
+{
+  "sample_id": "resume-021",
+  "facts": [
+    {
+      "experience": "教育经历",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "相关课程：统计学习、信息检索、大规模数据处理",
+      "has_number": false,
+      "source_quote": "相关课程：统计学习、信息检索、大规模数据处理",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "硕士毕业项目研究商品检索中的短查询改写",
+      "has_number": false,
+      "source_quote": "毕业项目研究商品检索中的短查询改写",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "本科毕业设计为校内失物招领图片检索",
+      "has_number": false,
+      "source_quote": "本科毕业设计为校内失物招领图片检索",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育经历",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "获学院优秀毕业设计",
+      "has_number": false,
+      "source_quote": "获学院优秀毕业设计",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "实习期间跟过缩写、商品型号和颜色别名相关的召回问题",
+      "has_number": false,
+      "source_quote": "实习期间跟过缩写、商品型号和颜色别名相关的召回问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "从脱敏日志抽取 240 条检索词",
+      "has_number": true,
+      "source_quote": "从脱敏日志抽取 240 条检索词",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "与运营分别标注后复核分歧",
+      "has_number": false,
+      "source_quote": "与运营分别标注后复核分歧",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "补齐型号后缀、同品牌不同代际等难例",
+      "has_number": false,
+      "source_quote": "负责补齐型号后缀、同品牌不同代际等难例",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在评估表里保留用户意图分组",
+      "has_number": false,
+      "source_quote": "在评估表里保留了用户意图分组",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "在现有 BM25 召回上试两种查询改写规则",
+      "has_number": true,
+      "source_quote": "负责在现有 BM25 召回上试两种查询改写规则",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "按时间切开调试数据与验收数据",
+      "has_number": false,
+      "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "result",
+      "responsibility": "own",
+      "text": "在 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条",
+      "has_number": true,
+      "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "result",
+      "responsibility": "own",
+      "text": "提升主要来自别名查询",
+      "has_number": false,
+      "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条。提升主要来自别名查询",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "result",
+      "responsibility": "own",
+      "text": "带型号后缀的查询新增了 3 条错召回",
+      "has_number": true,
+      "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条。提升主要来自别名查询，带型号后缀的查询新增了 3 条错召回",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "提交可回放的评估脚本与失败查询清单",
+      "has_number": false,
+      "source_quote": "提交可回放的评估脚本与失败查询清单",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "榛集电商技术 搜索算法实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "与导师复核后保留别名规则，型号规则退回继续调整",
+      "has_number": false,
+      "source_quote": "与导师复核后，保留别名规则，型号规则退回继续调整",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "短查询改写效果分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "保存查询抽样脚本、分组结果和随机种子，方便组员复跑",
+      "has_number": false,
+      "source_quote": "负责保存查询抽样脚本、分组结果和随机种子，方便组员复跑",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "短查询改写效果分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "按查询长度和商品类别输出评估表",
+      "has_number": false,
+      "source_quote": "负责保存查询抽样脚本、分组结果和随机种子，方便组员复跑，并按查询长度和商品类别输出评估表",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "短查询改写效果分析",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在一轮复验中排查到同款不同规格被误标为相关",
+      "has_number": false,
+      "source_quote": "在一轮复验中排查到同款不同规格被误标为相关",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "短查询改写效果分析",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补写标注说明",
+      "has_number": false,
+      "source_quote": "补写了标注说明",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "短查询改写效果分析",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "整理实验图表和报告",
+      "has_number": false,
+      "source_quote": "当前在整理实验图表和报告",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Python、SQL、pandas、PyTorch、Elasticsearch",
+      "has_number": false,
+      "source_quote": "Python、SQL、pandas、PyTorch、Elasticsearch",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "用过 scikit-learn 做基线和误差分析",
+      "has_number": false,
+      "source_quote": "用过 scikit-learn 做基线和误差分析",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "会用 Git 管理实验配置",
+      "has_number": false,
+      "source_quote": "会用 Git 管理实验配置",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "雅思 7.0（2025）",
+      "has_number": true,
+      "source_quote": "雅思 7.0（2025）",
+      "needs_confirmation": false
+    }
+  ]
+}

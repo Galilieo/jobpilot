@@ -1,0 +1,203 @@
+{
+  "sample_id": "resume-022",
+  "facts": [
+    {
+      "experience": "教育",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "学过管理会计、统计学、审计学",
+      "has_number": false,
+      "source_quote": "学过管理会计、统计学、审计学",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "跨院选修数据库和 Python 数据处理",
+      "has_number": false,
+      "source_quote": "跨院选修数据库和 Python 数据处理",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "大学英语四级",
+      "has_number": false,
+      "source_quote": "大学英语四级",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "协助准备 4 家门店的月末对账",
+      "has_number": true,
+      "source_quote": "协助准备 4 家门店的月末对账",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "日常主要核对收银流水、退款记录和第三方结算明细",
+      "has_number": false,
+      "source_quote": "日常主要核对收银流水、退款记录和第三方结算明细",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Excel Power Query 合并门店月报，把原来手工复制的日期、门店和支付渠道整理成统一格式",
+      "has_number": false,
+      "source_quote": "用 Excel Power Query 合并门店月报，把原来手工复制的日期、门店和支付渠道整理成统一格式",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "将无法用交易号匹配的记录单独列出来交财务复核",
+      "has_number": false,
+      "source_quote": "将无法用交易号匹配的记录单独列出来交财务复核",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "复核意见回填到异常表",
+      "has_number": false,
+      "source_quote": "复核意见回填到异常表",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "排查两家门店的实收金额和财务表对不上的问题",
+      "has_number": true,
+      "source_quote": "排查有两家门店的实收金额和财务表对不上",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "按结算批次重新整理明细",
+      "has_number": false,
+      "source_quote": "我按结算批次重新整理明细",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在周会上说明到账日和营业日的差别",
+      "has_number": false,
+      "source_quote": "在周会上说明到账日和营业日的差别",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "松坊社区商业 财务助理实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补充一份月底核对步骤",
+      "has_number": false,
+      "source_quote": "我补了一份月底核对步骤",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "社区书店销售与补货分析",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 SQL 汇总每周各品类的销量",
+      "has_number": false,
+      "source_quote": "我负责用 SQL 汇总每周各品类的销量",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区书店销售与补货分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "扣除退货得到净销量",
+      "has_number": false,
+      "source_quote": "我负责用 SQL 汇总每周各品类的销量，扣除退货得到净销量",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区书店销售与补货分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "用库存快照估算库存能支撑几天销售",
+      "has_number": false,
+      "source_quote": "我负责用 SQL 汇总每周各品类的销量，扣除退货得到净销量，再用库存快照估算库存能支撑几天销售",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区书店销售与补货分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "发现无库存快照的日期被当成零库存后，修改查询并在图表上标出缺口",
+      "has_number": false,
+      "source_quote": "我负责用 SQL 汇总每周各品类的销量，扣除退货得到净销量，再用库存快照估算库存能支撑几天销售。发现没有库存快照的日期被当成零库存后，修改查询并在图表上标出缺口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区书店销售与补货分析",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "答辩时以两类图书为例给出订货建议",
+      "has_number": true,
+      "source_quote": "答辩时以两类图书为例给出订货建议",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "学院迎新志愿者组",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "负责晚班签到和物资登记",
+      "has_number": false,
+      "source_quote": "负责晚班签到和物资登记",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院迎新志愿者组",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "第二天把缺领和补领记录交给辅导员",
+      "has_number": false,
+      "source_quote": "第二天把缺领和补领记录交给辅导员",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Excel（数据透视表、Power Query）、SQL（连接、分组聚合）",
+      "has_number": false,
+      "source_quote": "Excel（数据透视表、Power Query）、SQL（连接、分组聚合）",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "会用 Python 和 pandas 检查缺失值、导出明细",
+      "has_number": false,
+      "source_quote": "会用 Python 和 pandas 检查缺失值、导出明细",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "用 Power BI 做过课程仪表板",
+      "has_number": false,
+      "source_quote": "用 Power BI 做过课程仪表板",
+      "needs_confirmation": false
+    }
+  ]
+}
