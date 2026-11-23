@@ -55,8 +55,67 @@ class OwnedResource:
     routes: frozenset[Route] = field(default_factory=frozenset)
 
 
+async def _create_fact(client: httpx.AsyncClient) -> str:
+    """B 补充一条事实并发布，A 要碰的是已发布的事实。"""
+    created = await client.post(
+        "/api/facts",
+        json={
+            "experience": "B 的项目",
+            "kind": "action",
+            "responsibility": "own",
+            "text": "B 写的事实",
+        },
+    )
+    assert created.status_code == 201, created.text
+    committed = await client.post("/api/facts/commit", json={"base_fact_set_id": None})
+    assert committed.status_code == 200, committed.text
+    return created.json()["lineage_id"]
+
+
+async def _create_resume(client: httpx.AsyncClient) -> str:
+    """B 上传一份简历；假模型返回「没有经历」，只留下原文。"""
+    created = await client.post("/api/resumes", json={"raw_text": "B 的简历原文"})
+    assert created.status_code == 201, created.text
+    return created.json()["doc_id"]
+
+
 # T1.4 起每加一类业务资源，就在这里登记一项。
-OWNED_RESOURCES: list[OwnedResource] = []
+OWNED_RESOURCES: list[OwnedResource] = [
+    OwnedResource(
+        name="fact",
+        create=_create_fact,
+        read=("GET", "/api/facts/{id}"),
+        attempts=(
+            Attempt("GET", "/api/facts/{id}"),
+            Attempt("PUT", "/api/facts/{id}", {"text": "A 改的", "confirmed": True}),
+            Attempt("DELETE", "/api/facts/{id}"),
+        ),
+        routes=frozenset(
+            {
+                ("GET", "/api/facts"),
+                ("POST", "/api/facts"),
+                ("GET", "/api/facts/{lineage_id}"),
+                ("PUT", "/api/facts/{lineage_id}"),
+                ("DELETE", "/api/facts/{lineage_id}"),
+                ("POST", "/api/facts/batch"),
+                ("POST", "/api/facts/commit"),
+            }
+        ),
+    ),
+    OwnedResource(
+        name="resume_document",
+        create=_create_resume,
+        read=("GET", "/api/resumes/{id}"),
+        attempts=(Attempt("GET", "/api/resumes/{id}"),),
+        routes=frozenset(
+            {
+                ("POST", "/api/resumes/extract"),
+                ("POST", "/api/resumes"),
+                ("GET", "/api/resumes/{doc_id}"),
+            }
+        ),
+    ),
+]
 
 
 def _fill(value: Any, resource_id: str) -> Any:
@@ -158,7 +217,10 @@ async def test_self_routes_only_show_the_caller(
 
 @pytest.mark.parametrize("resource", OWNED_RESOURCES, ids=lambda r: r.name)
 async def test_other_users_resources_are_not_found(
-    user_a: httpx.AsyncClient, user_b: httpx.AsyncClient, resource: OwnedResource
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    resource: OwnedResource,
+    model_outputs: list[str],
 ) -> None:
     """A 的每次尝试都返回 404（不是 403，不暴露资源是否存在），B 的资源不变。"""
     resource_id = await resource.create(user_b)

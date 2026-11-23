@@ -10,7 +10,7 @@
 import re
 import unicodedata
 from enum import StrEnum
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
@@ -144,7 +144,6 @@ class DraftFact(BaseModel):
     未通过时保留模型给出的文字供用户对照，位置为空。
     """
 
-    item_id: UUID = Field(default_factory=uuid4)
     experience: str
     section: SectionKind
     kind: FactKind

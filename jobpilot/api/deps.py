@@ -3,7 +3,8 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from openai import AsyncOpenAI
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import settings
 from jobpilot.db.accounts import LoginSession, find_login_session
@@ -37,3 +38,19 @@ async def current_user(
 
 
 CurrentUser = Annotated[User, Depends(current_user)]
+
+
+def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
+    """模型网关要用独立的短事务记账，需要 session 工厂而不是请求的 session。"""
+    return request.app.state.db_session_factory
+
+
+def get_model_client(request: Request) -> AsyncOpenAI:
+    """应用启动时创建的模型客户端；测试替换成假上游。"""
+    return request.app.state.model_client
+
+
+SessionFactory = Annotated[
+    async_sessionmaker[AsyncSession], Depends(get_session_factory)
+]
+ModelClient = Annotated[AsyncOpenAI, Depends(get_model_client)]

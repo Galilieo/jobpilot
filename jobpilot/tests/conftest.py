@@ -15,11 +15,13 @@ from sqlalchemy import URL, delete
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from alembic import command
+from jobpilot.api.deps import get_model_client, get_session_factory
 from jobpilot.config import settings
 from jobpilot.db.models import Base
 from jobpilot.db.session import create_database_engine, get_session
 from jobpilot.main import app
 from jobpilot.tests.fakes import FakeModelClient
+from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
 
 
 @pytest.fixture(autouse=True)
@@ -109,6 +111,7 @@ async def async_client(
 
     previous_overrides = app.dependency_overrides.copy()
     app.dependency_overrides[get_session] = get_test_session
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     try:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
@@ -124,3 +127,19 @@ async def async_client(
 def fake_model_client() -> FakeModelClient:
     """为每个测试新建客户端，避免预设响应和调用记录互相污染。"""
     return FakeModelClient()
+
+
+@pytest.fixture
+async def model_outputs(async_client: httpx.AsyncClient) -> AsyncIterator[list[str]]:
+    """接口用的假模型：按顺序返回列表里的输出，列表空了返回「没有经历」。
+
+    测试往返回的列表里追加模型输出即可。依赖 async_client，在它恢复依赖之前清理。
+    """
+    outputs: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return completion_response(outputs.pop(0) if outputs else '{"experiences": []}')
+
+    async with fake_upstream(respond) as client:
+        app.dependency_overrides[get_model_client] = lambda: client
+        yield outputs

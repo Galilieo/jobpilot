@@ -5,32 +5,42 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
+from openai import AsyncOpenAI
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.auth import router as auth_router
+from jobpilot.api.facts import router as facts_router
 from jobpilot.api.ocr import router as ocr_router
+from jobpilot.api.resumes import router as resumes_router
 from jobpilot.config import settings
 from jobpilot.db.session import check_database, create_database_engine, get_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """启动时准备连接池与 session 工厂，退出时释放连接池。"""
+    """启动时准备连接池、session 工厂和模型客户端，退出时一并释放。"""
     engine = create_database_engine(
         settings.database_url,
         connect_timeout_seconds=settings.database_connect_timeout_seconds,
     )
     app.state.db_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    app.state.model_client = AsyncOpenAI(
+        api_key=settings.deepseek_api_key.get_secret_value() or "not-configured",
+        base_url=settings.deepseek_base_url,
+    )
     try:
         yield
     finally:
+        await app.state.model_client.close()
         await engine.dispose()
 
 
 app = FastAPI(title="JobPilot", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(ocr_router)
+app.include_router(resumes_router)
+app.include_router(facts_router)
 
 
 @app.get("/api/health")

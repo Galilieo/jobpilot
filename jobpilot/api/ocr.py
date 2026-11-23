@@ -90,7 +90,7 @@ async def recognize(
     pages: list[str] = []
     async with ocr_queue.admit():
         for upload in files:
-            data = await _read_limited(upload)
+            data = await read_limited(upload)
             try:
                 pages += await ocr_queue.run(upload.filename or "", data)
             except UnsupportedFormatError as error:
@@ -106,7 +106,7 @@ async def recognize(
     return OcrOut(text="\n\n".join(page for page in pages if page), pages=pages)
 
 
-async def _read_limited(upload: UploadFile) -> bytes:
+async def read_limited(upload: UploadFile) -> bytes:
     """最多读 MAX_UPLOAD_BYTES + 1 字节，超出就拒绝，不把整个大文件读进内存。"""
     data = await upload.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
