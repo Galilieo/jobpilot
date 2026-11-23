@@ -113,6 +113,38 @@ E1 评测简历事实拆分，E2 评测 JD 解析。把原文交给待测功能�
 
 标注真实 JD 时，从 `private/jds/{sample_id}.txt` 读取原文。对应 JSON 放入 `datasets/annotations/`，`sample_id` 与原文文件名一致，`source_url` 填公开招聘页链接。要求条目用自己的话概括。合成示例用于说明格式，真实 JD 数量单独统计。
 
+### E2 第一版的标注规则（2026-11-23）
+
+**分组：** [e2-split.json](datasets/e2-split.json) 从有本地原文的 82 份中文 JD 里分层抽出开发集、测试集各 10 份：实习 AI 应用 3、后端 3、算法 2、前端 1，另加校招或社招 AI 应用 1。可用样本里百度较多，测试集放宽公司上限后有 6 份百度，报告结果时注明。分组在跑模型之前确定，测试集只用来报告结果。
+
+**存放位置：** 真实 JD 的标注要逐字引用原文片段，按「仓库不提交 JD 原文」的约定，放在 `private/annotations/{sample_id}.json`（Git 忽略）。仓库只提交分组、规则、脚本和不含原文的汇总指标。
+
+**格式：** 在上面示例的基础上，要求条目改为带原文片段的对象：
+
+```json
+{
+  "sample_id": "jd-012",
+  "source_url": "公开招聘页链接",
+  "basic_fields": {"company": "…", "title": "…", "location": "…", "salary": null,
+                   "onsite_days_per_week": null, "internship_duration": null,
+                   "education": null, "graduation_window": null, "application_deadline": null},
+  "requirements": [
+    {"type": "hard", "text": "熟悉 Python", "source_quote": "熟悉Python"},
+    {"type": "preferred", "text": "有 RAG 项目经验", "source_quote": "有RAG相关项目经验者优先"}
+  ],
+  "keywords": ["Python", "RAG"]
+}
+```
+
+**拆分规则：**
+
+1. 一条要求是一个能单独判断「简历满不满足」的条件。并列的多项都要满足时拆开（「熟悉 MySQL、Redis」是两条）；写明「其一即可」时合成一条（「熟悉 Java 或 Go」）。
+2. `type`：写在「任职要求」「岗位要求」里、没有「优先」「加分」「plus」字样的为 `hard`；带这些字样或写在「加分项」里的为 `preferred`。到岗天数、实习时长、学历、毕业时间这类条件也算硬性要求，同时填进 `basic_fields`。
+3. 岗位职责（这个岗位要做什么）不算要求，不标。公司介绍、福利待遇不标。
+4. `source_quote` 从原文逐字复制连续的一段，能唯一定位到这条要求；`text` 用简洁的中文复述，不加原文没有的内容。
+5. `keywords` 只收技术名（语言、框架、数据库、算法与模型方向，如 `RAG`、`LangChain`、`Transformer`），用标准写法；不收「沟通能力」这类软技能。
+6. `basic_fields` 原文没写的填 `null`，不猜测；有范围或下限的保留原意，例如「至少 4 天」。
+
 ## 真实 JD 样本
 
 2026-11-18 从企业官网、企业官方职位板和公开招聘网站收集 118 份 JD，涉及 36 家企业。其中中文 82 份，英文 36 份。样本按岗位链接和正文去重，对同一家公司的近重复描述只留一份。按 [来源清单](datasets/jd-sources.json)的 `sample_id` 可以找到本地原文。提取时去掉了网页界面文字，并整理了空白与分行。
