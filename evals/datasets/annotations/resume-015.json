@@ -94,29 +94,29 @@
     {
       "experience": "铝壳表面缺陷检测",
       "kind": "result",
-      "responsibility": "own",
+      "responsibility": "participate",
       "text": "同一置信度阈值和留出集上，细划痕的召回率从 71% 升到 83%",
       "has_number": true,
       "source_quote": "负责复现 YOLO 基线，比较整图缩放和切片两种推理方式。用同一置信度阈值，在同一留出集上，细划痕的召回率从 71% 升到 83%",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "铝壳表面缺陷检测",
       "kind": "result",
-      "responsibility": "own",
+      "responsibility": "participate",
       "text": "每百张图误报数从 6 个增加到 10 个",
       "has_number": true,
       "source_quote": "负责复现 YOLO 基线，比较整图缩放和切片两种推理方式。用同一置信度阈值，在同一留出集上，细划痕的召回率从 71% 升到 83%，每百张图误报数从 6 个增加到 10 个",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "铝壳表面缺陷检测",
       "kind": "action",
-      "responsibility": "participate",
+      "responsibility": "own",
       "text": "把两版都交给课题组评审",
       "has_number": true,
       "source_quote": "把两版都交给课题组评审",
-      "needs_confirmation": true
+      "needs_confirmation": false
     },
     {
       "experience": "铝壳表面缺陷检测",
@@ -148,11 +148,11 @@
     {
       "experience": "铝壳表面缺陷检测",
       "kind": "result",
-      "responsibility": "own",
+      "responsibility": "participate",
       "text": "连续运行 30 分钟，整图方案每帧中位耗时 39 ms",
       "has_number": true,
       "source_quote": "负责用 ONNX 导出模型，记录图像预处理、推理、后处理各段用时。连续跑 30 分钟，整图方案每帧中位耗时 39 ms",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "铝壳表面缺陷检测",

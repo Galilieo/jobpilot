@@ -76,11 +76,11 @@
     {
       "experience": "榛集电商技术 搜索算法实习",
       "kind": "action",
-      "responsibility": "participate",
+      "responsibility": "own",
       "text": "在评估表里保留用户意图分组",
       "has_number": false,
       "source_quote": "在评估表里保留了用户意图分组",
-      "needs_confirmation": true
+      "needs_confirmation": false
     },
     {
       "experience": "榛集电商技术 搜索算法实习",
@@ -103,29 +103,29 @@
     {
       "experience": "榛集电商技术 搜索算法实习",
       "kind": "result",
-      "responsibility": "own",
+      "responsibility": "participate",
       "text": "在 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条",
       "has_number": true,
       "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "榛集电商技术 搜索算法实习",
       "kind": "result",
-      "responsibility": "own",
+      "responsibility": "participate",
       "text": "提升主要来自别名查询",
       "has_number": false,
       "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条。提升主要来自别名查询",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "榛集电商技术 搜索算法实习",
       "kind": "result",
-      "responsibility": "own",
+      "responsibility": "participate",
       "text": "带型号后缀的查询新增了 3 条错召回",
       "has_number": true,
       "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条。提升主要来自别名查询，带型号后缀的查询新增了 3 条错召回",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "榛集电商技术 搜索算法实习",
@@ -166,29 +166,29 @@
     {
       "experience": "短查询改写效果分析",
       "kind": "action",
-      "responsibility": "participate",
+      "responsibility": "own",
       "text": "在一轮复验中排查到同款不同规格被误标为相关",
       "has_number": false,
       "source_quote": "在一轮复验中排查到同款不同规格被误标为相关",
-      "needs_confirmation": true
+      "needs_confirmation": false
     },
     {
       "experience": "短查询改写效果分析",
       "kind": "action",
-      "responsibility": "participate",
+      "responsibility": "own",
       "text": "补写标注说明",
       "has_number": false,
       "source_quote": "补写了标注说明",
-      "needs_confirmation": true
+      "needs_confirmation": false
     },
     {
       "experience": "短查询改写效果分析",
       "kind": "action",
-      "responsibility": "participate",
+      "responsibility": "own",
       "text": "整理实验图表和报告",
       "has_number": false,
       "source_quote": "当前在整理实验图表和报告",
-      "needs_confirmation": true
+      "needs_confirmation": false
     },
     {
       "experience": "技能",

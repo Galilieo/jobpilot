@@ -148,11 +148,11 @@
     {
       "experience": "社区书店销售与补货分析",
       "kind": "action",
-      "responsibility": "participate",
+      "responsibility": "own",
       "text": "答辩时以两类图书为例给出订货建议",
       "has_number": true,
       "source_quote": "答辩时以两类图书为例给出订货建议",
-      "needs_confirmation": true
+      "needs_confirmation": false
     },
     {
       "experience": "学院迎新志愿者组",

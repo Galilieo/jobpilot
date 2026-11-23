@@ -13,6 +13,7 @@ from jobpilot.services.facts import (
     locate_quote,
     numbers_missing_from_quote,
     responsibility_supported,
+    role_context,
 )
 from jobpilot.services.parsing import normalize_text
 
@@ -44,12 +45,15 @@ def test_annotated_facts_follow_extraction_rules(path: Path) -> None:
     for fact in annotation["facts"]:
         quote = fact["source_quote"]
         responsibility = Responsibility(fact["responsibility"])
-        FactKind(fact["kind"])
+        kind = FactKind(fact["kind"])
 
         # 唯一定位：评测按位置配对，片段出现多处时配对会有歧义。
-        assert len(locate_quote(raw_text, quote)) == 1, quote
+        spans = locate_quote(raw_text, quote)
+        assert len(spans) == 1, quote
         if check_role_words:
-            assert responsibility_supported(responsibility, quote), quote
+            [(start, end)] = spans
+            context = role_context(raw_text, start, end, kind)
+            assert responsibility_supported(responsibility, context), quote
         assert not numbers_missing_from_quote(fact["text"], quote), quote
         if contains_number(fact["text"]):
             assert fact["has_number"], fact["text"]

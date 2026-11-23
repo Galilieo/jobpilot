@@ -215,10 +215,13 @@ async def test_verified_quote_is_taken_from_the_original_text(
             "乙公司实习",
             "internship",
             YI,
+            # 这里只测片段按原文保存；职责标为参与，不让职责检查掺进来。
+            # 原文在「响应时间」后硬换行，结果只认所在的句子，按 own 会被标出。
             fact(
-                "负责优化慢查询，响应时间降低 30%",
+                "优化慢查询，响应时间降低 30%",
                 "负责后端接口开发\n优化慢查询，响应时间降低 30%",
                 kind="result",
+                responsibility="participate",
             ),
         ),
     )

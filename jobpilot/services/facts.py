@@ -175,7 +175,10 @@ _ROLE_LEVELS = {
     "主持": Responsibility.LEAD,
     "负责人": Responsibility.LEAD,
     "负责": Responsibility.OWN,
-    "独立": Responsibility.OWN,
+    "独立完成": Responsibility.OWN,
+    "独立负责": Responsibility.OWN,
+    "独立开发": Responsibility.OWN,
+    "独立实现": Responsibility.OWN,
     "承担": Responsibility.OWN,
     "参与": Responsibility.PARTICIPATE,
     "协助": Responsibility.PARTICIPATE,
@@ -185,20 +188,23 @@ _ROLE_LEVELS = {
 # 按长度从长到短排列，「负责人」才不会被当成「负责」。
 _ROLE_PATTERN = re.compile("|".join(sorted(_ROLE_LEVELS, key=len, reverse=True)))
 _RANK = {Responsibility.PARTICIPATE: 0, Responsibility.OWN: 1, Responsibility.LEAD: 2}
-# 往前查找职责词时不越过句末标点和换行。
+# 结果类事实往前查找职责词时，不越过句末标点和换行。
 _SENTENCE_BREAK = re.compile(r"[。！？；!?;\n]")
 _NUMBER_PATTERN = re.compile(r"\d+(?:\.\d+)?")
 
 
-def role_context(raw_text: str, start: int, end: int) -> str:
-    """返回片段所在句子从句首到片段结尾的文字，供职责检查使用。
+def role_context(raw_text: str, start: int, end: int, kind: FactKind) -> str:
+    """返回检查职责时要看的文字：从职责词的作用范围起点到片段结尾。
 
-    模型常只抄职责词后面的半句，所以同一句前面的分句也算依据；
-    但不越过句号和换行，上一句的「负责」不支撑这一句。
+    做法和细节沿用同一行前面的职责词，从行首算起，可以越过句号；
+    结果最容易被夸大，只认结果所在的那一句，从片段结尾所在句子的句首算起。
     """
-    breaks = _SENTENCE_BREAK.finditer(raw_text, 0, start)
-    sentence_start = max((match.end() for match in breaks), default=0)
-    return raw_text[sentence_start:end]
+    if kind is FactKind.RESULT:
+        breaks = _SENTENCE_BREAK.finditer(raw_text, 0, max(end - 1, 0))
+        scope_start = max((match.end() for match in breaks), default=0)
+    else:
+        scope_start = raw_text.rfind("\n", 0, start) + 1
+    return raw_text[scope_start:end]
 
 
 def responsibility_supported(responsibility: Responsibility, context: str) -> bool:
@@ -343,7 +349,7 @@ def _to_draft(
 
     # 下面两项比对的是转述与片段；片段没通过校验时比对没有意义，这条本来就要核对
     elif spans and not responsibility_supported(
-        responsibility, role_context(raw_text, span_start, span_end)
+        responsibility, role_context(raw_text, span_start, span_end, fact.kind)
     ):
         reasons.append(ReviewReason.RESPONSIBILITY_UNSUPPORTED)
 

@@ -6,7 +6,7 @@ import pytest
 from openai.types.chat import ChatCompletion
 from pydantic import ValidationError
 
-from jobpilot.db.models import Responsibility
+from jobpilot.db.models import FactKind, Responsibility
 from jobpilot.services.facts import (
     FactExtraction,
     TruncatedOutputError,
@@ -110,6 +110,9 @@ def test_malformed_output_raises_validation_error(mutate) -> None:
         # 只看最后出现的职责词：「参与」截断了前面「负责」的作用范围
         (Responsibility.OWN, "负责接口开发，参与压测", False),
         (Responsibility.OWN, "参与需求评审，负责接口开发", True),
+        # 「独立」只在「独立完成」这类说法里表示职责，「独立留出集」不算
+        (Responsibility.OWN, "整理后的独立留出集来自 3 个批次", False),
+        (Responsibility.OWN, "独立完成接口开发", True),
     ],
 )
 def test_responsibility_needs_role_word_of_its_level(
@@ -125,24 +128,31 @@ RESUME_LINES = (
 
 
 @pytest.mark.parametrize(
-    ("quote", "context"),
+    ("quote", "kind", "context"),
     [
-        # 同一句前面的分句算进来：模型只抄了后半句也能找到「主导」
+        # 同一行前面的分句算进来：模型只抄了后半句也能找到「主导」
         (
             "决定用 PostgreSQL 管理向量",
+            FactKind.TECHNOLOGY,
             "主导三人小组交付原型，决定用 PostgreSQL 管理向量",
         ),
-        # 不越过句号：上一句的「负责」不支撑这一句的结果
-        ("召回率从 71% 升到 83%", "召回率从 71% 升到 83%"),
+        # 做法和细节沿用同一行前面的职责词，可以越过句号
+        (
+            "召回率从 71% 升到 83%",
+            FactKind.ACTION,
+            "负责复现基线。召回率从 71% 升到 83%",
+        ),
+        # 结果只认它所在的那一句：上一句的「负责」不算
+        ("召回率从 71% 升到 83%", FactKind.RESULT, "召回率从 71% 升到 83%"),
         # 不越过换行：上一行的内容不算
-        ("负责复现基线", "负责复现基线"),
+        ("负责复现基线", FactKind.ACTION, "负责复现基线"),
     ],
 )
-def test_role_context_runs_from_sentence_start_to_quote_end(
-    quote: str, context: str
+def test_role_context_depends_on_fact_kind(
+    quote: str, kind: FactKind, context: str
 ) -> None:
     start = RESUME_LINES.index(quote)
-    assert role_context(RESUME_LINES, start, start + len(quote)) == context
+    assert role_context(RESUME_LINES, start, start + len(quote), kind) == context
 
 
 # ---------- 数字 ----------
