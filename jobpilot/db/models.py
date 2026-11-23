@@ -135,6 +135,8 @@ class AiRun(Base):
     thread_id: Mapped[str | None] = mapped_column(Text)
     fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)
     user_job_id: Mapped[UUID | None] = mapped_column(Uuid)
+    # 匹配和改写启动时固定合并个人修改后的岗位内容，重读旧报告不受后续编辑影响。
+    job_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -423,4 +425,32 @@ class UserJob(Base):
     note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MatchReport(Base):
+    """一次匹配运行的报告产物：通过 (run_id, user_id) 追溯固定的岗位快照和事实版本。"""
+
+    __tablename__ = "match_report"
+    __table_args__ = (
+        UniqueConstraint("run_id"),
+        # 报告与运行必须属于同一用户，删除运行或账号时级联清理。
+        ForeignKeyConstraint(
+            ["run_id", "user_id"],
+            ["ai_run.run_id", "ai_run.user_id"],
+            ondelete="CASCADE",
+        ),
+        Index("ix_match_report_user_id_created_at", "user_id", "created_at"),
+    )
+
+    report_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    items_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+    main_gaps: Mapped[list[str]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
     )

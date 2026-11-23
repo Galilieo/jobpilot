@@ -7,6 +7,7 @@
   以及 A 会尝试的每个请求；A 的每次尝试都应返回 404，且 B 的资源保持不变。
 """
 
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -48,14 +49,15 @@ class OwnedResource:
     """一类属于用户的资源及其全部接口。"""
 
     name: str
-    create: Callable[[httpx.AsyncClient], Awaitable[str]]  # 以 B 的身份创建，返回 ID
+    # 以 B 的身份创建，返回 ID
+    create: Callable[[httpx.AsyncClient, list[str]], Awaitable[str]]
     read: Route  # B 读取自己这条资源的接口，用来比较前后是否被改
     attempts: tuple[Attempt, ...]
     # 该资源的全部接口（含创建、列表），用于归类检查。
     routes: frozenset[Route] = field(default_factory=frozenset)
 
 
-async def _create_fact(client: httpx.AsyncClient) -> str:
+async def _create_fact(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
     """B 补充一条事实并发布，A 要碰的是已发布的事实。"""
     created = await client.post(
         "/api/facts",
@@ -72,18 +74,55 @@ async def _create_fact(client: httpx.AsyncClient) -> str:
     return created.json()["lineage_id"]
 
 
-async def _create_resume(client: httpx.AsyncClient) -> str:
+async def _create_resume(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
     """B 上传一份简历；假模型返回「没有经历」，只留下原文。"""
     created = await client.post("/api/resumes", json={"raw_text": "B 的简历原文"})
     assert created.status_code == 201, created.text
     return created.json()["doc_id"]
 
 
-async def _create_job(client: httpx.AsyncClient) -> str:
+async def _create_job(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
     """B 提交一份 JD；假模型返回空的解析结果。"""
     created = await client.post("/api/jobs", json={"raw_text": "B 收藏的岗位"})
     assert created.status_code == 201, created.text
     return created.json()["job_id"]
+
+
+async def _create_match_report(
+    client: httpx.AsyncClient, model_outputs: list[str]
+) -> str:
+    """B 发布一条事实、建一个带要求的岗位并生成匹配报告。"""
+    await _create_fact(client, model_outputs)
+    fact_id = (await client.get("/api/facts")).json()["facts"][0]["fact_id"]
+    created_job = await client.post("/api/jobs", json={"raw_text": "B 的匹配岗位"})
+    assert created_job.status_code == 201, created_job.text
+    job_id = created_job.json()["job_id"]
+    updated = await client.put(
+        f"/api/jobs/{job_id}",
+        json={"requirements": [{"type": "hard", "text": "熟悉 Python"}]},
+    )
+    assert updated.status_code == 200, updated.text
+    req_id = updated.json()["parsed"]["requirements"][0]["requirement_id"]
+    model_outputs.append(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "requirement_id": req_id,
+                        "verdict": "covered",
+                        "fact_ids": [fact_id],
+                        "reason": "已掌握",
+                        "suggestion": "保留",
+                    }
+                ],
+                "main_gaps": [],
+            },
+            ensure_ascii=False,
+        )
+    )
+    matched = await client.post(f"/api/jobs/{job_id}/match")
+    assert matched.status_code == 201, matched.text
+    return matched.json()["report_id"]
 
 
 # T1.4 起每加一类业务资源，就在这里登记一项。
@@ -129,6 +168,8 @@ OWNED_RESOURCES: list[OwnedResource] = [
         attempts=(
             Attempt("GET", "/api/jobs/{id}"),
             Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
+            Attempt("POST", "/api/jobs/{id}/match"),
+            Attempt("GET", "/api/jobs/{id}/matches"),
         ),
         routes=frozenset(
             {
@@ -136,8 +177,17 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("GET", "/api/jobs"),
                 ("GET", "/api/jobs/{job_id}"),
                 ("PUT", "/api/jobs/{job_id}"),
+                ("POST", "/api/jobs/{job_id}/match"),
+                ("GET", "/api/jobs/{job_id}/matches"),
             }
         ),
+    ),
+    OwnedResource(
+        name="match_report",
+        create=_create_match_report,
+        read=("GET", "/api/match-reports/{id}"),
+        attempts=(Attempt("GET", "/api/match-reports/{id}"),),
+        routes=frozenset({("GET", "/api/match-reports/{report_id}")}),
     ),
 ]
 
@@ -247,7 +297,7 @@ async def test_other_users_resources_are_not_found(
     model_outputs: list[str],
 ) -> None:
     """A 的每次尝试都返回 404（不是 403，不暴露资源是否存在），B 的资源不变。"""
-    resource_id = await resource.create(user_b)
+    resource_id = await resource.create(user_b, model_outputs)
     read_method, read_path = resource.read
     before = await user_b.request(read_method, _fill(read_path, resource_id))
     assert before.status_code == 200

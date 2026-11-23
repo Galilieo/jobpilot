@@ -11,9 +11,11 @@ from uuid import UUID, uuid4
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
+from jobpilot.db.models import JobPosting, UserJob
 from jobpilot.services.facts import TruncatedOutputError, locate_quote
 from jobpilot.services.keywords import normalize_keywords
 from jobpilot.services.llm_gateway import (
@@ -103,6 +105,41 @@ class ParsedJob(BaseModel):
     requirements: list[Requirement]
     duties: list[Duty]
     keywords: list[str]
+
+
+def effective_parsed_job(posting: JobPosting, user_job: UserJob) -> ParsedJob:
+    """解析结果叠加个人修改：基本字段、要求、关键词，给了哪项就整体替换哪项。"""
+    parsed = ParsedJob.model_validate(posting.parsed_json)
+    overrides = user_job.field_overrides_json
+    if "basic_fields" in overrides:
+        parsed.basic_fields = BasicFields.model_validate(overrides["basic_fields"])
+    if "requirements" in overrides:
+        parsed.requirements = [
+            Requirement.model_validate(r) for r in overrides["requirements"]
+        ]
+    if "keywords" in overrides:
+        parsed.keywords = list(overrides["keywords"])
+    return parsed
+
+
+async def get_user_job(
+    db: AsyncSession, user_id: UUID, job_id: UUID
+) -> tuple[JobPosting, UserJob] | None:
+    """按用户归属查询岗位及其关系，不属于该用户时返回 None。"""
+    row = (
+        await db.execute(
+            select(JobPosting, UserJob)
+            .join(
+                UserJob,
+                (UserJob.posting_id == JobPosting.posting_id)
+                & (UserJob.user_id == JobPosting.owner_id),
+            )
+            .where(UserJob.user_job_id == job_id, UserJob.user_id == user_id)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    return row.JobPosting, row.UserJob
 
 
 def _locate(raw_text: str, quote: str) -> dict[str, object]:

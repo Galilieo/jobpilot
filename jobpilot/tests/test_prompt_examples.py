@@ -3,10 +3,11 @@
 import json
 import re
 from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
 
-from jobpilot.db.models import FactKind, Responsibility
+from jobpilot.db.models import FactKind, FactSource, Responsibility
 from jobpilot.services.facts import (
     FactExtraction,
     locate_quote,
@@ -14,7 +15,12 @@ from jobpilot.services.facts import (
     responsibility_supported,
     role_context,
 )
-from jobpilot.services.jobs import JobExtraction, build_parsed_job
+from jobpilot.services.jobs import JobExtraction, Requirement, build_parsed_job
+from jobpilot.services.matching import (
+    FactCandidate,
+    RawMatchOutput,
+    build_match_report,
+)
 from jobpilot.services.prompts import load_prompt
 
 _RESUME = re.compile(r'<untrusted_data label="resume">\n(.*?)\n</untrusted_data>', re.S)
@@ -61,3 +67,52 @@ def test_parse_jd_example_follows_program_rules() -> None:
 
     assert parsed.requirements and parsed.duties
     assert all(item.quote_verified for item in [*parsed.requirements, *parsed.duties])
+
+
+def test_match_job_example_follows_program_rules() -> None:
+    """匹配分析示例：输出通过模型与业务规则校验，且覆盖硬性与加分项。"""
+    text = load_prompt("match_job").text.split("## 示例", 1)[1]
+    [job_raw] = re.findall(
+        r'<untrusted_data label="job_requirements">\n(.*?)\n</untrusted_data>',
+        text,
+        re.S,
+    )
+    [facts_raw] = re.findall(
+        r'<untrusted_data label="facts">\n(.*?)\n</untrusted_data>', text, re.S
+    )
+    [output] = _OUTPUT.findall(text)
+
+    user_id, fact_set_id = uuid4(), uuid4()
+    requirements = [
+        Requirement.model_validate(item) for item in json.loads(job_raw)["requirements"]
+    ]
+    facts = [
+        FactCandidate(
+            fact_id=UUID(item["fact_id"]),
+            user_id=user_id,
+            fact_set_id=fact_set_id,
+            lineage_id=uuid4(),
+            experience=item["experience"],
+            kind=FactKind(item["kind"]),
+            responsibility=Responsibility(item["responsibility"]),
+            text=item["text"],
+            source=FactSource.RESUME,
+            confirmed=True,
+        )
+        for item in json.loads(facts_raw)
+    ]
+
+    built = build_match_report(
+        user_id=user_id,
+        fact_set_id=fact_set_id,
+        requirements=requirements,
+        facts=facts,
+        raw=RawMatchOutput.model_validate_json(output),
+    )
+
+    assert len(built.items) == len(requirements)
+    assert built.hard_summary.total == 2
+    assert built.hard_summary.covered == 1
+    assert built.hard_summary.partial == 1
+    assert built.preferred_summary.total == 1
+    assert built.preferred_summary.missing == 1

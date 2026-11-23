@@ -77,7 +77,8 @@ class Settings(BaseSettings):
     parse_jd: ModelSettings = Field(
         default_factory=lambda: ModelSettings(max_tokens=4096)
     )
-    match: ModelSettings = Field(default_factory=ModelSettings)
+    # 逐条返回要求 ID、引用事实 ID、原因与建议，十几到三十条要求会超过 2048。
+    match: ModelSettings = Field(default_factory=lambda: ModelSettings(max_tokens=4096))
     plan: ModelSettings = Field(default_factory=ModelSettings)
     rewrite: ModelSettings = Field(default_factory=ModelSettings)
     ground_check: ModelSettings = Field(default_factory=ModelSettings)

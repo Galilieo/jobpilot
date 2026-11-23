@@ -26,6 +26,8 @@ from jobpilot.services.jobs import (
     ParsedJob,
     Requirement,
     RequirementType,
+    effective_parsed_job,
+    get_user_job,
     parse_job,
 )
 from jobpilot.services.keywords import normalize_keywords
@@ -98,28 +100,13 @@ class JobOut(BaseModel):
     updated_at: datetime
 
 
-def _effective(posting: JobPosting, user_job: UserJob) -> ParsedJob:
-    """解析结果叠加个人修改：基本字段、要求、关键词，给了哪项就整体替换哪项。"""
-    parsed = ParsedJob.model_validate(posting.parsed_json)
-    overrides = user_job.field_overrides_json
-    if "basic_fields" in overrides:
-        parsed.basic_fields = BasicFields.model_validate(overrides["basic_fields"])
-    if "requirements" in overrides:
-        parsed.requirements = [
-            Requirement.model_validate(r) for r in overrides["requirements"]
-        ]
-    if "keywords" in overrides:
-        parsed.keywords = list(overrides["keywords"])
-    return parsed
-
-
 def _job_out(posting: JobPosting, user_job: UserJob) -> JobOut:
     return JobOut(
         job_id=user_job.user_job_id,
         stage=JobStage(user_job.stage),
         note=user_job.note,
         raw_text=posting.raw_text,
-        parsed=_effective(posting, user_job),
+        parsed=effective_parsed_job(posting, user_job),
         overridden=sorted(user_job.field_overrides_json),
         injection_flags=posting.injection_flags,
         created_at=user_job.created_at,
@@ -130,20 +117,10 @@ def _job_out(posting: JobPosting, user_job: UserJob) -> JobOut:
 async def _load(
     db: DbSession, user_id: UUID, job_id: UUID
 ) -> tuple[JobPosting, UserJob]:
-    row = (
-        await db.execute(
-            select(JobPosting, UserJob)
-            .join(
-                UserJob,
-                (UserJob.posting_id == JobPosting.posting_id)
-                & (UserJob.user_id == JobPosting.owner_id),
-            )
-            .where(UserJob.user_job_id == job_id, UserJob.user_id == user_id)
-        )
-    ).one_or_none()
+    row = await get_user_job(db, user_id, job_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
-    return row.JobPosting, row.UserJob
+    return row
 
 
 async def _find_existing(
@@ -251,7 +228,7 @@ async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
     )
     summaries = []
     for posting, user_job in rows:
-        parsed = _effective(posting, user_job)
+        parsed = effective_parsed_job(posting, user_job)
         summaries.append(
             JobSummary(
                 job_id=user_job.user_job_id,
@@ -287,7 +264,8 @@ async def update_job(
         overrides["basic_fields"] = body.basic_fields.model_dump(mode="json")
     if body.requirements is not None:
         current = {
-            r.requirement_id: r for r in _effective(posting, user_job).requirements
+            r.requirement_id: r
+            for r in effective_parsed_job(posting, user_job).requirements
         }
         requirements = []
         for item in body.requirements:
