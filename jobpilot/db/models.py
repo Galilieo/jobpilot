@@ -117,6 +117,13 @@ class AiRun(Base):
             deferrable=True,
             initially="DEFERRED",
         ),
+        # 解析 JD 的运行关联产出的岗位；匹配和改写关联所针对的岗位。
+        ForeignKeyConstraint(
+            ["user_job_id", "user_id"],
+            ["user_job.user_job_id", "user_job.user_id"],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
     )
 
     run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -127,6 +134,7 @@ class AiRun(Base):
     status: Mapped[str] = mapped_column(String(32), server_default="running")
     thread_id: Mapped[str | None] = mapped_column(Text)
     fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)
+    user_job_id: Mapped[UUID | None] = mapped_column(Uuid)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -326,6 +334,93 @@ class FactDraft(Base):
     items_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class JobStage(StrEnum):
+    """个人对一个岗位的进度。"""
+
+    SAVED = "saved"
+    APPLIED = "applied"
+    INTERVIEWING = "interviewing"
+    OFFER = "offer"
+    REJECTED = "rejected"
+    ARCHIVED = "archived"
+
+
+class JobPosting(Base):
+    """JD 原文与解析结果。V1 全部私有：谁导入谁拥有，同一用户导入同一份 JD 去重。
+
+    个人的修改不写这里，写 user_job.field_overrides_json，解析结果保持原样可追溯。
+    """
+
+    __tablename__ = "job_posting"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "content_hash"),
+        # 供 user_job 用 (posting_id, owner_id) 引用同一用户的岗位。
+        UniqueConstraint("posting_id", "owner_id"),
+        CheckConstraint(
+            "visibility IN ('private', 'public')", name="ck_job_visibility"
+        ),
+        CheckConstraint(
+            "visibility = 'public' OR owner_id IS NOT NULL", name="ck_job_owner"
+        ),
+    )
+
+    posting_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    visibility: Mapped[str] = mapped_column(String(16), server_default="private")
+    raw_text: Mapped[str] = mapped_column(Text)
+    # 规范化后正文的 SHA-256，用于同一用户内去重。
+    content_hash: Mapped[str] = mapped_column(String(64))
+    parsed_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    keywords: Mapped[list[str]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+    injection_flags: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+
+
+class UserJob(Base):
+    """一个用户和一个岗位的关系：进度、个人修改、备注。始终按用户隔离。"""
+
+    __tablename__ = "user_job"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["posting_id", "user_id"],
+            ["job_posting.posting_id", "job_posting.owner_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("user_id", "posting_id"),
+        # 供运行、投递等用 (user_job_id, user_id) 引用同一用户的岗位。
+        UniqueConstraint("user_job_id", "user_id"),
+        CheckConstraint(
+            "stage IN ('saved', 'applied', 'interviewing', 'offer', 'rejected', "
+            "'archived')",
+            name="ck_user_job_stage",
+        ),
+        Index("ix_user_job_user_id_updated_at", "user_id", "updated_at"),
+    )
+
+    user_job_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    posting_id: Mapped[UUID] = mapped_column(Uuid)
+    stage: Mapped[str] = mapped_column(String(16), server_default="saved")
+    # 用户对解析结果的修改，按字段整体覆盖（如 requirements 整个列表）。
+    field_overrides_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=sql_text("'{}'::jsonb")
+    )
+    extra_fields_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=sql_text("'{}'::jsonb")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

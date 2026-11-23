@@ -73,7 +73,10 @@ class Settings(BaseSettings):
     extract_facts: ModelSettings = Field(
         default_factory=lambda: ModelSettings(max_tokens=8192)
     )
-    parse_jd: ModelSettings = Field(default_factory=ModelSettings)
+    # 一份 JD 常有二三十条要求和职责，每条带原文片段，2048 不够。
+    parse_jd: ModelSettings = Field(
+        default_factory=lambda: ModelSettings(max_tokens=4096)
+    )
     match: ModelSettings = Field(default_factory=ModelSettings)
     plan: ModelSettings = Field(default_factory=ModelSettings)
     rewrite: ModelSettings = Field(default_factory=ModelSettings)

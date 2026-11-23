@@ -14,6 +14,7 @@ from jobpilot.services.facts import (
     responsibility_supported,
     role_context,
 )
+from jobpilot.services.jobs import JobExtraction, build_parsed_job
 from jobpilot.services.prompts import load_prompt
 
 _RESUME = re.compile(r'<untrusted_data label="resume">\n(.*?)\n</untrusted_data>', re.S)
@@ -46,3 +47,17 @@ def test_example_output_follows_program_rules(
             assert not numbers_missing_from_quote(fact["text"], quote), quote
             if not fact["responsibility_stated"]:
                 assert responsibility is Responsibility.PARTICIPATE, quote
+
+
+def test_parse_jd_example_follows_program_rules() -> None:
+    """JD 解析示例：输出能通过模型校验，每条要求和职责的片段都在示例 JD 里。"""
+    text = load_prompt("parse_jd").text.split("## 示例", 1)[1]
+    [raw_text] = re.findall(
+        r'<untrusted_data label="jd">\n(.*?)\n</untrusted_data>', text, re.S
+    )
+    [output] = _OUTPUT.findall(text)
+
+    parsed = build_parsed_job(raw_text, JobExtraction.model_validate_json(output))
+
+    assert parsed.requirements and parsed.duties
+    assert all(item.quote_verified for item in [*parsed.requirements, *parsed.duties])

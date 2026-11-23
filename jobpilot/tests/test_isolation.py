@@ -79,6 +79,13 @@ async def _create_resume(client: httpx.AsyncClient) -> str:
     return created.json()["doc_id"]
 
 
+async def _create_job(client: httpx.AsyncClient) -> str:
+    """B 提交一份 JD；假模型返回空的解析结果。"""
+    created = await client.post("/api/jobs", json={"raw_text": "B 收藏的岗位"})
+    assert created.status_code == 201, created.text
+    return created.json()["job_id"]
+
+
 # T1.4 起每加一类业务资源，就在这里登记一项。
 OWNED_RESOURCES: list[OwnedResource] = [
     OwnedResource(
@@ -112,6 +119,23 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("POST", "/api/resumes/extract"),
                 ("POST", "/api/resumes"),
                 ("GET", "/api/resumes/{doc_id}"),
+            }
+        ),
+    ),
+    OwnedResource(
+        name="job",
+        create=_create_job,
+        read=("GET", "/api/jobs/{id}"),
+        attempts=(
+            Attempt("GET", "/api/jobs/{id}"),
+            Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
+        ),
+        routes=frozenset(
+            {
+                ("POST", "/api/jobs"),
+                ("GET", "/api/jobs"),
+                ("GET", "/api/jobs/{job_id}"),
+                ("PUT", "/api/jobs/{job_id}"),
             }
         ),
     ),

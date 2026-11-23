@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.auth import router as auth_router
 from jobpilot.api.facts import router as facts_router
+from jobpilot.api.jobs import router as jobs_router
 from jobpilot.api.ocr import router as ocr_router
 from jobpilot.api.resumes import router as resumes_router
 from jobpilot.config import settings
@@ -41,6 +42,7 @@ app.include_router(auth_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)
 app.include_router(facts_router)
+app.include_router(jobs_router)
 
 
 @app.get("/api/health")

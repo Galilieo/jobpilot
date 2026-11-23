@@ -129,16 +129,23 @@ def fake_model_client() -> FakeModelClient:
     return FakeModelClient()
 
 
+EMPTY_JOB = '{"basic_fields": {}, "requirements": [], "duties": [], "keywords": []}'
+
+
 @pytest.fixture
 async def model_outputs(async_client: httpx.AsyncClient) -> AsyncIterator[list[str]]:
-    """接口用的假模型：按顺序返回列表里的输出，列表空了返回「没有经历」。
+    """接口用的假模型：按顺序返回列表里的输出；列表空了，按请求里的数据标签返回空结果。
 
     测试往返回的列表里追加模型输出即可。依赖 async_client，在它恢复依赖之前清理。
     """
     outputs: list[str] = []
 
     def respond(request: httpx.Request) -> httpx.Response:
-        return completion_response(outputs.pop(0) if outputs else '{"experiences": []}')
+        if outputs:
+            return completion_response(outputs.pop(0))
+        if b'label=\\"jd\\"' in request.content:
+            return completion_response(EMPTY_JOB)
+        return completion_response('{"experiences": []}')
 
     async with fake_upstream(respond) as client:
         app.dependency_overrides[get_model_client] = lambda: client
