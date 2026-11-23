@@ -1,7 +1,7 @@
 {
   "extract_facts": {
-    "version": 3,
-    "sha256": "3b7d282d910597b9966ce5a3813d72bcf4fef7b6b5d1d87fb2fa7822a68e0f8c"
+    "version": 4,
+    "sha256": "5d9c778c79904026dae597971db0c4842be9cd21e026e03666446c88cea4e940"
   },
   "repair_json": {
     "version": 1,
