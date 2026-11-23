@@ -53,7 +53,7 @@
       "text": "修复取消预约后列表状态更新延迟的问题",
       "has_number": false,
       "source_quote": "参与管理端联调，修复取消预约后列表状态更新延迟的问题",
-      "needs_confirmation": false
+      "needs_confirmation": true
     },
     {
       "experience": "校内器材预约系统",
