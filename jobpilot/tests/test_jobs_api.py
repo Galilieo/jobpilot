@@ -188,3 +188,53 @@ async def test_model_failure_saves_nothing(
         assert (await db.scalars(select(JobPosting))).all() == []
         [run] = (await db.scalars(select(AiRun))).all()
         assert run.status == RunStatus.FAILED
+
+
+async def test_double_submit_returns_the_first_job(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """连点两次：两个请求都查过重，另一个先插入。后到的不能报 500，返回先到的那份。
+
+    用替换后的 parse_job 在「调用模型期间」插入一份同样正文的岗位，稳定地复现这个时序。
+    """
+    from hashlib import sha256
+
+    import jobpilot.api.jobs as jobs_api
+    from jobpilot.db.models import User, UserJob
+    from jobpilot.services.parsing import normalize_text
+
+    real_parse = jobs_api.parse_job
+    competitor: dict[str, str] = {}
+
+    async def parse_while_other_request_wins(*args: Any, **kwargs: Any) -> Any:
+        parsed = await real_parse(*args, **kwargs)
+        async with session_factory.begin() as db:
+            user = await db.scalar(select(User))
+            raw = normalize_text(JD)
+            posting = JobPosting(
+                owner_id=user.user_id,
+                raw_text=raw,
+                content_hash=sha256(raw.encode()).hexdigest(),
+                parsed_json=parsed.model_dump(mode="json"),
+            )
+            db.add(posting)
+            await db.flush()
+            user_job = UserJob(user_id=user.user_id, posting_id=posting.posting_id)
+            db.add(user_job)
+            await db.flush()
+            competitor["job_id"] = str(user_job.user_job_id)
+        return parsed
+
+    monkeypatch.setattr(jobs_api, "parse_job", parse_while_other_request_wins)
+
+    response = await add_job(signed_in, model_outputs)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["job_id"] == competitor["job_id"]
+    async with session_factory() as db:
+        assert len((await db.scalars(select(JobPosting))).all()) == 1
+        [run] = (await db.scalars(select(AiRun))).all()
+        assert run.status == RunStatus.CANCELLED

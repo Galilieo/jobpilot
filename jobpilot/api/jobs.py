@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
@@ -34,6 +35,7 @@ from jobpilot.services.parsing import normalize_text
 router = APIRouter(prefix="/api", tags=["jobs"])
 
 MAX_JD_CHARS = 20_000
+_POSTING_UNIQUE = "uq_job_posting_owner_id"
 _PARSE_BUDGET = {"remaining_calls": 3, "remaining_tokens": 40_000}
 _MODEL_ERRORS = (
     APIConnectionError,
@@ -144,6 +146,21 @@ async def _load(
     return row.JobPosting, row.UserJob
 
 
+async def _find_existing(
+    db: DbSession, user_id: UUID, content_hash: str
+) -> UUID | None:
+    """本人以前提交过同样正文的岗位；按正文指纹查，只查自己的。"""
+    return await db.scalar(
+        select(UserJob.user_job_id)
+        .join(
+            JobPosting,
+            (UserJob.posting_id == JobPosting.posting_id)
+            & (UserJob.user_id == JobPosting.owner_id),
+        )
+        .where(JobPosting.owner_id == user_id, JobPosting.content_hash == content_hash)
+    )
+
+
 @router.post("/jobs", status_code=status.HTTP_201_CREATED)
 async def add_job(
     body: JobIn,
@@ -161,18 +178,7 @@ async def add_job(
         )
     content_hash = sha256(raw_text.encode("utf-8")).hexdigest()
 
-    existing = await db.scalar(
-        select(UserJob.user_job_id)
-        .join(
-            JobPosting,
-            (UserJob.posting_id == JobPosting.posting_id)
-            & (UserJob.user_id == JobPosting.owner_id),
-        )
-        .where(
-            JobPosting.owner_id == user.user_id,
-            JobPosting.content_hash == content_hash,
-        )
-    )
+    existing = await _find_existing(db, user.user_id, content_hash)
     if existing is not None:
         response.status_code = status.HTTP_200_OK
         return _job_out(*await _load(db, user.user_id, existing))
@@ -180,6 +186,9 @@ async def add_job(
     run = AiRun(user_id=user.user_id, kind="parse_jd")
     db.add(run)
     await db.commit()
+    # flush 失败后 session 处于待回滚状态，回滚又会让对象过期；之后再读 user.user_id
+    # 都会触发异步里不允许的隐式加载。所以趁现在把要用的 ID 取出来。
+    user_id, run_id = user.user_id, run.run_id
     try:
         parsed = await parse_job(
             session_factory,
@@ -205,7 +214,20 @@ async def add_job(
         injection_flags=[flag.to_json() for flag in detect_injection(raw_text)],
     )
     db.add(posting)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        # 连点两次提交：两个请求都在对方插入前查过重，后插入的撞上唯一约束。
+        # 数据库已经保证只存一份，这里把报错换成返回先到的那份。
+        await db.rollback()
+        if error.orig.diag.constraint_name != _POSTING_UNIQUE:
+            raise
+        await set_run_status(db, user_id, run_id, RunStatus.CANCELLED)
+        await db.commit()
+        existing = await _find_existing(db, user_id, content_hash)
+        assert existing is not None
+        response.status_code = status.HTTP_200_OK
+        return _job_out(*await _load(db, user_id, existing))
     user_job = UserJob(user_id=user.user_id, posting_id=posting.posting_id)
     db.add(user_job)
     await db.flush()
