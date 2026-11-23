@@ -1,0 +1,221 @@
+{
+  "sample_id": "resume-018",
+  "facts": [
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "跟的是离线记录和扫码这两块",
+      "has_number": true,
+      "source_quote": "我跟的是离线记录和扫码这两块",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 Room 保存待提交巡检单",
+      "has_number": false,
+      "source_quote": "我负责用 Room 保存待提交巡检单",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "页面重新打开时恢复草稿",
+      "has_number": false,
+      "source_quote": "页面重新打开时恢复草稿",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "把没传成功的照片留在列表上供重试",
+      "has_number": false,
+      "source_quote": "并把没传成功的照片留在列表上供重试",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "补充离线到在线、杀进程重进的检查项",
+      "has_number": false,
+      "source_quote": "我补了离线到在线、杀进程重进的检查项",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "配合现场同事排查扫码后偶尔进不了设备详情的问题",
+      "has_number": false,
+      "source_quote": "配合现场同事排查扫码后偶尔进不了设备详情的问题",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "解析前统一清理二维码内容",
+      "has_number": false,
+      "source_quote": "我在解析前统一清理",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补充旧版标签格式错误和未知设备的提示",
+      "has_number": false,
+      "source_quote": "并补了旧版标签格式错误和未知设备的提示",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "用仓库借出的 3 台机型做回归，其中 1 台是较旧的手持机",
+      "has_number": true,
+      "source_quote": "用仓库借出的 3 台机型做回归，其中有 1 台是较旧的手持机",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "跟了两次小范围发布",
+      "has_number": true,
+      "source_quote": "跟了两次小范围发布",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "汇总试用反馈，整理成待修清单",
+      "has_number": false,
+      "source_quote": "汇总试用反馈，整理成待修清单",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "青帆巡检设备 Android 开发实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "9 月验收后继续维护扫码与列表相关问题",
+      "has_number": true,
+      "source_quote": "9 月验收后继续维护扫码与列表相关问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "公交卡余额记录器",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Kotlin 写了一个手动记录充值、消费的小工具，账目保存在本地，可导出 CSV",
+      "has_number": false,
+      "source_quote": "用 Kotlin 写了一个手动记录充值、消费的小工具，账目保存在本地，可导出 CSV",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "公交卡余额记录器",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "支持把老版 CSV 导回去，写过两种表头样例",
+      "has_number": true,
+      "source_quote": "支持把老版 CSV 导回去，写过两种表头样例",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "公交卡余额记录器",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "先用 XML 做页面",
+      "has_number": false,
+      "source_quote": "先用 XML 做页面",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "公交卡余额记录器",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Compose 重写月度明细页，保留原来的数据层",
+      "has_number": false,
+      "source_quote": "后续用 Compose 重写了月度明细页，保留原来的数据层",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "学院技能节现场支持",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "为体验区的手机安装演示包",
+      "has_number": false,
+      "source_quote": "为体验区的手机安装演示包",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院技能节现场支持",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "整理设备编号和借还清单",
+      "has_number": false,
+      "source_quote": "整理设备编号和借还清单",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院技能节现场支持",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "协助记录现场遇到的闪退和界面显示问题",
+      "has_number": false,
+      "source_quote": "协助记录现场遇到的闪退和界面显示问题",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院技能节现场支持",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "收场后把日志与操作步骤交给参赛同学",
+      "has_number": false,
+      "source_quote": "收场后把日志与操作步骤交给参赛同学",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学历与技能",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "校级移动应用技能赛二等奖（2025）",
+      "has_number": true,
+      "source_quote": "校级移动应用技能赛二等奖（2025）",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学历与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Kotlin、Android Studio、Room、Git",
+      "has_number": false,
+      "source_quote": "Kotlin、Android Studio、Room、Git",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学历与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能用 adb 和 Logcat 查日志",
+      "has_number": false,
+      "source_quote": "能用 adb 和 Logcat 查日志",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学历与技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "接触过协程、Retrofit 和 Jetpack Compose",
+      "has_number": false,
+      "source_quote": "接触过协程、Retrofit 和 Jetpack Compose",
+      "needs_confirmation": false
+    }
+  ]
+}

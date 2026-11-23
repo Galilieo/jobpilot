@@ -37,6 +37,15 @@ def test_dev_set_is_fully_annotated() -> None:
     assert dev_set <= {path.stem for path in RESUME_ANNOTATIONS}
 
 
+def test_test_set_is_fully_annotated() -> None:
+    """与 evals/runners/e1_extract_facts.py 的 TEST_SAMPLES 保持一致。"""
+    test_set = {
+        *(f"resume-0{n:02d}" for n in range(6, 11)),
+        *(f"resume-0{n}" for n in (12, 13, 14, 16, 17, 18, 20)),
+    }
+    assert test_set <= {path.stem for path in RESUME_ANNOTATIONS}
+
+
 @pytest.mark.parametrize("path", RESUME_ANNOTATIONS, ids=lambda path: path.stem)
 def test_annotated_facts_follow_extraction_rules(path: Path) -> None:
     raw_text, annotation = load(path)

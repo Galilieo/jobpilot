@@ -1,0 +1,59 @@
+{
+  "sample_id": "resume-006",
+  "facts": [
+    {
+      "experience": "客服工单分派助手",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 Python 实现工单分类与分派建议",
+      "has_number": false,
+      "source_quote": "负责用 Python 实现工单分类与分派建议",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "客服工单分派助手",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "将模型输出交给 Pydantic 校验，校验失败的工单进入人工处理队列",
+      "has_number": false,
+      "source_quote": "将模型输出交给 Pydantic 校验，校验失败的工单进入人工处理队列",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "客服工单分派助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "设计并实现部门白名单校验，复核通过后才创建分派记录",
+      "has_number": false,
+      "source_quote": "设计并实现部门白名单校验，复核通过后才创建分派记录",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "客服工单分派助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在 36 条合成工单上回放测试",
+      "has_number": true,
+      "source_quote": "在 36 条合成工单上回放测试",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "客服工单分派助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "记录 5 条人工复核案例，其中 2 条与部门名称相近有关",
+      "has_number": true,
+      "source_quote": "记录 5 条人工复核案例，其中 2 条与部门名称相近有关",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "客服工单分派助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在请求日志里记录耗时和错误类别，工单正文未写入日志",
+      "has_number": false,
+      "source_quote": "在请求日志里记录耗时和错误类别，工单正文未写入日志",
+      "needs_confirmation": true
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "sample_id": "resume-012",
+  "facts": [
+    {
+      "experience": "教育背景",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "GPA 3.79/4.0",
+      "has_number": true,
+      "source_quote": "GPA 3.79/4.0",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育背景",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "专业 12/146",
+      "has_number": true,
+      "source_quote": "专业 12/146",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育背景",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "操作系统、数据库系统、信息检索",
+      "has_number": false,
+      "source_quote": "操作系统、数据库系统、信息检索",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育背景",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "2025 年校优秀学生奖学金",
+      "has_number": true,
+      "source_quote": "2025 年校优秀学生奖学金",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "主要维护资料索引和检索链路",
+      "has_number": false,
+      "source_quote": "我主要维护资料索引和检索链路",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "实现索引任务的增量更新，按页面标识和版本号只重建变更页",
+      "has_number": false,
+      "source_quote": "实现索引任务的增量更新，按页面标识和版本号只重建变更页",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "删除文档时同步清掉旧的段落",
+      "has_number": false,
+      "source_quote": "删除文档时同步清掉旧的段落",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在预发布回放一周内的 37 次资料更新",
+      "has_number": true,
+      "source_quote": "在预发布回放一周内的 37 次资料更新",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "更新后仍返回旧段落的查询由 11 次降到 1 次",
+      "has_number": true,
+      "source_quote": "更新后仍返回旧段落的查询由 11 次降到 1 次",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补记告警",
+      "has_number": false,
+      "source_quote": "补记了告警",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "与客服同事整理 84 条来自内部脱敏工单的问题",
+      "has_number": true,
+      "source_quote": "与客服同事整理 84 条来自内部脱敏工单的问题",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "给涉及产品版本的标注补上版本号",
+      "has_number": false,
+      "source_quote": "给涉及产品版本的标注补上版本号",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "在关键词召回后加版本过滤和复排",
+      "has_number": false,
+      "source_quote": "负责在关键词召回后加版本过滤和复排",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "result",
+      "responsibility": "own",
+      "text": "固定 Top-5 时，同一批问题上命中包含答案的资料页从 57 条到 68 条",
+      "has_number": true,
+      "source_quote": "固定 Top-5，在同一批问题上命中包含答案的资料页从 57 条到 68 条",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "给索引任务补充失败原因日志与人工重试入口",
+      "has_number": false,
+      "source_quote": "给索引任务补了失败原因日志与人工重试入口",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "写了重跑说明，交接给两名轮值同事",
+      "has_number": true,
+      "source_quote": "写了重跑说明，交接给两名轮值同事",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "栖桐文档科技 AI 工程实习",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "接口随 9 月版本上线",
+      "has_number": true,
+      "source_quote": "接口随 9 月版本上线",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "论文图表索引工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "从 PDF 提取图表标题、页码和附近正文",
+      "has_number": false,
+      "source_quote": "负责从 PDF 提取图表标题、页码和附近正文",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "论文图表索引工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "把原始页码带入搜索结果",
+      "has_number": false,
+      "source_quote": "并把原始页码带入搜索结果",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "论文图表索引工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "遇到跨页表格或扫描版时，目录展示页面级链接，保留人工补录入口",
+      "has_number": false,
+      "source_quote": "遇到跨页表格或扫描版，目录展示页面级链接，保留人工补录入口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "论文图表索引工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "用 23 篇论文走了一轮试用",
+      "has_number": true,
+      "source_quote": "用 23 篇论文走了一轮试用",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "论文图表索引工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "补充 6 个回归样例",
+      "has_number": true,
+      "source_quote": "随后补了 6 个回归样例",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "城市骑行可达性分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "把公开路网转成有向图",
+      "has_number": false,
+      "source_quote": "在三人组里负责把公开路网转成有向图",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "城市骑行可达性分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "按单行规则处理路段方向",
+      "has_number": false,
+      "source_quote": "按单行规则处理路段方向",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "城市骑行可达性分析",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "用几段实地路线检查导航结果",
+      "has_number": false,
+      "source_quote": "并用几段实地路线检查导航结果",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "城市骑行可达性分析",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "参与课程答辩",
+      "has_number": false,
+      "source_quote": "参与了课程答辩",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Python、SQL、FastAPI、PostgreSQL、OpenSearch",
+      "has_number": false,
+      "source_quote": "Python、SQL、FastAPI、PostgreSQL、OpenSearch",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能写 pytest 回归用例和读容器日志",
+      "has_number": false,
+      "source_quote": "能写 pytest 回归用例和读容器日志",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "工作中用过模型接口和排序模型",
+      "has_number": false,
+      "source_quote": "工作中用过模型接口和排序模型",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能够说明检索指标的计算口径",
+      "has_number": false,
+      "source_quote": "能够说明检索指标的计算口径",
+      "needs_confirmation": false
+    }
+  ]
+}

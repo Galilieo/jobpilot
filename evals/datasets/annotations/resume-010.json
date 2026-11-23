@@ -1,0 +1,41 @@
+{
+  "sample_id": "resume-010",
+  "facts": [
+    {
+      "experience": "会议纪要整理",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Python 调用大模型 API，根据自己写的虚构会议文本生成行动项",
+      "has_number": false,
+      "source_quote": "用 Python 调用大模型 API，根据自己写的虚构会议文本生成行动项",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "会议纪要整理",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "修改提示词，让输出里带上任务和负责人",
+      "has_number": false,
+      "source_quote": "修改提示词，让输出里带上任务和负责人",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "会议纪要整理",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在展示前手动检查输出",
+      "has_number": false,
+      "source_quote": "因此在展示前手动检查",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "会议纪要整理",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "试了 4 段输入",
+      "has_number": true,
+      "source_quote": "试了 4 段输入",
+      "needs_confirmation": true
+    }
+  ]
+}

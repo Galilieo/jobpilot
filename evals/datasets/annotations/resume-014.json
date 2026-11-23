@@ -1,0 +1,257 @@
+{
+  "sample_id": "resume-014",
+  "facts": [
+    {
+      "experience": "教育",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "学过网页交互设计、JavaScript 程序设计、数据库基础",
+      "has_number": false,
+      "source_quote": "学过网页交互设计、JavaScript 程序设计、数据库基础",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "校内网页设计赛三等奖（2025）",
+      "has_number": true,
+      "source_quote": "校内网页设计赛三等奖（2025）",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "做的是活动复制后再编辑的表单，以及选座预览的部分界面",
+      "has_number": false,
+      "source_quote": "我做的是活动复制后再编辑的表单，以及选座预览的部分界面",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Vue 3 和 TypeScript 改活动编辑表单",
+      "has_number": true,
+      "source_quote": "用 Vue 3 和 TypeScript 改活动编辑表单",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "把创建、复制用到的日期校验合并到同一套规则里",
+      "has_number": false,
+      "source_quote": "把创建、复制用到的日期校验合并到同一套规则里",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "复制旧活动时保留场地与票档草稿，开售时间留空由运营重新选",
+      "has_number": false,
+      "source_quote": "复制旧活动时保留场地与票档草稿，开售时间留空由运营重新选",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "联调阶段补充跨天场次和已停售票档的交互提示",
+      "has_number": false,
+      "source_quote": "联调阶段补了跨天场次和已停售票档的交互提示",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "排查选座预览偶尔显示上一个场次的问题",
+      "has_number": false,
+      "source_quote": "排查选座预览偶尔显示上一个场次的问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在切换后取消上一笔请求",
+      "has_number": false,
+      "source_quote": "我在切换后取消上一笔请求",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "用请求场次校验返回的数据",
+      "has_number": false,
+      "source_quote": "并用请求场次校验返回的数据",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "补充 4 条 Playwright 用例，其中 2 条模拟网络较慢时连续切换",
+      "has_number": true,
+      "source_quote": "补了 4 条 Playwright 用例，其中 2 条模拟网络较慢时连续切换",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和设计一起整理空状态文案",
+      "has_number": false,
+      "source_quote": "和设计一起整理空状态文案",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "提交两个页面的运营验收录屏",
+      "has_number": true,
+      "source_quote": "提交了两个页面的运营验收录屏",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "桐尺票务工作室 前端实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "配合核对窄屏样式",
+      "has_number": false,
+      "source_quote": "我配合核对了窄屏样式",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "做了带候补提示的报名页和志愿者签到页，保存报名调用社团已有接口",
+      "has_number": false,
+      "source_quote": "我做了带候补提示的报名页和志愿者签到页，保存报名调用社团已有接口",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "首页较慢时用 Chrome 性能工具发现海报原图太大",
+      "has_number": false,
+      "source_quote": "首页较慢时，用 Chrome 性能工具发现海报原图太大",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "改成按设备宽度选图",
+      "has_number": false,
+      "source_quote": "改成按设备宽度选图",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "延迟加载首屏外海报",
+      "has_number": false,
+      "source_quote": "并延迟加载首屏外海报",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "校园网下用同一台安卓手机各测 5 次",
+      "has_number": true,
+      "source_quote": "校园网下用同一台安卓手机各测 5 次",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "首页 LCP 中位数由 3.8 s 到 2.5 s",
+      "has_number": true,
+      "source_quote": "首页 LCP 中位数由 3.8 s 到 2.5 s",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园短片展映报名页",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "展映结束后关闭入口，代码保留给下一届复用",
+      "has_number": false,
+      "source_quote": "展映结束后关闭入口，代码保留给下一届复用",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "影像社活动组",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "维护招募页",
+      "has_number": false,
+      "source_quote": "维护招募页",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "影像社活动组",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "整理报名和签到表",
+      "has_number": false,
+      "source_quote": "整理报名和签到表",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "影像社活动组",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "现场协助两次校内短片展映",
+      "has_number": true,
+      "source_quote": "现场协助两次校内短片展映",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Vue 3、TypeScript、CSS、Vite",
+      "has_number": true,
+      "source_quote": "Vue 3、TypeScript、CSS、Vite",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能按设计稿还原页面、编写表单交互和页面测试",
+      "has_number": false,
+      "source_quote": "能按设计稿还原页面、编写表单交互和页面测试",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "用过 Git、Figma",
+      "has_number": false,
+      "source_quote": "用过 Git、Figma",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "React 自学写过一个天气页面",
+      "has_number": false,
+      "source_quote": "React 自学写过一个天气页面",
+      "needs_confirmation": false
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "sample_id": "resume-009",
+  "facts": [
+    {
+      "experience": "课程资料检索对照实验",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "整理 80 条查询与对应段落的人工标注",
+      "has_number": true,
+      "source_quote": "负责整理 80 条查询与对应段落的人工标注",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "课程资料检索对照实验",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "使用其中 20 条查询调整检索参数，其余 60 条留作验证",
+      "has_number": true,
+      "source_quote": "使用其中 20 条查询调整检索参数，其余 60 条留作验证",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "课程资料检索对照实验",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 BM25 和向量检索分别生成候选结果",
+      "has_number": true,
+      "source_quote": "用 BM25 和向量检索分别生成候选结果",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "课程资料检索对照实验",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "实现 RRF 融合",
+      "has_number": false,
+      "source_quote": "并实现 RRF 融合",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "课程资料检索对照实验",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "复核低排名案例时发现部分查询里的课程简称与文档用词不同",
+      "has_number": false,
+      "source_quote": "复核低排名案例时发现部分查询里的课程简称与文档用词不同",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "课程资料检索对照实验",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "在留出的 60 条查询上，融合方案的 Recall@5 高于单独使用 BM25 的方案",
+      "has_number": true,
+      "source_quote": "在留出的 60 条查询上，融合方案的 Recall@5 高于单独使用 BM25 的方案",
+      "needs_confirmation": true
+    }
+  ]
+}

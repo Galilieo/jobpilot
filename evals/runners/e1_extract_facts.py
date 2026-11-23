@@ -7,8 +7,10 @@
     uv run --project jobpilot python -m evals.runners.e1_extract_facts \
         --runs 1 resume-003
     uv run --project jobpilot python -m evals.runners.e1_extract_facts resume-019
+    uv run --project jobpilot python -m evals.runners.e1_extract_facts --test --runs 5
 
-最后一条单独运行英文探针，它不在默认的开发集里。
+倒数第二条单独运行英文探针，它不在默认的开发集里。最后一条在测试集上报告最终结果，
+提示词定版后才运行，测试集的结果不用来修改提示词或规则。
 
 运行和计分分开：输出保存下来以后，改计分规则只需重新计分，不必再调用模型。
 调用记录写入开发库，归属一个固定的评测账号。
@@ -44,6 +46,11 @@ RESULT_DIR = REPO_ROOT / "evals" / "results"
 DEV_SAMPLES = [
     *(f"resume-00{n}" for n in range(1, 6)),
     *(f"resume-0{n}" for n in (11, 15, 21, 22, 23)),
+]
+# 测试集：5 份短样本和 7 份完整简历，分组见 evals/README.md。
+TEST_SAMPLES = [
+    *(f"resume-0{n:02d}" for n in range(6, 11)),
+    *(f"resume-0{n}" for n in (12, 13, 14, 16, 17, 18, 20)),
 ]
 
 # 一次运行的额度：允许一次 JSON 修复重发。
@@ -194,9 +201,11 @@ async def main(sample_ids: list[str], runs: int) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "samples", nargs="*", default=DEV_SAMPLES, help="简历编号，默认开发集"
-    )
+    parser.add_argument("samples", nargs="*", help="简历编号，默认开发集")
+    parser.add_argument("--test", action="store_true", help="运行测试集")
     parser.add_argument("--runs", type=int, default=3, help="每份简历运行几次")
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.samples, args.runs)))
+    if args.test and args.samples:
+        parser.error("--test 与指定简历编号不能同时使用")
+    samples = args.samples or (TEST_SAMPLES if args.test else DEV_SAMPLES)
+    sys.exit(asyncio.run(main(samples, args.runs)))

@@ -1,0 +1,41 @@
+{
+  "sample_id": "resume-008",
+  "facts": [
+    {
+      "experience": "图书借还查询",
+      "kind": "role",
+      "responsibility": "participate",
+      "text": "参与小组作业",
+      "has_number": false,
+      "source_quote": "参与小组作业",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "图书借还查询",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "协助补充借还记录查询页面需要的接口",
+      "has_number": false,
+      "source_quote": "协助补充借还记录查询页面需要的接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "图书借还查询",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "按照组内已有的 Java 和 MySQL 代码，增加按图书编号筛选记录的逻辑",
+      "has_number": false,
+      "source_quote": "按照组内已有的 Java 和 MySQL 代码，增加按图书编号筛选记录的逻辑",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "图书借还查询",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "根据助教提供的两条样例请求验证返回字段",
+      "has_number": true,
+      "source_quote": "根据助教提供的两条样例请求验证返回字段",
+      "needs_confirmation": true
+    }
+  ]
+}

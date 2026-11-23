@@ -1,0 +1,203 @@
+{
+  "sample_id": "resume-017",
+  "facts": [
+    {
+      "experience": "教育",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "专科阶段主要学 Web 开发和数据库",
+      "has_number": false,
+      "source_quote": "专科阶段主要学 Web 开发和数据库",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "本科补修操作系统、计算机网络",
+      "has_number": false,
+      "source_quote": "本科补修操作系统、计算机网络",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责 Go 服务里的报名和取消接口",
+      "has_number": false,
+      "source_quote": "我负责 Go 服务里的报名和取消接口",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 MySQL 事务锁住该时段的名额记录",
+      "has_number": false,
+      "source_quote": "用 MySQL 事务锁住该时段的名额记录",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "取消成功后再尝试递补",
+      "has_number": false,
+      "source_quote": "取消成功后再尝试递补",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "管理员关闭某个时段时，后台保留已有报名明细用于联系队员",
+      "has_number": false,
+      "source_quote": "遇到管理员关闭某个时段，后台保留已有报名明细用于联系队员",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和团队拿 12 个账号在测试库里同时抢一个剩余名额",
+      "has_number": true,
+      "source_quote": "我们拿 12 个账号在测试库里同时抢一个剩余名额",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "复查时只有一笔报名成功",
+      "has_number": true,
+      "source_quote": "复查时只有一笔报名成功",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "校园运动队训练报名工具",
+      "kind": "result",
+      "responsibility": "participate",
+      "text": "社团在秋季学期开始使用",
+      "has_number": false,
+      "source_quote": "社团在秋季学期开始使用",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "日志归档命令行工具",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Go 做了一个按目录扫描并按月份压缩归档的小工具",
+      "has_number": false,
+      "source_quote": "用 Go 做了一个按目录扫描并按月份压缩归档的小工具",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "日志归档命令行工具",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "压缩先写临时文件，校验通过后再改名，以便中途停掉重跑",
+      "has_number": false,
+      "source_quote": "为了能中途停掉重跑，压缩先写临时文件，校验通过后再改名",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "日志归档命令行工具",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "试过文件被占用、目录只读和归档已存在的情况",
+      "has_number": false,
+      "source_quote": "试过文件被占用、目录只读和归档已存在",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "日志归档命令行工具",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在 README 里写了恢复步骤",
+      "has_number": false,
+      "source_quote": "README 里写了恢复步骤",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "庐川职业技术学院信息中心 勤工助学",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "按值班表检查机房开机、网络和打印机状态",
+      "has_number": false,
+      "source_quote": "按值班表检查机房开机、网络和打印机状态",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "庐川职业技术学院信息中心 勤工助学",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "把报障单里的机位编号改为下拉选择",
+      "has_number": false,
+      "source_quote": "把报障单里的机位编号改为下拉选择",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "庐川职业技术学院信息中心 勤工助学",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "协助老师核对重复报修",
+      "has_number": false,
+      "source_quote": "协助老师核对重复报修",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "庐川职业技术学院信息中心 勤工助学",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "整理了两间机房的设备清单",
+      "has_number": true,
+      "source_quote": "整理了两间机房的设备清单",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "Go、Gin、MySQL",
+      "has_number": false,
+      "source_quote": "Go、Gin、MySQL",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能写接口和表驱动测试",
+      "has_number": false,
+      "source_quote": "能写接口和表驱动测试",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "用过 Docker Compose、Git 和基础 Linux 命令",
+      "has_number": false,
+      "source_quote": "用过 Docker Compose、Git 和基础 Linux 命令",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "熟悉课程项目里的 Redis 缓存读写",
+      "has_number": false,
+      "source_quote": "熟悉课程项目里的 Redis 缓存读写",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技能",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "最近在补消息队列",
+      "has_number": false,
+      "source_quote": "最近在补消息队列",
+      "needs_confirmation": false
+    }
+  ]
+}

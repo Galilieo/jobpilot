@@ -1,0 +1,230 @@
+{
+  "sample_id": "resume-016",
+  "facts": [
+    {
+      "experience": "教育背景",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "选修 Python 程序设计与信息可视化",
+      "has_number": false,
+      "source_quote": "选修 Python 程序设计与信息可视化",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育背景",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "2025 年学院课程设计周优秀展示",
+      "has_number": true,
+      "source_quote": "2025 年学院课程设计周优秀展示",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "做了一个本地页面，把值班手册和器材登记说明放进去",
+      "has_number": false,
+      "source_quote": "做了一个本地页面，把值班手册和器材登记说明放进去",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Python 按标题切段",
+      "has_number": false,
+      "source_quote": "先用 Python 按标题切段",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "按关键词拿三段文字交给模型生成回答",
+      "has_number": true,
+      "source_quote": "再按关键词拿三段文字交给模型生成回答",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "在页面列出段落标题",
+      "has_number": false,
+      "source_quote": "并在页面列出段落标题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "试了自己写的 24 个问题",
+      "has_number": true,
+      "source_quote": "试了自己写的 24 个问题",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "补充器材别名表",
+      "has_number": false,
+      "source_quote": "补了器材别名表",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "工坊工具借还说明助手",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "手册里找不到对应规则时提示去问值班人员",
+      "has_number": false,
+      "source_quote": "手册里找不到对应规则时会提示去问值班人员",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "社区展览语音导览原型",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责三个展点的导览脚本和交互原型",
+      "has_number": true,
+      "source_quote": "负责三个展点的导览脚本和交互原型",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区展览语音导览原型",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "整理志愿者访谈记录",
+      "has_number": false,
+      "source_quote": "整理志愿者访谈记录",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区展览语音导览原型",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 Figma 做扫码进入、选展点和切换字幕的流程",
+      "has_number": false,
+      "source_quote": "用 Figma 做扫码进入、选展点和切换字幕的流程",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区展览语音导览原型",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "逐个核对后用人工录音替换了 7 处",
+      "has_number": true,
+      "source_quote": "我逐个核对后用人工录音替换了 7 处",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区展览语音导览原型",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "给组员整理词条表",
+      "has_number": false,
+      "source_quote": "我给他们整理了词条表",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "社区展览语音导览原型",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和组员一起验收",
+      "has_number": false,
+      "source_quote": "并一起验收",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院模型工坊 学生值班员",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "定期核对工具借还登记",
+      "has_number": false,
+      "source_quote": "定期核对工具借还登记",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院模型工坊 学生值班员",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "给新同学说明工具归位要求",
+      "has_number": false,
+      "source_quote": "给新同学说明工具归位要求",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院模型工坊 学生值班员",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "和工坊老师把容易填错的器材编号印在工具柜上",
+      "has_number": false,
+      "source_quote": "后来和工坊老师把容易填错的器材编号印在工具柜上",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学院模型工坊 学生值班员",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "交班时按柜位核对",
+      "has_number": false,
+      "source_quote": "交班时按柜位核对",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技术与工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "能用 Python 处理 TXT、CSV",
+      "has_number": false,
+      "source_quote": "能用 Python 处理 TXT、CSV",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技术与工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "写过简单 Flask 路由和模型 API 调用",
+      "has_number": false,
+      "source_quote": "写过简单 Flask 路由和模型 API 调用",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技术与工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "常用 Figma",
+      "has_number": false,
+      "source_quote": "常用 Figma",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技术与工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "了解 HTML 和 CSS",
+      "has_number": false,
+      "source_quote": "了解 HTML 和 CSS",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技术与工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "正在补 SQL",
+      "has_number": false,
+      "source_quote": "正在补 SQL",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "技术与工具",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "CET-4",
+      "has_number": true,
+      "source_quote": "CET-4",
+      "needs_confirmation": false
+    }
+  ]
+}

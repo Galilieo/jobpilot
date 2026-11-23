@@ -1,0 +1,239 @@
+{
+  "sample_id": "resume-020",
+  "facts": [
+    {
+      "experience": "教育背景",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "统计学、数值分析、数据库基础、软件测试选修",
+      "has_number": false,
+      "source_quote": "统计学、数值分析、数据库基础、软件测试选修",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "教育背景",
+      "kind": "result",
+      "responsibility": "na",
+      "text": "大学英语四级",
+      "has_number": false,
+      "source_quote": "大学英语四级",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责优惠券退回和电子小票查询两个功能的版本回归",
+      "has_number": true,
+      "source_quote": "负责优惠券退回和电子小票查询两个功能的版本回归",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "参与店员端的需求验收",
+      "has_number": false,
+      "source_quote": "也参与了店员端的需求验收",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "按产品规则整理 31 条优惠券退款用例，覆盖部分退、整单退、有券订单改价",
+      "has_number": true,
+      "source_quote": "按产品规则整理 31 条优惠券退款用例，覆盖部分退、整单退、有券订单改价",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "测出同一商品拆两次退时，券状态在收银后台和小程序里显示不同",
+      "has_number": true,
+      "source_quote": "测出同一商品拆两次退时，券状态在收银后台和小程序里显示不同",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "留了操作录像、订单状态和接口返回",
+      "has_number": false,
+      "source_quote": "留了操作录像、订单状态和接口返回",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "与开发一起定位",
+      "has_number": false,
+      "source_quote": "与开发一起定位",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "修复后追加先退低价商品和先退高价商品两种顺序",
+      "has_number": true,
+      "source_quote": "修复后追加了先退低价商品和先退高价商品两种顺序",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "technology",
+      "responsibility": "participate",
+      "text": "用 Python、pytest 将 12 条稳定的订单接口用例接入现有回归脚本",
+      "has_number": true,
+      "source_quote": "用 Python、pytest 将 12 条稳定的订单接口用例接入现有回归脚本",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "每轮先建测试商品，结束后归档数据",
+      "has_number": false,
+      "source_quote": "每轮先建测试商品，结束后归档数据",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "和测试负责人商量后加了独立门店配置",
+      "has_number": false,
+      "source_quote": "和测试负责人商量后加了独立门店配置",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "保留一条闭店状态用例",
+      "has_number": false,
+      "source_quote": "保留一条闭店状态用例",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "轮值整理版本验收清单",
+      "has_number": false,
+      "source_quote": "轮值整理版本验收清单",
+      "needs_confirmation": true
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "参加两次发布后的巡检",
+      "has_number": true,
+      "source_quote": "参加两次发布后的巡检",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "棠野零售系统 测试实习",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责逐笔核对试点店的几种电子小票",
+      "has_number": false,
+      "source_quote": "负责逐笔核对试点店的几种电子小票",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "晚自习教室管理页面",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "负责写预约规则和验收用例",
+      "has_number": false,
+      "source_quote": "负责写预约规则和验收用例",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "晚自习教室管理页面",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "用三张状态表核对取消、签到和过期之间的切换",
+      "has_number": true,
+      "source_quote": "用三张状态表核对取消、签到和过期之间的切换",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "晚自习教室管理页面",
+      "kind": "technology",
+      "responsibility": "own",
+      "text": "用 Postman 记录接口返回",
+      "has_number": false,
+      "source_quote": "再用 Postman 记录接口返回",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "晚自习教室管理页面",
+      "kind": "action",
+      "responsibility": "own",
+      "text": "课程验收前发现预约结束当天的筛选会漏掉最后一条记录",
+      "has_number": false,
+      "source_quote": "课程验收前发现预约结束当天的筛选会漏掉最后一条记录",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "晚自习教室管理页面",
+      "kind": "action",
+      "responsibility": "participate",
+      "text": "协助组员定位到日期范围条件",
+      "has_number": false,
+      "source_quote": "协助组员定位到日期范围条件",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学校东门便利店 周末店员",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "负责补货、交接和核对小票",
+      "has_number": false,
+      "source_quote": "负责补货、交接和核对小票",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "学校东门便利店 周末店员",
+      "kind": "action",
+      "responsibility": "na",
+      "text": "遇到券在收银机和手机端显示不一致时，记录订单号给店长",
+      "has_number": false,
+      "source_quote": "遇到券在收银机和手机端显示不一致时，记录订单号给店长",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "会用 Postman、pytest、Git、基础 SQL",
+      "has_number": false,
+      "source_quote": "会用 Postman、pytest、Git、基础 SQL",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "可通过浏览器开发者工具和服务日志定位常见问题",
+      "has_number": false,
+      "source_quote": "可通过浏览器开发者工具和服务日志定位常见问题",
+      "needs_confirmation": false
+    },
+    {
+      "experience": "工具",
+      "kind": "technology",
+      "responsibility": "na",
+      "text": "接触过 Jenkins 定时任务配置",
+      "has_number": false,
+      "source_quote": "接触过 Jenkins 定时任务配置",
+      "needs_confirmation": false
+    }
+  ]
+}
