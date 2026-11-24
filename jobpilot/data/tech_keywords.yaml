@@ -1,0 +1,162 @@
+# 技术关键词同义词表：JD 解析和简历匹配共用，由 services/keywords.py 读取。
+# 每项 name 是标准名，aliases 是会被映射成它的写法。
+# 比较时忽略大小写、全角半角和首尾空白，但词中间的空格算数，所以「生成式AI」和「生成式 AI」要分别列出。
+# 一个别名只能属于一个标准名，冲突时加载报错。表里没有的词原样保留。
+
+# ---------- 编程语言 ----------
+- name: Python
+  category: language
+- name: Java
+  category: language
+- name: Go
+  category: language
+  aliases: [Golang, Go语言, Go 语言]
+- name: C++
+  category: language
+  aliases: [CPP, cplusplus]
+- name: JavaScript
+  category: language
+  aliases: [JS]
+- name: TypeScript
+  category: language
+  aliases: [TS]
+- name: Kotlin
+  category: language
+- name: Swift
+  category: language
+- name: SQL
+  category: language
+
+# ---------- 前端与客户端 ----------
+- name: Vue
+  category: frontend
+  aliases: [Vue.js, VueJS, Vue3, Vue 3]
+- name: React
+  category: frontend
+  aliases: [React.js, ReactJS]
+- name: H5
+  category: frontend
+  aliases: [HTML5, 移动端 H5]
+- name: Android
+  category: mobile
+- name: iOS
+  category: mobile
+- name: Flutter
+  category: mobile
+
+# ---------- 后端框架与协议 ----------
+- name: FastAPI
+  category: backend
+- name: Flask
+  category: backend
+- name: Spring Boot
+  category: backend
+  aliases: [SpringBoot]
+- name: HTTP
+  category: protocol
+  aliases: [HTTP 协议, HTTP协议]
+- name: TCP
+  category: protocol
+  aliases: [TCP 协议, TCP协议]
+- name: REST API
+  category: protocol
+  aliases: [REST, RESTful, RESTful API]
+
+# ---------- 数据库与中间件 ----------
+- name: MySQL
+  category: database
+- name: PostgreSQL
+  category: database
+  aliases: [Postgres]
+- name: Redis
+  category: database
+- name: 向量数据库
+  category: database
+  aliases: [Vector Database, 向量库]
+- name: Kafka
+  category: middleware
+
+# ---------- 基础设施与工具 ----------
+- name: Docker
+  category: infra
+- name: Kubernetes
+  category: infra
+  aliases: [K8s]
+- name: client-go
+  category: infra
+  aliases: [K8s client-go, Kubernetes client-go]
+- name: Linux
+  category: infra
+- name: Git
+  category: tool
+- name: Cursor
+  category: tool
+- name: Copilot
+  category: tool
+  aliases: [GitHub Copilot]
+- name: ChatGPT
+  category: tool
+- name: Claude Code
+  category: tool
+
+# ---------- AI 与算法方向 ----------
+- name: LLM
+  category: ai
+  aliases: [大模型, 大语言模型, Large Language Model]
+- name: AI Agent
+  category: ai
+  aliases: [Agent, 智能体, 智能Agent, 智能 Agent, AI 智能体]
+- name: 多智能体
+  category: ai
+  aliases: [Multi-Agent, 多 Agent, 多Agent]
+- name: 多模态大模型
+  category: ai
+  aliases: [VLM, MLLM, 多模态大语言模型]
+- name: RAG
+  category: ai
+  aliases: [检索增强生成, RAG 知识检索]
+- name: Prompt Engineering
+  category: ai
+  aliases: [Prompt, Prompt工程, Prompt 工程, 提示词工程, 提示工程]
+- name: 生成式 AI
+  category: ai
+  aliases: [生成式AI, AIGC, GenAI, Generative AI]
+- name: NLP
+  category: ai
+  aliases: [自然语言处理]
+- name: 计算机视觉
+  category: ai
+  aliases: [CV]
+- name: 机器学习
+  category: ai
+  aliases: [Machine Learning, ML]
+- name: 深度学习
+  category: ai
+  aliases: [Deep Learning]
+- name: Deep Research
+  category: ai
+  aliases: [Deep Search, Deep Search/Research]
+- name: PyTorch
+  category: ai
+- name: TensorFlow
+  category: ai
+- name: YOLO
+  category: ai
+  aliases: [YOLOv5, YOLOv8, YOLOv9, YOLO 系列, YOLO系列]
+- name: vLLM
+  category: ai
+- name: 模型量化
+  category: ai
+  aliases: [量化]
+- name: 知识蒸馏
+  category: ai
+  aliases: [蒸馏, 模型蒸馏]
+- name: 模型剪枝
+  category: ai
+  aliases: [剪枝]
+- name: 指令微调
+  category: ai
+  aliases: [Instruction Tuning]
+- name: OCR
+  category: ai
+  aliases: [OCR 识别, OCR识别]
