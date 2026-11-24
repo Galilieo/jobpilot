@@ -18,5 +18,13 @@
   "repair_json": {
     "version": 1,
     "sha256": "b53817242508469d9e6dd7ad74ae8f3d1b73a9ec44f248f1c8c49aec2c415918"
+  },
+  "revise_bullet": {
+    "version": 1,
+    "sha256": "c93da7db0cefe43acc4053823e518c879c753def355a3b1f97f9e024e3bb845e"
+  },
+  "rewrite_bullets": {
+    "version": 1,
+    "sha256": "321dfbbbc1d22ddf25901abd6cde34225a36a202d7fb25f001e81a8a77ed34ac"
   }
 }
