@@ -14,7 +14,13 @@ from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import Select, select
 
-from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.api.deps import (
+    CurrentUser,
+    DbSession,
+    ModelClient,
+    SessionFactory,
+    finish_product,
+)
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
     AiRun,
@@ -245,7 +251,7 @@ async def create_match_report(
         main_gaps=built.main_gaps,
     )
     db.add(report)
-    await set_run_status(db, user_id, run_id, RunStatus.SUCCEEDED)
+    await finish_product(db, user_id, run_id)
     await db.commit()
     await db.refresh(report)
 

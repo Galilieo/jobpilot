@@ -15,7 +15,13 @@ from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy.exc import IntegrityError
 
-from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.api.deps import (
+    CurrentUser,
+    DbSession,
+    ModelClient,
+    SessionFactory,
+    finish_product,
+)
 from jobpilot.db.jobs import find_existing_job, get_user_job, list_user_jobs
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
 from jobpilot.db.runs import set_run_status
@@ -212,7 +218,7 @@ async def add_job(
     db.add(user_job)
     await db.flush()
     run.user_job_id = user_job.user_job_id
-    await set_run_status(db, user.user_id, run.run_id, RunStatus.SUCCEEDED)
+    await finish_product(db, user.user_id, run.run_id)
     await db.commit()
     return _job_out(posting, user_job)
 

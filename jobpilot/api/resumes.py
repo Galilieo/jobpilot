@@ -14,7 +14,13 @@ from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 
-from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.api.deps import (
+    CurrentUser,
+    DbSession,
+    ModelClient,
+    SessionFactory,
+    finish_product,
+)
 from jobpilot.api.ocr import read_limited
 from jobpilot.db.models import AiRun, ResumeDocument, RunStatus
 from jobpilot.db.runs import set_run_status
@@ -150,7 +156,7 @@ async def upload(
 
     doc.sections_json = [section.model_dump(mode="json") for section in result.sections]
     items = await drafts.add_extracted(db, user.user_id, result.facts)
-    await set_run_status(db, user.user_id, run.run_id, RunStatus.SUCCEEDED)
+    await finish_product(db, user.user_id, run.run_id)
     await db.commit()
     return ResumeOut(doc_id=doc.doc_id, run_id=run.run_id, items=items)
 
