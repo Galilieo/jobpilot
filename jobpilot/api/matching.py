@@ -34,7 +34,11 @@ from jobpilot.services.jobs import (
     RequirementType,
     effective_parsed_job,
 )
-from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelBudget
+from jobpilot.services.llm_gateway import (
+    BudgetExhaustedError,
+    EmptyModelResponseError,
+    ModelBudget,
+)
 from jobpilot.services.matching import (
     CoverageCounts,
     FactCandidate,
@@ -49,6 +53,7 @@ router = APIRouter(prefix="/api", tags=["matching"])
 
 _MATCH_BUDGET = {"remaining_calls": 3, "remaining_tokens": 40_000}
 _MODEL_ERRORS = (
+    EmptyModelResponseError,
     APIConnectionError,
     APIStatusError,
     BudgetExhaustedError,

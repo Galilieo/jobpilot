@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from jobpilot.config import ModelPurpose
 from jobpilot.services.grounding import GroundingFact, GroundingIssue, IssueKind
 from jobpilot.services.llm_gateway import (
+    EmptyModelResponseError,
     ModelBudget,
     request_completion,
     wrap_untrusted_text,
@@ -146,7 +147,7 @@ async def ground_check(
             budget=budget,
             validate=parse_semantic_output,
         )
-    except (APIError, ValidationError) as error:
+    except (APIError, ValidationError, EmptyModelResponseError) as error:
         # 上游出错，或修复一次后输出仍不合格：按未通过处理。
         issue = GroundingIssue(
             kind=IssueKind.CHECK_UNAVAILABLE,

@@ -30,7 +30,11 @@ from jobpilot.services.jobs import (
     parse_job,
 )
 from jobpilot.services.keywords import normalize_keywords
-from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelBudget
+from jobpilot.services.llm_gateway import (
+    BudgetExhaustedError,
+    EmptyModelResponseError,
+    ModelBudget,
+)
 from jobpilot.services.parsing import normalize_text
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -43,6 +47,7 @@ _MODEL_ERRORS = (
     APIStatusError,
     BudgetExhaustedError,
     TruncatedOutputError,
+    EmptyModelResponseError,
     ValidationError,
 )
 

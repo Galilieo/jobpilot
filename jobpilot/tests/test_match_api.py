@@ -17,7 +17,11 @@ from jobpilot.api.deps import get_model_client
 from jobpilot.db.models import AiRun, CallOutcome, MatchReport, ModelCall, RunStatus
 from jobpilot.main import app
 from jobpilot.tests.conftest import EMPTY_JOB
-from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
+from jobpilot.tests.test_call_accounting import (
+    completion_response,
+    empty_choices_response,
+    fake_upstream,
+)
 from jobpilot.tests.test_facts_api import EXTRACTION, RESUME
 
 JOB_RAW = (
@@ -787,3 +791,32 @@ async def test_outgoing_match_request_wraps_untrusted_text_and_redacts_pii(
     assert "[EMAIL]" in body_text
     assert '<untrusted_data label="job_requirements">' in user_content
     assert '<untrusted_data label="facts">' in user_content
+
+
+@pytest.mark.parametrize("kind", ["parse_resume", "parse_jd", "match"])
+async def test_empty_choices_finishes_run_as_failed(
+    kind: str,
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if kind == "match":
+        await _publish_resume_facts(signed_in, model_outputs)
+        job = await _add_job(signed_in, model_outputs)
+        url, body = f"/api/jobs/{job['job_id']}/match", None
+    elif kind == "parse_resume":
+        url, body = "/api/resumes", {"raw_text": RESUME}
+    else:
+        url, body = "/api/jobs", {"raw_text": JOB_RAW}
+    async with fake_upstream(lambda _: empty_choices_response()) as client:
+        monkeypatch.setitem(app.dependency_overrides, get_model_client, lambda: client)
+        response = await signed_in.post(url, json=body)
+    assert response.status_code == 502
+    async with session_factory() as db:
+        run = (await db.scalars(select(AiRun).where(AiRun.kind == kind))).one()
+        assert run.status == RunStatus.FAILED and run.finished_at is not None
+        calls = await db.scalars(
+            select(ModelCall).where(ModelCall.run_id == run.run_id)
+        )
+        assert calls.one().outcome == CallOutcome.INVALID_OUTPUT

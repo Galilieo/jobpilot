@@ -21,7 +21,11 @@ from jobpilot.db.runs import set_run_status
 from jobpilot.services import drafts
 from jobpilot.services.drafts import DraftItem
 from jobpilot.services.facts import Section, TruncatedOutputError, extract_facts
-from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelBudget
+from jobpilot.services.llm_gateway import (
+    BudgetExhaustedError,
+    EmptyModelResponseError,
+    ModelBudget,
+)
 from jobpilot.services.parsing import (
     NeedsOcrError,
     ParseError,
@@ -41,6 +45,7 @@ _MODEL_ERRORS = (
     APIStatusError,
     BudgetExhaustedError,
     TruncatedOutputError,
+    EmptyModelResponseError,
     ValidationError,
 )
 

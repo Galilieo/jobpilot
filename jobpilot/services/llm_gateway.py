@@ -72,6 +72,10 @@ def redact_pii(text: str) -> str:
     return text
 
 
+class EmptyModelResponseError(RuntimeError):
+    """上游返回成功，但没有候选消息可供解析。"""
+
+
 class BudgetExhaustedError(RuntimeError):
     """剩余额度不足以发送下一次模型请求。"""
 
@@ -220,6 +224,8 @@ async def _send_once(
         usage = response.usage
         # 先记为 invalid_output：validate 抛出任何异常都按校验失败结算。
         outcome = CallOutcome.INVALID_OUTPUT
+        if not response.choices:
+            raise EmptyModelResponseError("模型回包缺少候选消息")
         if validate is not None:
             validate(response)
         outcome = CallOutcome.SUCCESS

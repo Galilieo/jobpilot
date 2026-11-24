@@ -88,6 +88,12 @@ def completion_response(
     )
 
 
+def empty_choices_response() -> httpx.Response:
+    payload = completion_response().json()
+    payload["choices"] = []
+    return httpx.Response(200, json=payload)
+
+
 def error_response(status_code: int) -> httpx.Response:
     return httpx.Response(status_code, json={"error": {"message": "test error"}})
 

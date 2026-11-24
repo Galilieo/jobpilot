@@ -20,6 +20,7 @@ from jobpilot.services.semantic_check import (
 from jobpilot.tests.test_call_accounting import (
     calls_of,
     completion_response,
+    empty_choices_response,
     fake_upstream,
 )
 
@@ -208,3 +209,14 @@ def test_prompt_example_follows_program_rules() -> None:
     example = SemanticOutput.model_validate_json(text.split("输出：\n", 1)[1].strip())
     assert example.verdict is not SemanticVerdict.SUPPORTED
     assert all(span.text in sentence for span in example.unsupported_spans)
+
+
+async def test_empty_choices_reports_check_unavailable(
+    session_factory: Factory, run: AiRun
+):
+    result, requests = await check_with(session_factory, run, empty_choices_response())
+    assert len(requests) == 1
+    assert result.verdict is None and not result.passed
+    [issue] = result.issues
+    assert issue.kind is IssueKind.CHECK_UNAVAILABLE
+    assert "EmptyModelResponseError" in issue.message
