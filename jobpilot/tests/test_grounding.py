@@ -281,6 +281,11 @@ def test_organization_from_another_experience_is_flagged(text, names, org) -> No
     assert result.issues[0].fragment == org
 
 
+def test_section_names_are_not_organizations() -> None:
+    names = ["技能", "教育经历", "项目经历 补充", "专业技能", INTERN]
+    assert organizations_of(names) == {"云栈物流科技"}
+
+
 def test_organizations_are_first_words_of_experience_names() -> None:
     assert organizations_of([INTERN, "A 项目", PROJECT]) == {"云栈物流科技", PROJECT}
 

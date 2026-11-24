@@ -234,18 +234,26 @@ def check_content(
     ]
 
 
-def organizations_of(experiences: Iterable[str]) -> set[str]:
+def organizations_of(
+    experiences: Iterable[str], *, rules: GroundingRules | None = None
+) -> set[str]:
     """从经历名取出组织名：经历名的第一个词。
 
     例如「云栈物流科技 后端开发实习」→「云栈物流科技」。
 
-    少于 2 个字的不算，避免把「A 项目」里的「A」当成组织名。
+    少于 2 个字的不算，避免把「A 项目」里的「A」当成组织名；
+    「技能」「教育经历」这类栏目名也不算，否则别的经历里写到「技能」就会被误拦。
     """
+    rules = rules or default_rules()
     names = set()
     for experience in experiences:
         words = experience.split()
-        if words and len(words[0]) >= 2:
-            names.add(words[0])
+        if not words or len(words[0]) < 2:
+            continue
+        first = words[0]
+        if first in rules.section_words or first.endswith("经历"):
+            continue
+        names.add(first)
     return names
 
 

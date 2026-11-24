@@ -34,6 +34,7 @@ class GroundingRules:
     degree_names: tuple[str, ...]
     unstated_degree_max: int
     number_units: dict[str, str]
+    section_words: frozenset[str]
 
     @cached_property
     def role_pattern(self) -> re.Pattern[str]:
@@ -86,6 +87,7 @@ def load_grounding_rules(path: Path) -> GroundingRules:
         number_units={
             str(k): str(v) for k, v in (data.get("number_units") or {}).items()
         },
+        section_words=frozenset(data.get("section_words") or ()),
     )
 
 
