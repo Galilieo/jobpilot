@@ -370,9 +370,16 @@ def test_known_limit_chinese_numerals_are_not_checked() -> None:
     assert check("牵头五人团队完成小程序开发与上线", "b1").passed
 
 
-def test_known_limit_strict_numbers_block_equivalent_rewrites() -> None:
-    # 事实写「四人」，改写成「4 人」也会被拦：宁可误拦。
-    assert kinds(check("牵头 4 人团队完成小程序上线", "b1")) == [IssueKind.NUMBER]
+def test_known_limit_derived_numbers_are_blocked() -> None:
+    # 事实写「一周内」，改写换算成「7 天内」也会被拦：换算出来的数字一律不认，宁可误拦。
+    _, fact = _fact("w", INTERN, PART, "上线后一周内跟进告警")
+    result = check_grounding(
+        "上线后 7 天内跟进告警",
+        [fact.fact_id],
+        {fact.fact_id: fact},
+        section=BulletSection.EXPERIENCE,
+    )
+    assert kinds(result) == [IssueKind.NUMBER]
 
 
 def test_known_limit_negation_is_ignored() -> None:
@@ -436,3 +443,99 @@ def test_content_failure_calls_semantic_only_before_last_revision() -> None:
 
 def kinds_of(issues) -> list[IssueKind]:
     return [issue.kind for issue in issues]
+
+
+# ---------- 中文数字、年份、职责不适用时的角色词 ----------
+
+
+def _single(text: str, responsibility=PART, experience=INTERN):
+    _, fact = _fact("z", experience, responsibility, text)
+    return fact
+
+
+def _check_one(sentence: str, fact: GroundingFact):
+    return check_grounding(
+        sentence, [fact.fact_id], {fact.fact_id: fact}, section=BulletSection.EXPERIENCE
+    )
+
+
+@pytest.mark.parametrize(
+    ("fact_text", "sentence"),
+    [
+        ("牵头四人团队完成小程序开发与上线", "牵头 4 人团队完成小程序上线"),
+        ("兼容两种表头", "兼容 2 种表头"),
+        (
+            "前十位至少出现一个相关商品的查询从 49 条增至 56 条",
+            "Top-10 命中查询从 49 条增至 56 条",
+        ),
+        ("每百张图误报数从 6 个增加到 10 个", "每 100 张图误报从 6 个增至 10 个"),
+        ("通过大学英语六级", "通过 CET-6"),
+        ("一百二十条历史工单", "复核 120 条历史工单"),
+        ("一百零五条记录", "整理 105 条记录"),
+        ("连续十二周值班", "连续值班 12 周"),
+        ("雅思 7.0（2025）", "2025 年考取雅思 7.0"),
+    ],
+)
+def test_chinese_numerals_and_years_in_facts_support_digits(
+    fact_text, sentence
+) -> None:
+    fact = _single(fact_text, responsibility=LEAD)
+    result = _check_one(sentence, fact)
+    assert result.passed, [issue.message for issue in result.issues]
+
+
+@pytest.mark.parametrize(
+    ("fact_text", "sentence", "fragment"),
+    [
+        ("兼容两种表头", "兼容 3 种表头", "3"),  # 计数量词不进片段
+        ("一周内跟进", "两周内跟进，共 2 周", "2 周"),  # 一周不能写成 2 周
+        (
+            "一起梳理回归用例",
+            "梳理 1 批回归用例",
+            "1",
+        ),  # 「一起」后面不是量词，不算数字 1
+        ("雅思 7.0（2025）", "2024 年考取雅思 7.0", "2024 年"),
+    ],
+)
+def test_chinese_numerals_do_not_cover_other_numbers(
+    fact_text, sentence, fragment
+) -> None:
+    result = _check_one(sentence, _single(fact_text))
+    assert kinds(result) == [IssueKind.NUMBER]
+    assert result.issues[0].fragment == fragment
+
+
+def test_chinese_numerals_in_rewrite_are_left_to_layer_three() -> None:
+    # 改写里的中文数字不检查：「一次性」不当成 1，「五人」写错了也查不出，交给第三层。
+    assert _check_one("一次性完成接口开发", _single("完成接口开发")).passed
+
+
+@pytest.mark.parametrize(
+    ("fact_text", "sentence"),
+    [
+        ("负责晚班签到和物资登记", "负责学院迎新晚班签到与物资登记"),
+        ("协助登记借用设备", "协助登记借用设备并汇总记录"),
+        ("负责晚班签到", "协助晚班签到"),  # 低于原文等级也可以
+    ],
+)
+def test_na_fact_allows_role_words_its_text_states(fact_text, sentence) -> None:
+    assert _check_one(sentence, _single(fact_text, responsibility=NA)).passed
+
+
+@pytest.mark.parametrize(
+    ("fact_text", "sentence", "word"),
+    [
+        ("协助登记借用设备", "负责登记借用设备", "负责"),  # 高于原文
+        (
+            "主要做需求拆解和客户验收",
+            "主导需求拆解和客户验收",
+            "主导",
+        ),  # 原文没有角色词
+    ],
+)
+def test_na_fact_still_blocks_role_words_beyond_its_text(
+    fact_text, sentence, word
+) -> None:
+    result = _check_one(sentence, _single(fact_text, responsibility=NA))
+    assert kinds(result) == [IssueKind.ROLE]
+    assert result.issues[0].fragment == word

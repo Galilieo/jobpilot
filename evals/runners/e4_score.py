@@ -2,6 +2,10 @@
 
     uv run --project jobpilot python -m evals.runners.e4_score
     uv run --project jobpilot python -m evals.runners.e4_score evals/results/e4-dev-xxx.json
+    uv run --project jobpilot python -m evals.runners.e4_score --recheck
+
+--recheck：第一、二层按当前代码重算，第三层沿用结果文件里的模型输出，不花钱。
+改了程序规则之后用它对比前后效果；报告文件名带 -recheck，并记下重算时的代码版本。
 
 组合：只用第一层；第一 + 二层；第一 + 二 + 三层；另列第三层单独的结果作参考。
 第三层出错或输出不合格时按拦下计（与产品里的 fail-closed 一致），错误次数单独列出。
@@ -104,6 +108,15 @@ def render(result: dict[str, Any], runs: list[dict[str, Any]], path: Path) -> st
         f"- 代码：`{result['git']['commit'][:7]}`"
         + ("（有未提交改动）" if result["git"]["dirty"] else ""),
         f"- 第三层提示词：`{result['prompt_version']}`；模型：`{result['model']}`",
+        *(
+            [
+                f"- 第一、二层按 `{result['recheck_git']['commit'][:7]}`"
+                + ("（有未提交改动）" if result["recheck_git"]["dirty"] else "")
+                + " 的代码重算，第三层沿用原结果"
+            ]
+            if "recheck_git" in result
+            else []
+        ),
         (
             f"- 句子：{len(cases)} 句（正常 {counts[NORMAL]}、编造 "
             f"{len(cases) - counts[NORMAL]}）；第三层每句 {result['runs']} 次"
@@ -199,7 +212,21 @@ def render(result: dict[str, Any], runs: list[dict[str, Any]], path: Path) -> st
     return "\n".join(lines) + "\n"
 
 
-def main(path: Path | None) -> int:
+def recheck(result: dict[str, Any]) -> None:
+    """按当前代码重算每句的第一、二层，原地替换。"""
+    from evals.runners.e1_extract_facts import git_state
+    from evals.runners.e4_ground_check import load_fact_set, program_layers
+
+    fact_sets: dict[str, Any] = {}
+    for case in result["cases"]:
+        sample_id = case["sample_id"]
+        if sample_id not in fact_sets:
+            fact_sets[sample_id] = load_fact_set(sample_id)
+        case.update(program_layers(case, fact_sets[sample_id]))
+    result["recheck_git"] = git_state()
+
+
+def main(path: Path | None, *, recheck_program: bool = False) -> int:
     if path is None:
         found = sorted(RESULT_DIR.glob("e4-*.json"))
         if not found:
@@ -208,6 +235,8 @@ def main(path: Path | None) -> int:
         path = found[-1]
     path = path.resolve()
     result = json.loads(path.read_text(encoding="utf-8"))
+    if recheck_program:
+        recheck(result)
     cases = {case["case_id"]: case for case in result["cases"]}
     runs = [
         score_run(cases, [r for r in result["semantic"] if r["run_index"] == index])
@@ -215,7 +244,7 @@ def main(path: Path | None) -> int:
     ]
     report = render(result, runs, path)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    out = REPORT_DIR / f"{path.stem}.md"
+    out = REPORT_DIR / f"{path.stem}{'-recheck' if recheck_program else ''}.md"
     out.write_text(report, encoding="utf-8")
     print(report)
     print(f"报告已写入 {out.relative_to(REPO_ROOT)}")
@@ -225,5 +254,8 @@ def main(path: Path | None) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("result", nargs="?", type=Path, help="结果文件，默认最新一份")
+    parser.add_argument(
+        "--recheck", action="store_true", help="第一、二层按当前代码重算"
+    )
     args = parser.parse_args()
-    sys.exit(main(args.result))
+    sys.exit(main(args.result, recheck_program=args.recheck))

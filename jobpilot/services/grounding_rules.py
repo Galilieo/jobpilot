@@ -35,6 +35,7 @@ class GroundingRules:
     unstated_degree_max: int
     number_units: dict[str, str]
     section_words: frozenset[str]
+    chinese_classifiers: tuple[str, ...]
 
     @cached_property
     def role_pattern(self) -> re.Pattern[str]:
@@ -88,6 +89,10 @@ def load_grounding_rules(path: Path) -> GroundingRules:
             str(k): str(v) for k, v in (data.get("number_units") or {}).items()
         },
         section_words=frozenset(data.get("section_words") or ()),
+        # 长的放前面，「个月」先于「个」被认出来。
+        chinese_classifiers=tuple(
+            sorted(data.get("chinese_classifiers") or (), key=len, reverse=True)
+        ),
     )
 
 

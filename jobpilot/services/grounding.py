@@ -267,35 +267,95 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", text)
 
 
+def _unit_after(text: str, end: int, rules: GroundingRules) -> tuple[str, int]:
+    """看数字后面跟的单位，返回 (规范单位, 单位在原文中的结束位置)。
+
+    没列出的单位都算计数。
+    """
+    rest = text[end:]
+    stripped = rest.lstrip(" ")
+    start = end + len(rest) - len(stripped)
+    for candidate in sorted(rules.number_units, key=len, reverse=True):
+        if not stripped.startswith(candidate):
+            continue
+        after = stripped[len(candidate) : len(candidate) + 1]
+        # 英文单位后面不能紧跟字母：「5 sessions」里的 s 不是秒。
+        if (
+            candidate.isascii()
+            and candidate.isalpha()
+            and after.isascii()
+            and after.isalpha()
+        ):
+            continue
+        return rules.number_units[candidate], start + len(candidate)
+    return _COUNT, end
+
+
+def _canonical(value: Decimal, unit: str) -> tuple[str, str]:
+    """数值去掉多余的零；1900～2099 的整数当作年份，「2025」和「2025 年」算同一个。"""
+    if (
+        unit in (_COUNT, "year")
+        and value == value.to_integral()
+        and 1900 <= value < 2100
+    ):
+        unit = "year"
+    return format(value.normalize(), "f"), unit
+
+
 def _numbers(text: str, rules: GroundingRules) -> list[tuple[str, str, str]]:
-    """返回 (原文片段, 规范数值, 规范单位)。没列出的单位都算计数。"""
+    """返回 (原文片段, 规范数值, 规范单位)。只认阿拉伯数字。"""
     text = _normalize(text)
-    units = sorted(rules.number_units, key=len, reverse=True)
     found = []
     for match in _NUMBER.finditer(text):
-        value = format(Decimal(match.group().replace(",", "")).normalize(), "f")
-        rest = text[match.end() :]
-        stripped = rest.lstrip(" ")
-        unit = _COUNT
-        fragment = match.group()
-        for candidate in units:
-            if not stripped.startswith(candidate):
-                continue
-            after = stripped[len(candidate) : len(candidate) + 1]
-            # 英文单位后面不能紧跟字母：「5 sessions」里的 s 不是秒。
-            if (
-                candidate.isascii()
-                and candidate.isalpha()
-                and after.isascii()
-                and after.isalpha()
-            ):
-                continue
-            unit = rules.number_units[candidate]
-            fragment = text[
-                match.start() : match.end() + len(rest) - len(stripped) + len(candidate)
-            ]
-            break
-        found.append((fragment, value, unit))
+        unit, unit_end = _unit_after(text, match.end(), rules)
+        value, unit = _canonical(Decimal(match.group().replace(",", "")), unit)
+        found.append((text[match.start() : max(unit_end, match.end())], value, unit))
+    return found
+
+
+_CHINESE_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+                   "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}  # fmt: skip
+_CHINESE_MAGNITUDES = {"十": 10, "百": 100, "千": 1000}
+_CHINESE_NUMBER = re.compile(r"[零〇一二两三四五六七八九十百千]+")
+
+
+def _chinese_value(word: str) -> int | None:
+    """中文数字转整数，认不出返回 None。
+
+    「两」→2、「十二」→12、「二十」→20、「百」→100、「一百二十」→120。
+    """
+    total, digit = 0, None
+    for char in word:
+        if char in "零〇":  # 「一百零五」里的零只是占位
+            continue
+        if char in _CHINESE_DIGITS:
+            if digit is not None:  # 「一二」这种连写不是数字
+                return None
+            digit = _CHINESE_DIGITS[char]
+        else:
+            total += (1 if digit is None else digit) * _CHINESE_MAGNITUDES[char]
+            digit = None
+    return total + (digit or 0)
+
+
+def _chinese_numbers(text: str, rules: GroundingRules) -> list[tuple[str, str]]:
+    """事实里写在量词前的中文数字：「两种」「四人」「前十位」「每百张」。
+
+    只用来扩充「依据里有的数字」，不检查改写里的中文数字：
+    改写写「一次性」不该被当成数字 1。
+    后面不接量词或单位的（「一起」「一些」）不算。
+    """
+    text = _normalize(text)
+    found = []
+    for match in _CHINESE_NUMBER.finditer(text):
+        after = text[match.end() : match.end() + 2]
+        if not any(after.startswith(word) for word in rules.chinese_classifiers):
+            continue
+        number = _chinese_value(match.group())
+        if number is None:
+            continue
+        unit, _ = _unit_after(text, match.end(), rules)
+        found.append(_canonical(Decimal(number), unit))
     return found
 
 
@@ -303,6 +363,7 @@ def _check_numbers(
     text: str, fact_text: str, rules: GroundingRules
 ) -> list[GroundingIssue]:
     supported = {(value, unit) for _, value, unit in _numbers(fact_text, rules)}
+    supported |= set(_chinese_numbers(fact_text, rules))
     issues = []
     for fragment, value, unit in _numbers(text, rules):
         if (value, unit) not in supported:
@@ -395,13 +456,22 @@ def _check_roles(
         if fact.responsibility in RESPONSIBILITY_RANK
     ]
     if not ranks:
+        # 职责不适用（教育、志愿者、技能……）时，只允许事实原文自己写了的等级：
+        # 事实写「负责晚班签到」，改写也可以说「负责」；原文没有角色词就一个都不能加。
+        stated = [
+            RESPONSIBILITY_RANK[rules.role_levels[word]]
+            for fact in cited
+            for word in rules.role_pattern.findall(fact.text)
+        ]
+        allowed_na = max(stated, default=-1)
         return [
             GroundingIssue(
                 kind=IssueKind.ROLE,
-                message=f"引用的事实都不涉及职责程度，改写里不能出现「{word}」",
+                message=f"引用的事实不涉及职责程度，原文也没有这么写，改写里不能出现「{word}」",
                 fragment=word,
             )
             for word in words
+            if RESPONSIBILITY_RANK[rules.role_levels[word]] > allowed_na
         ]
     allowed = max(ranks)
     return [
