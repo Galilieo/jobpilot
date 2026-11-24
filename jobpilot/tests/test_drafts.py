@@ -25,6 +25,7 @@ from jobpilot.services import drafts
 from jobpilot.services.drafts import (
     CannotConfirmError,
     DraftItem,
+    DraftRevisionConflictError,
     FactChanges,
     ItemNotFoundError,
     ItemStatus,
@@ -472,6 +473,43 @@ async def test_concurrent_edits_do_not_overwrite_each_other(
         first_item.lineage_id: ItemStatus.CONFIRMED,
         second_item.lineage_id: ItemStatus.CONFIRMED,
     }
+
+
+async def test_concurrent_confirmation_checks_revision_after_waiting_for_edit(
+    session_factory: Factory, owner: tuple[UUID, UUID]
+) -> None:
+    user_id, doc_id = owner
+    [item] = await add(
+        session_factory, user_id, extracted(doc_id, "优化查询后响应时间降低 30%")
+    )
+    new_text = "优化查询后响应时间降低 20%"
+    async with session_factory() as first:
+        revision = await drafts.read_revision(first, user_id)
+        await drafts.edit_fact(
+            first, user_id, item.lineage_id, FactChanges(text=new_text)
+        )
+        confirmation = asyncio.create_task(
+            run(
+                session_factory,
+                lambda db: drafts.edit_fact(
+                    db,
+                    user_id,
+                    item.lineage_id,
+                    FactChanges(confirmed=True),
+                    expected_revision=revision,
+                ),
+            )
+        )
+        await asyncio.sleep(0.3)
+        assert not confirmation.done()
+        await first.commit()
+
+    with pytest.raises(DraftRevisionConflictError) as error:
+        await confirmation
+    assert error.value.revision == revision + 1
+    [current] = await draft_items(session_factory, user_id)
+    assert current.text == new_text
+    assert current.status is ItemStatus.PENDING
 
 
 async def test_failed_publish_leaves_no_partial_version(

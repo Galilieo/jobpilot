@@ -393,6 +393,7 @@ class FactDraft(Base):
         ForeignKey("user_account.user_id", ondelete="CASCADE"), primary_key=True
     )
     base_fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)  # 首次发布前为空
+    revision: Mapped[int] = mapped_column(server_default=sql_text("0"))
     items_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )

@@ -87,13 +87,22 @@ async def _publish_resume_facts(
     outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
     uploaded = await client.post("/api/resumes", json={"raw_text": RESUME})
     assert uploaded.status_code == 201, uploaded.text
+    revision = uploaded.json()["revision"]
     for item in uploaded.json()["items"]:
         confirmed = await client.put(
             f"/api/facts/{item['lineage_id']}",
-            json={"confirmed": True, "responsibility": "own"},
+            json={
+                "confirmed": True,
+                "responsibility": "own",
+                "expected_revision": revision,
+            },
         )
         assert confirmed.status_code == 200, confirmed.text
-    committed = await client.post("/api/facts/commit", json={"base_fact_set_id": None})
+        revision = confirmed.json()["revision"]
+    committed = await client.post(
+        "/api/facts/commit",
+        json={"base_fact_set_id": None, "expected_revision": revision},
+    )
     assert committed.status_code == 200, committed.text
     return (await client.get("/api/facts")).json()
 
@@ -118,7 +127,11 @@ async def _add_user_fact(
     fact_set = None
     if commit:
         committed = await client.post(
-            "/api/facts/commit", json={"base_fact_set_id": base_fact_set_id}
+            "/api/facts/commit",
+            json={
+                "base_fact_set_id": base_fact_set_id,
+                "expected_revision": added.json()["revision"],
+            },
         )
         assert committed.status_code == 200, committed.text
         fact_set = committed.json()
@@ -287,7 +300,7 @@ async def test_matching_uses_only_published_facts_and_ignores_draft(
     r_hard, r_pref = job["parsed"]["requirements"]
 
     # 1. 仅有未发布的草稿条目 -> 422 且不调用模型
-    await _add_user_fact(
+    added, _ = await _add_user_fact(
         signed_in, "草稿里的高并发实践", base_fact_set_id=None, commit=False
     )
     requests.clear()
@@ -297,7 +310,10 @@ async def test_matching_uses_only_published_facts_and_ignores_draft(
 
     # 2. 发布 v1 后，再往草稿新增一条未发布的事实 B
     v1_set = (
-        await signed_in.post("/api/facts/commit", json={"base_fact_set_id": None})
+        await signed_in.post(
+            "/api/facts/commit",
+            json={"base_fact_set_id": None, "expected_revision": added["revision"]},
+        )
     ).json()
     v1_fact = (await signed_in.get("/api/facts")).json()["facts"][0]
     draft_item, _ = await _add_user_fact(
@@ -550,12 +566,20 @@ async def test_updating_fact_from_30_to_20_and_editing_jd_preserves_v3_report(
     # 修订同一条事实为 20% 并发布为 v4，同时修改 JD 要求
     edited = await signed_in.put(
         f"/api/facts/{perf_draft['lineage_id']}",
-        json={"text": "优化查询后接口耗时降低 20%", "confirmed": True},
+        json={
+            "text": "优化查询后接口耗时降低 20%",
+            "confirmed": True,
+            "expected_revision": v3_set["revision"],
+        },
     )
     assert edited.status_code == 200
     v4_set = (
         await signed_in.post(
-            "/api/facts/commit", json={"base_fact_set_id": v3_set["fact_set_id"]}
+            "/api/facts/commit",
+            json={
+                "base_fact_set_id": v3_set["fact_set_id"],
+                "expected_revision": edited.json()["revision"],
+            },
         )
     ).json()
     assert v4_set["version"] == 4
@@ -616,13 +640,21 @@ async def test_citing_other_version_fact_id_of_same_user_is_rejected(
     assert v1 is not None
     v1_fact_id = (await signed_in.get("/api/facts")).json()["facts"][0]["fact_id"]
 
-    await signed_in.put(
+    edited = await signed_in.put(
         f"/api/facts/{item['lineage_id']}",
-        json={"text": "新版本 v2 事实", "confirmed": True},
+        json={
+            "text": "新版本 v2 事实",
+            "confirmed": True,
+            "expected_revision": v1["revision"],
+        },
     )
     v2 = (
         await signed_in.post(
-            "/api/facts/commit", json={"base_fact_set_id": v1["fact_set_id"]}
+            "/api/facts/commit",
+            json={
+                "base_fact_set_id": v1["fact_set_id"],
+                "expected_revision": edited.json()["revision"],
+            },
         )
     ).json()
     assert v2["version"] == 2

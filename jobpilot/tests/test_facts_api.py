@@ -82,6 +82,133 @@ async def test_extract_sends_images_to_ocr(signed_in: httpx.AsyncClient) -> None
 # ---------- 上传、确认、发布 ----------
 
 
+@pytest.mark.parametrize(
+    "changes", [{"confirmed": True}, {"confirmed": False}, {"responsibility": "lead"}]
+)
+async def test_review_requires_displayed_revision(
+    signed_in: httpx.AsyncClient, model_outputs: list[str], changes: dict[str, object]
+) -> None:
+    model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
+    uploaded = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    assert uploaded.status_code == 201
+    clean, _ = uploaded.json()["items"]
+
+    response = await signed_in.put(f"/api/facts/{clean['lineage_id']}", json=changes)
+
+    assert response.status_code == 422
+    detail = await signed_in.get(f"/api/facts/{clean['lineage_id']}")
+    assert detail.json()["draft"]["status"] == "pending"
+    assert detail.json()["draft"]["responsibility"] == "own"
+    assert detail.json()["revision"] == uploaded.json()["revision"]
+
+
+async def test_stale_confirmation_does_not_confirm_edited_text(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
+    uploaded = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    _, item = uploaded.json()["items"]
+    path = f"/api/facts/{item['lineage_id']}"
+    displayed = (await signed_in.get(path)).json()
+    assert "30%" in displayed["draft"]["text"]
+
+    revised_text = "优化查询后响应时间降低 20%"
+    edited = await signed_in.put(path, json={"text": revised_text})
+    assert edited.status_code == 200
+    assert edited.json()["revision"] == displayed["revision"] + 1
+
+    stale = await signed_in.put(
+        path, json={"confirmed": True, "expected_revision": displayed["revision"]}
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["revision"] == edited.json()["revision"]
+    current = (await signed_in.get(path)).json()
+    assert current["draft"]["text"] == revised_text
+    assert current["draft"]["status"] == "pending"
+    assert current["revision"] == edited.json()["revision"]
+
+    confirmed = await signed_in.put(
+        path, json={"confirmed": True, "expected_revision": current["revision"]}
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["text"] == revised_text
+    assert confirmed.json()["status"] == "confirmed"
+    assert confirmed.json()["revision"] == current["revision"] + 1
+
+
+async def test_stale_batch_does_not_confirm_new_resume_items(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    experience = EXTRACTION["experiences"][0]
+    model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
+    await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    displayed = (await signed_in.get("/api/facts")).json()["draft"]
+
+    quotes = [f"负责实现第 {week} 周课程筛选" for week in range(1, 6)]
+    facts = [
+        {
+            **experience["facts"][0],
+            "text": quote,
+            "source_quote": quote,
+            "has_number": True,
+        }
+        for quote in quotes
+    ]
+    model_outputs.append(
+        json.dumps(
+            {"experiences": [{**experience, "facts": facts}]}, ensure_ascii=False
+        )
+    )
+    raw_text = "\n".join([experience["heading_quote"], *quotes])
+    uploaded = await signed_in.post("/api/resumes", json={"raw_text": raw_text})
+    assert uploaded.status_code == 201
+    assert len(uploaded.json()["items"]) == 5
+    assert uploaded.json()["revision"] == displayed["revision"] + 1
+
+    stale = await signed_in.post(
+        "/api/facts/batch",
+        json={"action": "confirm_clean", "expected_revision": displayed["revision"]},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["revision"] == uploaded.json()["revision"]
+    current = (await signed_in.get("/api/facts")).json()["draft"]
+    assert current["revision"] == uploaded.json()["revision"]
+    assert current["items"] == [*displayed["items"], *uploaded.json()["items"]]
+    assert {item["status"] for item in current["items"]} == {"pending"}
+
+
+async def test_stale_confirmation_of_removed_item_reports_conflict(
+    signed_in: httpx.AsyncClient,
+) -> None:
+    added = await signed_in.post(
+        "/api/facts",
+        json={
+            "experience": "课程排班面板",
+            "kind": "action",
+            "responsibility": "own",
+            "text": "实现按周次筛选课程的功能",
+        },
+    )
+    assert added.status_code == 201
+    item = added.json()
+    path = f"/api/facts/{item['lineage_id']}"
+    deleted = await signed_in.delete(path)
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    revision = int(deleted.headers["X-Draft-Revision"])
+    assert revision == item["revision"] + 1
+
+    stale = await signed_in.put(
+        path, json={"confirmed": True, "expected_revision": item["revision"]}
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["revision"] == revision
+    missing = await signed_in.put(
+        path, json={"confirmed": True, "expected_revision": revision}
+    )
+    assert missing.status_code == 404
+
+
 async def test_upload_confirm_and_publish(
     signed_in: httpx.AsyncClient, model_outputs: list[str]
 ) -> None:
@@ -92,6 +219,7 @@ async def test_upload_confirm_and_publish(
     )
     assert uploaded.status_code == 201, uploaded.text
     body = uploaded.json()
+    assert body["revision"] == 1
     clean, flagged = body["items"]
     assert {clean["status"], flagged["status"]} == {"pending"}
     assert flagged["review_reasons"] == ["responsibility_unstated"]
@@ -104,30 +232,58 @@ async def test_upload_confirm_and_publish(
         == (clean["source_quote"])
     )
 
+    missing = await signed_in.post("/api/facts/batch", json={"action": "confirm_clean"})
+    assert missing.status_code == 422
     confirmed = await signed_in.post(
-        "/api/facts/batch", json={"action": "confirm_clean"}
+        "/api/facts/batch",
+        json={"action": "confirm_clean", "expected_revision": body["revision"]},
     )
-    assert confirmed.json() == {"changed": 1}
+    assert confirmed.json() == {"changed": 1, "revision": 2}
+
+    missing = await signed_in.post("/api/facts/commit", json={"base_fact_set_id": None})
+    assert missing.status_code == 422
+    stale_revision = await signed_in.post(
+        "/api/facts/commit",
+        json={"base_fact_set_id": None, "expected_revision": body["revision"]},
+    )
+    assert stale_revision.status_code == 409
+    assert stale_revision.json()["detail"]["revision"] == confirmed.json()["revision"]
+    assert (await signed_in.get("/api/facts")).json()["fact_set"] is None
 
     published = await signed_in.post(
-        "/api/facts/commit", json={"base_fact_set_id": None}
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": confirmed.json()["revision"],
+        },
     )
     assert published.status_code == 200, published.text
     assert published.json()["version"] == 1
+    assert published.json()["revision"] == 3
 
     library = (await signed_in.get("/api/facts")).json()
+    assert library["draft"]["revision"] == published.json()["revision"]
     assert [f["lineage_id"] for f in library["facts"]] == [clean["lineage_id"]]
     assert [i["lineage_id"] for i in library["draft"]["items"]] == [
         flagged["lineage_id"]
     ]
 
     # 还拿着旧基准（空）再发布：版本已变，409。
-    stale = await signed_in.post("/api/facts/commit", json={"base_fact_set_id": None})
+    stale = await signed_in.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": library["draft"]["revision"],
+        },
+    )
     assert stale.status_code == 409
     # 基准正确但没有改动：400。
     nothing = await signed_in.post(
         "/api/facts/commit",
-        json={"base_fact_set_id": published.json()["fact_set_id"]},
+        json={
+            "base_fact_set_id": published.json()["fact_set_id"],
+            "expected_revision": library["draft"]["revision"],
+        },
     )
     assert nothing.status_code == 400
 
@@ -136,23 +292,38 @@ async def test_set_responsibility_then_confirm_clean(
     signed_in: httpx.AsyncClient, model_outputs: list[str]
 ) -> None:
     """回答「这段经历里没写职责的是你负责的吗」，之后一键确认就能覆盖它们。"""
+    previous = (await signed_in.get("/api/facts")).json()["draft"]["revision"]
     model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
     await signed_in.post("/api/resumes", json={"raw_text": RESUME})
-
+    before = (await signed_in.get("/api/facts")).json()["draft"]
+    responsibility = {
+        "action": "set_responsibility",
+        "experience": "课程排班面板",
+        "responsibility": "own",
+    }
+    missing = await signed_in.post("/api/facts/batch", json=responsibility)
+    assert missing.status_code == 422
+    stale = await signed_in.post(
+        "/api/facts/batch",
+        json={**responsibility, "expected_revision": previous},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["revision"] == before["revision"]
+    assert (await signed_in.get("/api/facts")).json()["draft"] == before
     answered = await signed_in.post(
         "/api/facts/batch",
-        json={
-            "action": "set_responsibility",
-            "experience": "课程排班面板",
-            "responsibility": "own",
-        },
+        json={**responsibility, "expected_revision": before["revision"]},
     )
     confirmed = await signed_in.post(
-        "/api/facts/batch", json={"action": "confirm_clean"}
+        "/api/facts/batch",
+        json={
+            "action": "confirm_clean",
+            "expected_revision": answered.json()["revision"],
+        },
     )
 
-    assert answered.json() == {"changed": 1}
-    assert confirmed.json() == {"changed": 2}
+    assert answered.json() == {"changed": 1, "revision": 2}
+    assert confirmed.json() == {"changed": 2, "revision": 3}
 
 
 async def test_quote_failure_blocks_confirmation(
@@ -161,16 +332,18 @@ async def test_quote_failure_blocks_confirmation(
     bad = json.loads(json.dumps(EXTRACTION))
     bad["experiences"][0]["facts"][0]["source_quote"] = "原文里没有这一句"
     model_outputs.append(json.dumps(bad, ensure_ascii=False))
-    [blocked, _] = (
-        await signed_in.post("/api/resumes", json={"raw_text": RESUME})
-    ).json()["items"]
+    uploaded = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    blocked, _ = uploaded.json()["items"]
 
     response = await signed_in.put(
-        f"/api/facts/{blocked['lineage_id']}", json={"confirmed": True}
+        f"/api/facts/{blocked['lineage_id']}",
+        json={"confirmed": True, "expected_revision": uploaded.json()["revision"]},
     )
 
     assert response.status_code == 422
     assert "修改文字或删除" in response.json()["detail"]
+    detail = await signed_in.get(f"/api/facts/{blocked['lineage_id']}")
+    assert detail.json()["revision"] == uploaded.json()["revision"]
 
 
 async def test_model_failure_marks_run_failed_and_keeps_resume(
@@ -190,6 +363,7 @@ async def test_model_failure_marks_run_failed_and_keeps_resume(
         assert len((await db.scalars(select(ResumeDocument))).all()) == 1
     library = (await signed_in.get("/api/facts")).json()
     assert library["draft"]["items"] == []
+    assert library["draft"]["revision"] == 0
 
 
 async def test_requests_cannot_carry_user_id(
@@ -213,8 +387,17 @@ async def test_same_quote_in_two_resumes_points_to_each_document(
     second = (
         await signed_in.post("/api/resumes", json={"raw_text": "补充说明\n" + RESUME})
     ).json()
-    await signed_in.post("/api/facts/batch", json={"action": "confirm_clean"})
-    await signed_in.post("/api/facts/commit", json={"base_fact_set_id": None})
+    confirmed = await signed_in.post(
+        "/api/facts/batch",
+        json={"action": "confirm_clean", "expected_revision": second["revision"]},
+    )
+    await signed_in.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": confirmed.json()["revision"],
+        },
+    )
 
     facts = {
         f["source_doc_id"]: f
@@ -263,10 +446,17 @@ async def test_wrong_experience_requires_individual_confirmation(
         item["quote_verified"] and raw[item["span_start"] : item["span_end"]] == quote
     )
     assert item["review_reasons"] == ["experience_uncertain"]
-    batch = await signed_in.post("/api/facts/batch", json={"action": "confirm_clean"})
-    assert batch.json() == {"changed": 0}
+    batch = await signed_in.post(
+        "/api/facts/batch",
+        json={
+            "action": "confirm_clean",
+            "expected_revision": uploaded.json()["revision"],
+        },
+    )
+    assert batch.json() == {"changed": 0, "revision": 2}
     edited = await signed_in.put(
-        f"/api/facts/{item['lineage_id']}", json={"confirmed": True}
+        f"/api/facts/{item['lineage_id']}",
+        json={"confirmed": True, "expected_revision": batch.json()["revision"]},
     )
     assert edited.status_code == 200
     assert edited.json()["status"] == "confirmed"

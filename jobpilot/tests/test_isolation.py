@@ -69,7 +69,13 @@ async def _create_fact(client: httpx.AsyncClient, _model_outputs: list[str]) -> 
         },
     )
     assert created.status_code == 201, created.text
-    committed = await client.post("/api/facts/commit", json={"base_fact_set_id": None})
+    committed = await client.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": created.json()["revision"],
+        },
+    )
     assert committed.status_code == 200, committed.text
     return created.json()["lineage_id"]
 
@@ -133,7 +139,11 @@ OWNED_RESOURCES: list[OwnedResource] = [
         read=("GET", "/api/facts/{id}"),
         attempts=(
             Attempt("GET", "/api/facts/{id}"),
-            Attempt("PUT", "/api/facts/{id}", {"text": "A 改的", "confirmed": True}),
+            Attempt(
+                "PUT",
+                "/api/facts/{id}",
+                {"text": "A 改的", "confirmed": True, "expected_revision": 0},
+            ),
             Attempt("DELETE", "/api/facts/{id}"),
         ),
         routes=frozenset(

@@ -24,6 +24,7 @@ from jobpilot.db.models import (
     FactSource,
     Responsibility,
     SectionKind,
+    User,
 )
 from jobpilot.services.facts import (
     RESPONSIBILITY_SECTIONS,
@@ -149,6 +150,14 @@ class VersionConflictError(DraftError):
     """发布时最新版本已经变了，例如另一个窗口先发布了。"""
 
 
+class DraftRevisionConflictError(DraftError):
+    """请求携带的草稿修订号已经过期。"""
+
+    def __init__(self, revision: int) -> None:
+        super().__init__(revision)
+        self.revision = revision
+
+
 class NothingToPublishError(DraftError):
     """草稿里没有已确认或待删除的条目。"""
 
@@ -185,6 +194,32 @@ async def read_draft(db: AsyncSession, user_id: UUID) -> FactDraft | None:
     return await db.get(FactDraft, user_id)
 
 
+async def read_snapshot(
+    db: AsyncSession, user_id: UUID
+) -> tuple[FactDraft | None, FactSet | None]:
+    """用同一条查询读草稿与最新版本，避免看到刚发布前的内容和发布后的修订号。"""
+    query = (
+        select(FactDraft, FactSet)
+        .select_from(User)
+        .outerjoin(FactDraft, FactDraft.user_id == User.user_id)
+        .outerjoin(FactSet, FactSet.user_id == User.user_id)
+        .where(User.user_id == user_id)
+        .order_by(FactSet.version.desc())
+        .limit(1)
+    )
+    row = (await db.execute(query)).one_or_none()
+    return (row[0], row[1]) if row is not None else (None, None)
+
+
+def revision_of(draft: FactDraft | None) -> int:
+    return draft.revision if draft is not None else 0
+
+
+async def read_revision(db: AsyncSession, user_id: UUID) -> int:
+    """写接口在提交前读取本事务写入的修订号，此时仍持有行锁。"""
+    return revision_of(await read_draft(db, user_id))
+
+
 def items_of(draft: FactDraft | None) -> list[DraftItem]:
     return [
         DraftItem.model_validate(raw) for raw in (draft.items_json if draft else [])
@@ -215,8 +250,14 @@ async def lock_draft(db: AsyncSession, user_id: UUID) -> FactDraft:
 
 
 def save_items(draft: FactDraft, items: list[DraftItem]) -> None:
-    # 整体替换列表，ORM 才会发现 JSONB 变了。
+    """在草稿行锁内保存条目并推进修订号。"""
     draft.items_json = [item.model_dump(mode="json") for item in items]
+    draft.revision += 1
+
+
+def _check_revision(draft: FactDraft, expected_revision: int | None) -> None:
+    if expected_revision is not None and draft.revision != expected_revision:
+        raise DraftRevisionConflictError(draft.revision)
 
 
 def _find(items: list[DraftItem], lineage_id: UUID) -> DraftItem | None:
@@ -276,14 +317,16 @@ async def add_user_fact(
 
 
 async def edit_fact(
-    db: AsyncSession, user_id: UUID, lineage_id: UUID, changes: FactChanges
+    db: AsyncSession,
+    user_id: UUID,
+    lineage_id: UUID,
+    changes: FactChanges,
+    *,
+    expected_revision: int | None = None,
 ) -> DraftItem:
-    """修改或确认一条事实。改已发布的事实时，先把它复制进草稿。
-
-    改了文字就转为用户补充：原文片段不再能支撑新的文字（30% 改成 20%），
-    程序也判断不了任意改写是否忠于原文。只改职责时，职责视为用户确认，去掉职责类原因。
-    """
+    """修改或确认一条事实。改已发布的事实时，先把它复制进草稿。"""
     draft = await lock_draft(db, user_id)
+    _check_revision(draft, expected_revision)
     items = items_of(draft)
     item = _find(items, lineage_id)
     if item is None:
@@ -292,9 +335,16 @@ async def edit_fact(
             raise ItemNotFoundError(lineage_id)
         item = DraftItem.from_published(published, ItemStatus.PENDING)
         items.append(item)
-    elif item.status is ItemStatus.DELETED:
+    if item.status is ItemStatus.DELETED:
         item.status = ItemStatus.PENDING  # 修改一条待删除的事实，视为撤销删除
 
+    _apply_changes(item, changes)
+    save_items(draft, items)
+    return item
+
+
+def _apply_changes(item: DraftItem, changes: FactChanges) -> None:
+    """改文字后原文出处失效；用户修改职责后去掉职责类核对原因。"""
     if changes.text is not None and changes.text != item.text:
         item.text = changes.text
         item.has_number = contains_number(changes.text)
@@ -314,11 +364,8 @@ async def edit_fact(
         ]
     if changes.confirmed is not None:
         if changes.confirmed and item.blocked:
-            raise CannotConfirmError(lineage_id)
+            raise CannotConfirmError(item.lineage_id)
         item.status = ItemStatus.CONFIRMED if changes.confirmed else ItemStatus.PENDING
-
-    save_items(draft, items)
-    return item
 
 
 async def delete_fact(db: AsyncSession, user_id: UUID, lineage_id: UUID) -> None:
@@ -336,9 +383,12 @@ async def delete_fact(db: AsyncSession, user_id: UUID, lineage_id: UUID) -> None
     save_items(draft, remaining)
 
 
-async def confirm_clean(db: AsyncSession, user_id: UUID) -> int:
+async def confirm_clean(
+    db: AsyncSession, user_id: UUID, *, expected_revision: int | None = None
+) -> int:
     """确认全部没有核对原因的待确认条目，返回确认了几条。带原因的必须逐条看过。"""
     draft = await lock_draft(db, user_id)
+    _check_revision(draft, expected_revision)
     items = items_of(draft)
     count = 0
     for item in items:
@@ -357,6 +407,7 @@ async def set_responsibility(
     *,
     experience: str,
     responsibility: Responsibility,
+    expected_revision: int | None = None,
 ) -> int:
     """回答「这段经历里没写职责的工作，是你负责的吗」，返回改了几条。
 
@@ -364,6 +415,7 @@ async def set_responsibility(
     不直接确认，没有别的原因的条目之后可以用 confirm_clean 一起确认。
     """
     draft = await lock_draft(db, user_id)
+    _check_revision(draft, expected_revision)
     items = items_of(draft)
     count = 0
     for item in items:
@@ -388,7 +440,11 @@ async def set_responsibility(
 
 
 async def publish_draft(
-    db: AsyncSession, user_id: UUID, expected_base: UUID | None
+    db: AsyncSession,
+    user_id: UUID,
+    expected_base: UUID | None,
+    *,
+    expected_revision: int | None = None,
 ) -> FactSet:
     """把草稿发布成新版本，未提交；调用方提交后才生效。
 
@@ -398,6 +454,7 @@ async def publish_draft(
     NothingToPublishError。
     """
     draft = await lock_draft(db, user_id)
+    _check_revision(draft, expected_revision)
     latest = await latest_fact_set(db, user_id)
     latest_id = latest.fact_set_id if latest else None
     if expected_base != latest_id or draft.base_fact_set_id != latest_id:

@@ -73,6 +73,7 @@ class ResumeOut(BaseModel):
     doc_id: UUID
     run_id: UUID
     items: list[DraftItem]  # 这次拆出的事实，都在草稿里等确认
+    revision: int
 
 
 class ResumeDocumentOut(BaseModel):
@@ -157,8 +158,11 @@ async def upload(
     doc.sections_json = [section.model_dump(mode="json") for section in result.sections]
     items = await drafts.add_extracted(db, user.user_id, result.facts)
     await finish_product(db, user.user_id, run.run_id)
+    revision = await drafts.read_revision(db, user.user_id)
     await db.commit()
-    return ResumeOut(doc_id=doc.doc_id, run_id=run.run_id, items=items)
+    return ResumeOut(
+        doc_id=doc.doc_id, run_id=run.run_id, items=items, revision=revision
+    )
 
 
 @router.get("/resumes/{doc_id}")
