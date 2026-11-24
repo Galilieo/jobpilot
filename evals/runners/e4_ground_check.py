@@ -15,6 +15,7 @@ import asyncio
 import json
 import sys
 from datetime import UTC, datetime
+from functools import cache
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -31,6 +32,7 @@ from jobpilot.db.models import (
     ModelCall,
     Responsibility,
     RunStatus,
+    SectionKind,
 )
 from jobpilot.db.runs import set_run_status
 from jobpilot.db.session import create_database_engine
@@ -60,11 +62,18 @@ def load_cases(split: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines if line.strip()]
 
 
+@cache
+def _sections() -> dict[str, dict[str, str]]:
+    """E1 标注没有段落类型，E4 另外补了一份：{简历: {经历名: section}}。"""
+    return json.loads((E4_DIR / "sections.json").read_text(encoding="utf-8"))
+
+
 def load_fact_set(sample_id: str) -> dict[UUID, GroundingFact]:
     """把 E1 标注里的事实当作这份简历已发布的事实库。"""
     annotation = json.loads(
         (ANNOTATION_DIR / f"{sample_id}.json").read_text(encoding="utf-8")
     )
+    sections = _sections()[sample_id]
     facts = [
         GroundingFact(
             fact_id=fact_id(sample_id, index),
@@ -73,6 +82,7 @@ def load_fact_set(sample_id: str) -> dict[UUID, GroundingFact]:
             text=fact["text"],
             source=FactSource.RESUME,
             quote_verified=True,
+            section=SectionKind(sections[fact["experience"]]),
         )
         for index, fact in enumerate(annotation["facts"])
     ]
@@ -110,7 +120,7 @@ def with_program_layers(
     """
     fact_sets = {s: load_fact_set(s) for s in {case["sample_id"] for case in cases}}
     organizations = {
-        sample_id: organizations_of({fact.experience for fact in facts.values()})
+        sample_id: organizations_of(facts.values())
         for sample_id, facts in fact_sets.items()
     }
     checked = [

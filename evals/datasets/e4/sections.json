@@ -1,0 +1,84 @@
+{
+  "_comment": "E1 标注没有段落类型，这里按简历原文的栏目补上每段经历的 section（与 extract_facts 提示词的六类一致），供依据检查判断哪些经历名是组织名。",
+  "resume-011": {
+    "教育经历": "education",
+    "禾栈仓储软件 后端开发实习": "internship",
+    "物业报修工单分流": "project",
+    "实验室耗材借领小程序": "project",
+    "学院机房开放值班志愿者": "other",
+    "技能": "skill"
+  },
+  "resume-012": {
+    "教育背景": "education",
+    "栖桐文档科技 AI 工程实习": "internship",
+    "论文图表索引工具": "project",
+    "城市骑行可达性分析": "project",
+    "技能": "skill"
+  },
+  "resume-013": {
+    "砚桥商服软件 Java 开发工程师": "internship",
+    "门店月结清单": "project",
+    "外部凭证同步": "project",
+    "同川数服 Java 实习": "internship",
+    "技术栈": "skill"
+  },
+  "resume-014": {
+    "教育": "education",
+    "桐尺票务工作室 前端实习": "internship",
+    "校园短片展映报名页": "project",
+    "影像社活动组": "other",
+    "技能": "skill"
+  },
+  "resume-015": {
+    "教育经历": "education",
+    "铝壳表面缺陷检测": "project",
+    "道路标线分割": "project",
+    "学院视觉实验课助教": "other",
+    "技能": "skill"
+  },
+  "resume-016": {
+    "教育背景": "education",
+    "工坊工具借还说明助手": "project",
+    "社区展览语音导览原型": "project",
+    "学院模型工坊 学生值班员": "other",
+    "技术与工具": "skill"
+  },
+  "resume-017": {
+    "教育": "education",
+    "校园运动队训练报名工具": "project",
+    "日志归档命令行工具": "project",
+    "庐川职业技术学院信息中心 勤工助学": "other",
+    "技能": "skill"
+  },
+  "resume-018": {
+    "青帆巡检设备 Android 开发实习": "internship",
+    "公交卡余额记录器": "project",
+    "学院技能节现场支持": "other",
+    "学历与技能": "skill"
+  },
+  "resume-020": {
+    "教育背景": "education",
+    "棠野零售系统 测试实习": "internship",
+    "晚自习教室管理页面": "project",
+    "学校东门便利店 周末店员": "other",
+    "工具": "skill"
+  },
+  "resume-021": {
+    "教育经历": "education",
+    "榛集电商技术 搜索算法实习": "internship",
+    "短查询改写效果分析": "project",
+    "技能": "skill"
+  },
+  "resume-022": {
+    "教育": "education",
+    "松坊社区商业 财务助理实习": "internship",
+    "社区书店销售与补货分析": "project",
+    "学院迎新志愿者组": "other",
+    "工具": "skill"
+  },
+  "resume-023": {
+    "简序办公软件 实施工程师": "internship",
+    "桥翌网络服务 技术支持": "internship",
+    "工具与技能": "skill"
+  }
+}

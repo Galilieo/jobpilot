@@ -3,12 +3,13 @@
 事实库是合成的：一段实习、一个项目、技能概述和教育经历。
 """
 
+from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from jobpilot.db.models import FactSource, Responsibility
+from jobpilot.db.models import FactSource, Responsibility, SectionKind
 from jobpilot.services.grounding import (
     BulletSection,
     GroundingFact,
@@ -29,6 +30,12 @@ INTERN = "云栈物流科技 后端开发实习"
 PROJECT = "校园二手书交易小程序"
 SKILLS = "专业技能"
 SCHOOL = "澄湖大学 计算机科学与技术 本科"
+SECTIONS = {
+    INTERN: SectionKind.INTERNSHIP,
+    PROJECT: SectionKind.PROJECT,
+    SKILLS: SectionKind.SKILL,
+    SCHOOL: SectionKind.EDUCATION,
+}
 
 OWN, PART, LEAD, NA = (
     Responsibility.OWN,
@@ -46,6 +53,7 @@ def _fact(name: str, experience: str, responsibility: Responsibility, text: str)
         text=text,
         source=FactSource.RESUME,
         quote_verified=True,
+        section=SECTIONS.get(experience),
     )
 
 
@@ -65,7 +73,7 @@ FACTS = dict(
     ]
 )
 AVAILABLE = {fact.fact_id: fact for fact in FACTS.values()}
-ORGS = organizations_of({fact.experience for fact in FACTS.values()})
+ORGS = organizations_of(FACTS.values())
 
 
 def check(text: str, *names: str, section=BulletSection.EXPERIENCE, experience=None):
@@ -281,13 +289,46 @@ def test_organization_from_another_experience_is_flagged(text, names, org) -> No
     assert result.issues[0].fragment == org
 
 
-def test_section_names_are_not_organizations() -> None:
-    names = ["技能", "教育经历", "项目经历 补充", "专业技能", INTERN]
-    assert organizations_of(names) == {"云栈物流科技"}
+def _sectioned(experience: str, section: SectionKind | None) -> GroundingFact:
+    return replace(FACTS["c1"], fact_id=uuid4(), experience=experience, section=section)
 
 
 def test_organizations_are_first_words_of_experience_names() -> None:
-    assert organizations_of([INTERN, "A 项目", PROJECT]) == {"云栈物流科技", PROJECT}
+    assert ORGS == {"云栈物流科技", PROJECT, "澄湖大学"}
+    assert organizations_of([_sectioned("A 项目", SectionKind.PROJECT)]) == set()
+
+
+@pytest.mark.parametrize(
+    "heading", ["技能", "工具", "技术与工具", "学历与技能", "工具与技能", "荣誉奖项"]
+)
+def test_skill_and_award_headings_are_not_organizations(heading) -> None:
+    facts = [
+        _sectioned(heading, SectionKind.SKILL),
+        _sectioned(heading, SectionKind.AWARD),
+    ]
+    assert organizations_of(facts) == set()
+
+
+def test_experience_without_any_section_is_not_an_organization() -> None:
+    # 旧版本、用户补充的事实没有段落类型：宁可少认，交给第三层。
+    assert organizations_of([_sectioned("工具", None)]) == set()
+    # 同一段经历只要有一条带段落类型的事实就算。
+    mixed = [_sectioned(INTERN, None), _sectioned(INTERN, SectionKind.INTERNSHIP)]
+    assert organizations_of(mixed) == {"云栈物流科技"}
+
+
+def test_skill_heading_word_in_a_bullet_is_not_blocked() -> None:
+    """resume-020：栏目名「工具」曾被当成组织名，拦下了「用表格工具记录」。"""
+    tools = _sectioned("工具", SectionKind.SKILL)
+    orgs = organizations_of([tools, *FACTS.values()])
+    result = check_grounding(
+        "补充接口超时的告警规则，用表格工具记录",
+        [FACTS["a4"].fact_id],
+        AVAILABLE,
+        section=BulletSection.EXPERIENCE,
+        known_organizations=orgs,
+    )
+    assert result.passed, result.issues
 
 
 # ---------- 第一层：结构 ----------

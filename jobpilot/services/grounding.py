@@ -29,6 +29,7 @@ from jobpilot.db.models import (
     Fact,
     FactSource,
     Responsibility,
+    SectionKind,
 )
 from jobpilot.services.grounding_rules import (
     RESPONSIBILITY_RANK,
@@ -85,6 +86,7 @@ class GroundingFact:
     text: str
     source: FactSource
     quote_verified: bool
+    section: SectionKind | None = None  # 用户补充、旧版本的事实可能没有
 
     @classmethod
     def of(cls, fact: Fact) -> "GroundingFact":
@@ -95,6 +97,7 @@ class GroundingFact:
             text=fact.text,
             source=FactSource(fact.source),
             quote_verified=fact.quote_verified,
+            section=SectionKind(fact.section) if fact.section else None,
         )
 
 
@@ -239,27 +242,31 @@ def check_content(
     ]
 
 
-def organizations_of(
-    experiences: Iterable[str], *, rules: GroundingRules | None = None
-) -> set[str]:
-    """从经历名取出组织名：经历名的第一个词。
+# 这几类经历的名字以组织或项目开头（学校、公司、项目名、社团）；
+# 技能、获奖的经历名是栏目名（「技能」「工具与技能」），不是组织。
+ORGANIZATION_SECTIONS = frozenset(
+    {
+        SectionKind.EDUCATION,
+        SectionKind.INTERNSHIP,
+        SectionKind.PROJECT,
+        SectionKind.OTHER,
+    }
+)
+
+
+def organizations_of(facts: Iterable[GroundingFact]) -> set[str]:
+    """从用户事实库取出组织名：上面几类经历的经历名的第一个词。
 
     例如「云栈物流科技 后端开发实习」→「云栈物流科技」。
-
-    少于 2 个字的不算，避免把「A 项目」里的「A」当成组织名；
-    「技能」「教育经历」这类栏目名也不算，否则别的经历里写到「技能」就会被误拦。
+    少于 2 个字的不算，避免把「A 项目」里的「A」当成组织名。
+    一段经历只要有一条事实带着这几类段落类型就算；全部没有段落类型的经历不取，
+    宁可少认一个组织名（交给第三层），也不把栏目名当成组织去误拦。
     """
-    rules = rules or default_rules()
-    names = set()
-    for experience in experiences:
-        words = experience.split()
-        if not words or len(words[0]) < 2:
-            continue
-        first = words[0]
-        if first in rules.section_words or first.endswith("经历"):
-            continue
-        names.add(first)
-    return names
+    experiences = {
+        fact.experience for fact in facts if fact.section in ORGANIZATION_SECTIONS
+    }
+    first_words = (name.split()[0] for name in experiences if name.strip())
+    return {word for word in first_words if len(word) >= 2}
 
 
 # 数字：前面紧挨着英文字母或数字的不算（P95、Vue3、H5 属于名字，交给技术名检查）。
