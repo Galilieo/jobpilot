@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
 from jobpilot.db.models import FactKind, Responsibility
+from jobpilot.services.grounding_rules import RESPONSIBILITY_RANK, default_rules
 from jobpilot.services.llm_gateway import (
     ModelBudget,
     request_completion,
@@ -165,28 +166,8 @@ class ExtractionResult(BaseModel):
 
 # ---------- 转述检查：text 与标签是否有片段支撑 ----------
 
-# 职责词及其级别。参与级的词不支撑任何职责，只用来截断前面职责词的作用范围。
-# T2.2 依据检查建立角色词表后改为共用。
-_ROLE_LEVELS = {
-    "主导": Responsibility.LEAD,
-    "牵头": Responsibility.LEAD,
-    "带领": Responsibility.LEAD,
-    "主持": Responsibility.LEAD,
-    "负责人": Responsibility.LEAD,
-    "负责": Responsibility.OWN,
-    "独立完成": Responsibility.OWN,
-    "独立负责": Responsibility.OWN,
-    "独立开发": Responsibility.OWN,
-    "独立实现": Responsibility.OWN,
-    "承担": Responsibility.OWN,
-    "参与": Responsibility.PARTICIPATE,
-    "协助": Responsibility.PARTICIPATE,
-    "配合": Responsibility.PARTICIPATE,
-}
-# 同一位置能匹配多个词时，正则取先列出的那个。
-# 按长度从长到短排列，「负责人」才不会被当成「负责」。
-_ROLE_PATTERN = re.compile("|".join(sorted(_ROLE_LEVELS, key=len, reverse=True)))
-_RANK = {Responsibility.PARTICIPATE: 0, Responsibility.OWN: 1, Responsibility.LEAD: 2}
+# 职责词及其级别放在 jobpilot/data/grounding_rules.yaml，和依据检查共用。
+# 参与级的词不支撑任何职责，只用来截断前面职责词的作用范围。
 # 结果类事实往前查找职责词时，不越过句末标点和换行。
 _SENTENCE_BREAK = re.compile(r"[。！？；!?;\n]")
 _NUMBER_PATTERN = re.compile(r"\d+(?:\.\d+)?")
@@ -214,8 +195,12 @@ def responsibility_supported(responsibility: Responsibility, context: str) -> bo
     """
     if responsibility not in (Responsibility.LEAD, Responsibility.OWN):
         return True
-    words = _ROLE_PATTERN.findall(context)
-    return bool(words) and _RANK[_ROLE_LEVELS[words[-1]]] >= _RANK[responsibility]
+    rules = default_rules()
+    words = rules.role_pattern.findall(context)
+    return bool(words) and (
+        RESPONSIBILITY_RANK[rules.role_levels[words[-1]]]
+        >= RESPONSIBILITY_RANK[responsibility]
+    )
 
 
 def numbers_missing_from_quote(text: str, quote: str) -> list[str]:
