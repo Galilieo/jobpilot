@@ -28,7 +28,7 @@ from jobpilot.services.jobs import Requirement, RequirementType
 from jobpilot.services.matching import MatchItem
 
 MAX_BULLETS_PER_BLOCK = 4
-# 逐段改写的经历；教育和获奖不改写。
+# 逐段改写的经历，也是计划里各类的先后顺序；教育和获奖不改写。
 REWRITTEN_SECTIONS = (SectionKind.INTERNSHIP, SectionKind.PROJECT, SectionKind.OTHER)
 SKILLS_KEY = "skills"
 
@@ -206,8 +206,8 @@ def build_plan(
 ) -> list[PlanBlock]:
     """按段落分块、排顺序、标出要突出的要求。
 
-    顺序：段落类型按在事实库里第一次出现的顺序；同一类里，支撑的要求越多越靠前
-    （硬性要求算 2、加分项算 1），一样多时保持原顺序。技能概述放最后。
+    顺序：实习、项目、其他依次排；同一类里，支撑的要求越多越靠前
+    （硬性要求算 2、加分项算 1），一样多时保持事实库里的顺序。技能概述放最后。
     只是建议，不删经历。
     """
     sections = resolve_sections(facts, section_overrides)
@@ -245,9 +245,8 @@ def build_plan(
         )
         for experience, ids in experience_facts.items()
     ]
-    section_order = list(dict.fromkeys(block.section for block in blocks))
     # sort 是稳定的：分数相同时保持原顺序。
-    blocks.sort(key=lambda b: (section_order.index(b.section), -_score(b)))
+    blocks.sort(key=lambda b: (REWRITTEN_SECTIONS.index(b.section), -_score(b)))
 
     skill_ids = tuple(
         fact.fact_id

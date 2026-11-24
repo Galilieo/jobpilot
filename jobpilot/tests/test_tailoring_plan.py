@@ -190,6 +190,12 @@ def test_blocks_supporting_more_requirements_come_first_within_a_section() -> No
     assert [b.experience for b in blocks[:3]] == [INTERN2, INTERN, PROJECT]
 
 
+def test_internships_come_before_projects_whatever_the_fact_order() -> None:
+    reordered = [BOOK, *[f for f in FACTS if f is not BOOK]]
+    blocks = build_plan(reordered, REQS, ITEMS, base_doc_id=DOC_A, base_text="")
+    assert [b.experience for b in blocks] == [INTERN, INTERN2, PROJECT, None]
+
+
 def test_focus_lists_supported_requirements_hard_first() -> None:
     intern, intern2, project, skills = plan()
     assert [f.text for f in intern.focus] == ["熟悉 Redis"]
