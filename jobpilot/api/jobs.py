@@ -128,9 +128,9 @@ def _job_out(posting: JobPosting, user_job: UserJob) -> JobOut:
 
 
 async def _load(
-    db: DbSession, user_id: UUID, job_id: UUID
+    db: DbSession, user_id: UUID, job_id: UUID, *, for_update: bool = False
 ) -> tuple[JobPosting, UserJob]:
-    row = await get_user_job(db, user_id, job_id)
+    row = await get_user_job(db, user_id, job_id, for_update=for_update)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
     return row
@@ -242,7 +242,7 @@ async def update_job(
     job_id: UUID, body: JobChangesIn, user: CurrentUser, db: DbSession
 ) -> JobOut:
     """修改进度、备注或解析结果。解析结果的修改写进 user_job，job_posting 不变。"""
-    posting, user_job = await _load(db, user.user_id, job_id)
+    posting, user_job = await _load(db, user.user_id, job_id, for_update=True)
     if body.stage is not None:
         user_job.stage = body.stage
     if body.note is not None:

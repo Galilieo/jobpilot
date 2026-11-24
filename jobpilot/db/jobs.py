@@ -21,10 +21,14 @@ def _owned_jobs(user_id: UUID):
 
 
 async def get_user_job(
-    db: AsyncSession, user_id: UUID, job_id: UUID
+    db: AsyncSession, user_id: UUID, job_id: UUID, *, for_update: bool = False
 ) -> tuple[JobPosting, UserJob] | None:
-    result = await db.execute(_owned_jobs(user_id).where(UserJob.user_job_id == job_id))
-    return result.tuples().one_or_none()
+    query = _owned_jobs(user_id).where(UserJob.user_job_id == job_id)
+    if for_update:
+        query = query.with_for_update(of=UserJob)
+    result = await db.execute(query)
+    row = result.one_or_none()
+    return (row.JobPosting, row.UserJob) if row else None
 
 
 async def find_existing_job(
@@ -38,4 +42,4 @@ async def list_user_jobs(
     db: AsyncSession, user_id: UUID
 ) -> list[tuple[JobPosting, UserJob]]:
     query = _owned_jobs(user_id).order_by(UserJob.updated_at.desc())
-    return list((await db.execute(query)).tuples())
+    return [(posting, job) for posting, job in await db.execute(query)]

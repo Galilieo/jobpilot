@@ -4,15 +4,16 @@
 不同用户各自导入同一份 JD 都成功。隔离（A 碰不到 B 的岗位）由 test_isolation.py 覆盖。
 """
 
+import asyncio
 import json
 from typing import Any
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.db.models import AiRun, JobPosting, RunStatus
+from jobpilot.db.models import AiRun, JobPosting, RunStatus, UserJob
 
 JD = (
     "星桥数据 · 后端开发实习生（上海）\n"
@@ -280,3 +281,35 @@ async def test_dedup_list_and_detail_share_owner_scope(
     [listed] = (await signed_in.get("/api/jobs")).json()
     assert listed["job_id"] == second["job_id"]
     assert (await signed_in.get(f"/api/jobs/{first['job_id']}")).status_code == 404
+
+
+async def test_concurrent_keyword_and_requirement_edits_both_survive(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    job = (await add_job(signed_in, model_outputs)).json()
+    url = f"/api/jobs/{job['job_id']}"
+    async with session_factory.begin() as first, session_factory() as observer:
+        owner_job = (await first.scalars(select(UserJob).with_for_update())).one()
+        pid = await first.scalar(text("SELECT pg_backend_pid()"))
+        second = asyncio.create_task(signed_in.put(url, json={"keywords": ["Redis"]}))
+        # 确认第二个请求已在数据库中等锁，再提交第一份修改。
+        for _ in range(200):
+            blocked = await observer.scalar(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                    "WHERE :pid = ANY(pg_blocking_pids(pid)))"
+                ),
+                {"pid": pid},
+            )
+            await observer.commit()
+            if blocked:
+                break
+            await asyncio.sleep(0.01)
+        owner_job.field_overrides_json = {"requirements": []}
+    response = await second
+    assert blocked and response.status_code == 200
+    parsed = (await signed_in.get(url)).json()["parsed"]
+    assert parsed["requirements"] == []
+    assert parsed["keywords"] == ["Redis"]
