@@ -481,7 +481,6 @@ class MatchReport(Base):
     )
 
 
-
 class BulletSection(StrEnum):
     """改写条目所在的区域。"""
 
@@ -498,7 +497,11 @@ class CheckStatus(StrEnum):
 
 
 class TailoredBullet(Base):
-    """一次改写运行产出的一条简历条目。只追加：用户修改另存为简历版本，不改这里。"""
+    """一次改写运行产出的一条简历条目。
+
+    文字和引用生成后不再修改：用户改写的内容另存为简历版本。
+    只有 user_decision 会在用户采纳或放弃时写入。
+    """
 
     __tablename__ = "tailored_bullet"
     __table_args__ = (
@@ -529,7 +532,8 @@ class TailoredBullet(Base):
         CheckConstraint(
             "revision_count BETWEEN 0 AND 2", name="ck_tailored_bullet_revision_count"
         ),
-        Index("ix_tailored_bullet_run_id_order_no", "run_id", "order_no"),
+        # 同一次运行里顺序号不重复；唯一约束自带索引，按顺序读出全部条目。
+        UniqueConstraint("run_id", "order_no"),
     )
 
     bullet_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)

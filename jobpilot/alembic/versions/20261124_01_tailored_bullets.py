@@ -104,13 +104,13 @@ def upgrade() -> None:
             "user_decision IS NULL OR user_decision IN ('accepted', 'rejected')",
             name="ck_tailored_bullet_user_decision",
         ),
+        sa.UniqueConstraint(
+            "run_id", "order_no", name=op.f("uq_tailored_bullet_run_id")
+        ),
         sa.CheckConstraint("order_no >= 0", name="ck_tailored_bullet_order_no"),
         sa.CheckConstraint(
             "revision_count BETWEEN 0 AND 2", name="ck_tailored_bullet_revision_count"
         ),
-    )
-    op.create_index(
-        "ix_tailored_bullet_run_id_order_no", "tailored_bullet", ["run_id", "order_no"]
     )
 
     op.create_table(
@@ -153,7 +153,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("bullet_fact")
-    op.drop_index("ix_tailored_bullet_run_id_order_no", "tailored_bullet")
     op.drop_table("tailored_bullet")
     op.drop_constraint("uq_ai_run_run_id_user_id_fact_set_id", "ai_run", type_="unique")
     op.drop_constraint(

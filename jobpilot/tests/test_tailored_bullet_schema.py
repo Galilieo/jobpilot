@@ -142,6 +142,12 @@ async def test_value_checks(session_factory: Factory) -> None:
     assert await violated_constraint(session_factory, row) == (
         "ck_tailored_bullet_experience"
     )
+    # 同一次运行里顺序号不能重复
+    await add_bullet(session_factory, bullet(a, a_run, a_v1, order_no=5))
+    duplicate = bullet(a, a_run, a_v1, order_no=5)
+    assert await violated_constraint(session_factory, duplicate) == (
+        "uq_tailored_bullet_run_id"
+    )
     # 技能区没有经历名是合法的
     assert await add_bullet(
         session_factory, bullet(a, a_run, a_v1, section="skills", experience=None)
