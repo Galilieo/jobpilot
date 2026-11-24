@@ -252,3 +252,16 @@ async def test_partial_basic_field_edits_keep_existing_values_and_allow_clear(
         original.update(patch)
         assert response.json()["parsed"]["basic_fields"] == original
     assert (await signed_in.get(url)).json()["parsed"]["basic_fields"] == original
+
+
+async def test_duplicate_requirement_id_is_rejected_before_saving(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    job = (await add_job(signed_in, model_outputs)).json()
+    url = f"/api/jobs/{job['job_id']}"
+    first = job["parsed"]["requirements"][0]
+    entry = {key: first[key] for key in ("requirement_id", "type", "text")}
+    response = await signed_in.put(url, json={"requirements": [entry, entry]})
+    assert response.status_code == 422
+    assert entry["requirement_id"] in response.json()["detail"][0]["msg"]
+    assert (await signed_in.get(url)).json()["parsed"] == job["parsed"]

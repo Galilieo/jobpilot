@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
 from openai import APIConnectionError, APIStatusError
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -76,6 +76,20 @@ class JobChangesIn(BaseModel):
     basic_fields: BasicFields | None = None
     requirements: list[RequirementIn] | None = Field(default=None, max_length=80)
     keywords: list[str] | None = Field(default=None, max_length=60)
+
+    @field_validator("requirements")
+    @classmethod
+    def unique_requirement_ids(
+        cls, requirements: list[RequirementIn] | None
+    ) -> list[RequirementIn] | None:
+        seen = set()
+        for item in requirements or []:
+            if item.requirement_id is None:
+                continue
+            if item.requirement_id in seen:
+                raise ValueError(f"重复的岗位要求 ID：{item.requirement_id}")
+            seen.add(item.requirement_id)
+        return requirements
 
 
 class JobSummary(BaseModel):
