@@ -296,3 +296,35 @@ async def test_full_queue_returns_503_and_frees_the_slot(
     assert rejected.headers["retry-after"] == "10"
     assert (await first).status_code == 200
     assert ocr_api.ocr_queue.requests == 0  # 请求结束后名额归还
+
+
+def test_pdf_pixel_limit_precedes_render(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(parsing, "MAX_IMAGE_PIXELS", 99)
+
+    def unexpected_render(*args, **kwargs):
+        pytest.fail("超限页不应分配像素缓冲区")
+
+    monkeypatch.setattr(parsing.pdfium.PdfPage, "render", unexpected_render)
+    with pytest.raises(UnreadableFileError, match="页面尺寸"):
+        ocr_pages("scan.pdf", as_scanned_pdf(SCREENSHOT))
+
+
+def test_pdf_pages_are_recognised_before_rendering_next(monkeypatch) -> None:
+    buffer = BytesIO()
+    page = Image.new("RGB", (10, 12))
+    page.save(buffer, "PDF", save_all=True, append_images=[page])
+    events = []
+    original = parsing.pdfium.PdfPage.render
+
+    def render(page, **kwargs):
+        events.append("render")
+        return original(page, **kwargs)
+
+    def recognise(image):
+        events.append("recognise")
+        return str(len(events))
+
+    monkeypatch.setattr(parsing.pdfium.PdfPage, "render", render)
+    monkeypatch.setattr(parsing, "_ocr_image", recognise)
+    assert ocr_pages("two.pdf", buffer.getvalue()) == ["2", "4"]
+    assert events == ["render", "recognise", "render", "recognise"]

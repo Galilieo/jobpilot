@@ -5,6 +5,7 @@ extract_text 处理 TXT、Markdown、HTML、DOCX 和文字版 PDF。图片和提
 所有结果都经过 normalize_text，粘贴的文本也走同一个函数，保证引用位置按同一份文本计算。
 """
 
+import math
 import re
 import threading
 from functools import cache
@@ -258,10 +259,9 @@ def ocr_pages(filename: str, data: bytes) -> list[str]:
     with _OCR_LOCK:
         if suffix == ".pdf":
             _require_magic(data, _PDF_MAGIC, "PDF")
-            images = _render_pdf(data)
-        else:
-            images = [load_image(data)]
-        return [_ocr_image(image) for image in images]
+            return _ocr_pdf(data)
+        with load_image(data) as image:
+            return [_ocr_image(image)]
 
 
 def load_image(data: bytes) -> Image.Image:
@@ -351,8 +351,8 @@ def _same_row(row: list[_Box], item: _Box) -> bool:
     return overlap > 0.5 * min(row_bottom - row_top, bottom - top)
 
 
-def _render_pdf(data: bytes) -> list[Image.Image]:
-    """把扫描版 PDF 的每一页渲染成图片。"""
+def _ocr_pdf(data: bytes) -> list[str]:
+    """逐页检查渲染尺寸、识别并释放像素缓冲区，只累积文字。"""
     try:
         document = pdfium.PdfDocument(data)
     except pdfium.PdfiumError as error:
@@ -360,10 +360,22 @@ def _render_pdf(data: bytes) -> list[Image.Image]:
     try:
         if len(document) > MAX_PDF_PAGES:
             raise UnreadableFileError(f"PDF 超过 {MAX_PDF_PAGES} 页")
-        return [
-            page.render(scale=_PDF_RENDER_SCALE).to_pil().convert("RGB")
-            for page in document
-        ]
+        texts = []
+        for page in document:
+            try:
+                width = math.ceil(page.get_width() * _PDF_RENDER_SCALE)
+                height = math.ceil(page.get_height() * _PDF_RENDER_SCALE)
+                if width * height > MAX_IMAGE_PIXELS:
+                    raise UnreadableFileError("PDF 页面尺寸过大")
+                bitmap = page.render(scale=_PDF_RENDER_SCALE)
+                try:
+                    with bitmap.to_pil() as pixels, pixels.convert("RGB") as image:
+                        texts.append(_ocr_image(image))
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+        return texts
     finally:
         document.close()
 
