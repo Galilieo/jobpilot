@@ -5,7 +5,7 @@ from collections import Counter
 from typing import Any
 
 import pytest
-from evals.runners.e4_score import LABELS, NORMAL, score_run
+from evals.runners.e4_score import LABELS, NORMAL, render, score_run
 
 from jobpilot.config import REPO_ROOT
 
@@ -98,3 +98,42 @@ def test_score_run_counts_each_configuration() -> None:
     assert summary["L123"]["detection"] == 1
     assert summary["L123"]["by_label"]["implicit"] == 1
     assert result["first_layer"] == Counter({"第二层": 1, "第三层": 2})
+
+
+def test_report_counts_each_false_block_reason_across_runs() -> None:
+    case = {
+        "case_id": "n1",
+        "sentence": "常用 Figma 设计原型",
+        "label": NORMAL,
+        "layer1": [],
+        "layer2": [],
+    }
+    records = [
+        {
+            "case_id": "n1",
+            "error": None,
+            "calls": [],
+            "issues": [{"kind": kind, "message": reason}],
+        }
+        for kind, reason in [
+            ("check_unavailable", "连接失败"),
+            ("semantic", "原型设计缺少依据"),
+            ("semantic", "原型设计缺少依据"),
+        ]
+    ]
+    result = {
+        "split": "test",
+        "created_at": "test",
+        "git": {"commit": "test", "dirty": False},
+        "prompt_version": "test",
+        "model": {},
+        "runs": 3,
+        "cases": [case],
+        "semantic": records,
+    }
+    runs = [score_run({"n1": case}, [record]) for record in records]
+    report = render(result, runs, REPO_ROOT / "evals/results/example.json")
+    line = next(line for line in report.splitlines() if "`n1`" in line)
+    assert "3/3 次" in line
+    assert "连接失败（1 次）" in line
+    assert "原型设计缺少依据（2 次）" in line

@@ -159,7 +159,8 @@ def render(result: dict[str, Any], runs: list[dict[str, Any]], path: Path) -> st
 
     # 失败案例：完整组合下漏掉的编造、被拦下的正常句。
     misses: dict[str, int] = Counter()
-    false_blocks: dict[str, list[str]] = defaultdict(list)
+    false_blocks: Counter[str] = Counter()
+    reasons_by_case: dict[str, Counter[str]] = defaultdict(Counter)
     for record in result["semantic"]:
         case = cases[record["case_id"]]
         outcome = blocked(case, record)
@@ -170,7 +171,8 @@ def render(result: dict[str, Any], runs: list[dict[str, Any]], path: Path) -> st
             reasons += [i["message"] for i in record["issues"]]
             if record["error"]:
                 reasons.append(f"第三层出错：{record['error']}")
-            false_blocks[case["case_id"]].append("；".join(reasons))
+            false_blocks[case["case_id"]] += 1
+            reasons_by_case[case["case_id"]].update(set(reasons))
 
     lines += ["", "## 漏掉的编造（完整组合）", ""]
     for case_id, times in sorted(misses.items()):
@@ -183,10 +185,14 @@ def render(result: dict[str, Any], runs: list[dict[str, Any]], path: Path) -> st
         lines.append("无")
 
     lines += ["", "## 被误拦的正常句（完整组合）", ""]
-    for case_id, reasons in sorted(false_blocks.items()):
+    for case_id, times in sorted(false_blocks.items()):
+        reasons = "；".join(
+            f"{reason}（{count} 次）"
+            for reason, count in sorted(reasons_by_case[case_id].items())
+        )
         lines.append(
-            f"- （{len(reasons)}/{result['runs']} 次）`{case_id}` "
-            f"{cases[case_id]['sentence']}　— {reasons[0]}"
+            f"- （{times}/{result['runs']} 次）`{case_id}` "
+            f"{cases[case_id]['sentence']}　— {reasons}"
         )
     if not false_blocks:
         lines.append("无")
