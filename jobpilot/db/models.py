@@ -96,6 +96,13 @@ class AiRun(Base):
     __tablename__ = "ai_run"
     __table_args__ = (
         UniqueConstraint("run_id", "user_id"),
+        # 供改写条目用 (run_id, user_id, fact_set_id) 绑定运行固定的事实库版本。
+        UniqueConstraint(
+            "run_id",
+            "user_id",
+            "fact_set_id",
+            name="uq_ai_run_run_id_user_id_fact_set_id",
+        ),
         CheckConstraint(
             "kind IN ('parse_resume', 'parse_jd', 'match', 'tailor', 'agent')",
             name="ck_ai_run_kind",
@@ -117,6 +124,13 @@ class AiRun(Base):
             deferrable=True,
             initially="DEFERRED",
         ),
+        # 改写启动时固定的简历底稿必须属于同一用户。
+        ForeignKeyConstraint(
+            ["base_doc_id", "user_id"],
+            ["resume_document.doc_id", "resume_document.user_id"],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         # 解析 JD 的运行关联产出的岗位；匹配和改写关联所针对的岗位。
         ForeignKeyConstraint(
             ["user_job_id", "user_id"],
@@ -135,6 +149,8 @@ class AiRun(Base):
     thread_id: Mapped[str | None] = mapped_column(Text)
     fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)
     user_job_id: Mapped[UUID | None] = mapped_column(Uuid)
+    # 改写启动时固定的简历底稿：基本信息、教育等不改写的内容从这里原样保留。
+    base_doc_id: Mapped[UUID | None] = mapped_column(Uuid)
     # 匹配和改写启动时固定合并个人修改后的岗位内容，重读旧报告不受后续编辑影响。
     job_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     started_at: Mapped[datetime] = mapped_column(
@@ -274,6 +290,13 @@ class Fact(Base):
             initially="DEFERRED",
         ),
         UniqueConstraint("user_id", "fact_set_id", "lineage_id"),
+        # 供改写条目用 (fact_id, user_id, fact_set_id) 引用同一用户、同一版本的事实。
+        UniqueConstraint("fact_id", "user_id", "fact_set_id"),
+        CheckConstraint(
+            "section IS NULL OR section IN "
+            "('education', 'project', 'internship', 'skill', 'award', 'other')",
+            name="ck_fact_section",
+        ),
         CheckConstraint(
             "kind IN ('action', 'technology', 'result', 'role')", name="ck_fact_kind"
         ),
@@ -300,6 +323,8 @@ class Fact(Base):
     user_id: Mapped[UUID] = mapped_column(Uuid)
     lineage_id: Mapped[UUID] = mapped_column(Uuid)
     experience: Mapped[str] = mapped_column(Text)
+    # 简历栏目（教育、项目、实习、技能……），改写时按栏目分块；用户补充的事实可以为空。
+    section: Mapped[str | None] = mapped_column(String(16))
     kind: Mapped[str] = mapped_column(String(16))
     responsibility: Mapped[str] = mapped_column(String(16))
     text: Mapped[str] = mapped_column(Text)
@@ -454,3 +479,103 @@ class MatchReport(Base):
     main_gaps: Mapped[list[str]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )
+
+
+
+class BulletSection(StrEnum):
+    """改写条目所在的区域。"""
+
+    EXPERIENCE = "experience"  # 某段经历下的条目：引用必须来自同一段经历
+    SKILLS = "skills"  # 技能概述等跨经历的区域：可以引用多段经历
+
+
+class CheckStatus(StrEnum):
+    """条目最后的检查结果。"""
+
+    PASSED = "passed"  # 三层检查通过（可能经过修订，见 revision_count）
+    FALLBACK = "fallback"  # 修订两次仍不通过，退回本次事实库里的事实原文
+    PENDING = "pending"  # 没有可用的事实，标「待处理」，不自动填入原简历的句子
+
+
+class TailoredBullet(Base):
+    """一次改写运行产出的一条简历条目。只追加：用户修改另存为简历版本，不改这里。"""
+
+    __tablename__ = "tailored_bullet"
+    __table_args__ = (
+        # 条目、运行和事实库版本必须一致：同一用户、运行启动时固定的那个版本。
+        ForeignKeyConstraint(
+            ["run_id", "user_id", "fact_set_id"],
+            ["ai_run.run_id", "ai_run.user_id", "ai_run.fact_set_id"],
+            ondelete="CASCADE",
+        ),
+        # 供 bullet_fact 用 (bullet_id, user_id, fact_set_id) 引用。
+        UniqueConstraint("bullet_id", "user_id", "fact_set_id"),
+        CheckConstraint(
+            "section IN ('experience', 'skills')", name="ck_tailored_bullet_section"
+        ),
+        CheckConstraint(
+            "(section = 'experience') = (experience IS NOT NULL)",
+            name="ck_tailored_bullet_experience",
+        ),
+        CheckConstraint(
+            "check_status IN ('passed', 'fallback', 'pending')",
+            name="ck_tailored_bullet_check_status",
+        ),
+        CheckConstraint(
+            "user_decision IS NULL OR user_decision IN ('accepted', 'rejected')",
+            name="ck_tailored_bullet_user_decision",
+        ),
+        CheckConstraint("order_no >= 0", name="ck_tailored_bullet_order_no"),
+        CheckConstraint(
+            "revision_count BETWEEN 0 AND 2", name="ck_tailored_bullet_revision_count"
+        ),
+        Index("ix_tailored_bullet_run_id_order_no", "run_id", "order_no"),
+    )
+
+    bullet_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    fact_set_id: Mapped[UUID] = mapped_column(Uuid)
+    section: Mapped[str] = mapped_column(String(16))
+    # 经历条目所属的经历名；技能概述为空。
+    experience: Mapped[str | None] = mapped_column(Text)
+    order_no: Mapped[int]
+    text: Mapped[str] = mapped_column(Text)
+    check_status: Mapped[str] = mapped_column(String(16))
+    revision_count: Mapped[int] = mapped_column(server_default=sql_text("0"))
+    # 最后一次检查的问题清单（GroundingIssue 列表）；通过时为空。
+    issues_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+    user_decision: Mapped[str | None] = mapped_column(String(16))
+
+
+class BulletFact(Base):
+    """条目引用了哪些事实。组合外键保证事实和条目属于同一用户、同一事实库版本。"""
+
+    __tablename__ = "bullet_fact"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["bullet_id", "user_id", "fact_set_id"],
+            [
+                "tailored_bullet.bullet_id",
+                "tailored_bullet.user_id",
+                "tailored_bullet.fact_set_id",
+            ],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["fact_id", "user_id", "fact_set_id"],
+            ["fact.fact_id", "fact.user_id", "fact.fact_set_id"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    bullet_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    fact_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    fact_set_id: Mapped[UUID] = mapped_column(Uuid)

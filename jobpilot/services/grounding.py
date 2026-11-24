@@ -24,20 +24,18 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from jobpilot.db.models import Fact, FactSource, Responsibility
+from jobpilot.db.models import (
+    BulletSection,
+    Fact,
+    FactSource,
+    Responsibility,
+)
 from jobpilot.services.grounding_rules import (
     RESPONSIBILITY_RANK,
     GroundingRules,
     default_rules,
 )
 from jobpilot.services.keywords import DEFAULT_TABLE, load_keyword_table
-
-
-class BulletSection(StrEnum):
-    """改写条目所在的区域。"""
-
-    EXPERIENCE = "experience"  # 某段经历下的条目：引用必须来自同一段经历
-    SKILLS = "skills"  # 技能概述等跨经历的区域：可以引用多段经历
 
 
 class IssueKind(StrEnum):

@@ -244,6 +244,8 @@ async def test_correction_appends_new_row_with_same_lineage(
     # 没动过的事实复制到新版本：同一 lineage，新的一行，内容不变
     assert new[keep.lineage_id].fact_id != old[keep.lineage_id].fact_id
     assert new[keep.lineage_id].source_quote == old[keep.lineage_id].source_quote
+    # 栏目随事实发布，复制到新版本、改了文字后都保留，改写时按它分块。
+    assert {fact.section for fact in [*old.values(), *new.values()]} == {"project"}
 
 
 async def test_changing_responsibility_keeps_resume_source(
