@@ -20,6 +20,7 @@ from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.main import app
 from jobpilot.tests.test_call_accounting import fake_upstream
 from jobpilot.tests.test_fact_schema import add_user
+from jobpilot.tests.test_facts_api import new_idempotency_headers
 from jobpilot.tests.test_tailoring_graph import (
     INTERN,
     PROJECT,
@@ -55,8 +56,11 @@ async def model(async_client: httpx.AsyncClient) -> AsyncIterator[FakeModel]:
         yield fake
 
 
-async def start(client: httpx.AsyncClient, job_id: UUID, **body) -> httpx.Response:
-    return await client.post(f"/api/jobs/{job_id}/tailor", json=body)
+async def start(
+    client: httpx.AsyncClient, job_id: UUID, *, key: str | None = None, **body
+) -> httpx.Response:
+    headers = {"Idempotency-Key": key} if key else new_idempotency_headers()
+    return await client.post(f"/api/jobs/{job_id}/tailor", json=body, headers=headers)
 
 
 async def add_document(session_factory: Factory, user_id: UUID) -> UUID:
@@ -139,11 +143,7 @@ async def test_preconditions_are_checked_before_creating_a_run(
 
     unknown_job = await start(async_client, UUID(int=1))
     assert unknown_job.status_code == 404
-    async with session_factory() as session:
-        runs = await session.scalar(
-            select(func.count()).where(AiRun.user_id == user_id, AiRun.kind == "tailor")
-        )
-    assert runs == 0
+    assert await tailor_runs(session_factory, user_id) == 0
 
 
 async def test_user_given_sections_unblock_legacy_facts(
@@ -165,6 +165,59 @@ async def test_user_given_sections_unblock_legacy_facts(
     ).json()
     assert result["status"] == "succeeded"
     assert [b["experience"] for b in result["blocks"]] == [INTERN, PROJECT, None]
+
+
+# ---------- 幂等 ----------
+
+
+async def tailor_runs(session_factory: Factory, user_id: UUID) -> int:
+    async with session_factory() as session:
+        return await session.scalar(
+            select(func.count()).where(AiRun.user_id == user_id, AiRun.kind == "tailor")
+        )
+
+
+async def test_resend_with_same_key_returns_the_same_run(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """响应丢了、客户端重送：不新建运行、不再调用模型，返回原来的 202 和 run_id。"""
+    user_id = await sign_in(async_client, "resend@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+
+    first = await start(async_client, inputs.user_job_id, key="tailor-key-1")
+    await launcher.wait_all()
+    calls = dict(model.calls)
+    again = await start(async_client, inputs.user_job_id, key="tailor-key-1")
+    await launcher.wait_all()
+
+    assert (first.status_code, again.status_code) == (202, 202)
+    assert again.json() == first.json()
+    assert await tailor_runs(session_factory, user_id) == 1
+    assert model.calls == calls
+
+
+async def test_same_key_with_other_request_is_rejected(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    user_id = await sign_in(async_client, "rekey@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+    assert (await start(async_client, inputs.user_job_id, key="k2")).status_code == 202
+    other = await start(
+        async_client, inputs.user_job_id, key="k2", base_doc_id=str(inputs.doc_id)
+    )
+    assert other.status_code == 422
+    missing = await async_client.post(f"/api/jobs/{inputs.user_job_id}/tailor", json={})
+    assert missing.status_code == 400
+    await launcher.wait_all()
+    assert await tailor_runs(session_factory, user_id) == 1
 
 
 # ---------- 隔离 ----------

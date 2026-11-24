@@ -155,7 +155,9 @@ async def _create_tailor_run(
     report_id = await _create_match_report(client, model_outputs)
     job_id = (await client.get(f"/api/match-reports/{report_id}")).json()["job_id"]
     started = await client.post(
-        f"/api/jobs/{job_id}/tailor", json={"sections": {"B 的项目": "project"}}
+        f"/api/jobs/{job_id}/tailor",
+        json={"sections": {"B 的项目": "project"}},
+        headers=new_idempotency_headers(),
     )
     assert started.status_code == 202, started.text
     await app.state.run_launcher.wait_all()
@@ -211,7 +213,9 @@ OWNED_RESOURCES: list[OwnedResource] = [
             Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
             Attempt("POST", "/api/jobs/{id}/match", headers=new_idempotency_headers()),
             Attempt("GET", "/api/jobs/{id}/matches"),
-            Attempt("POST", "/api/jobs/{id}/tailor", {}),
+            Attempt(
+                "POST", "/api/jobs/{id}/tailor", {}, headers=new_idempotency_headers()
+            ),
         ),
         routes=frozenset(
             {

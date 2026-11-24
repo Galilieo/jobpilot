@@ -6,11 +6,12 @@
 """
 
 import asyncio
+import json
 import logging
-from collections.abc import Coroutine
+from collections.abc import AsyncIterator, Coroutine
 from datetime import datetime
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
+from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
     AiRun,
@@ -87,17 +90,43 @@ class TailorStartOut(BaseModel):
     base_doc_id: UUID
 
 
+async def reserve_tailor(
+    job_id: UUID,
+    body: TailorIn,
+    user: CurrentUser,
+    db: DbSession,
+    factory: SessionFactory,
+    key: RequiredKey,
+) -> AsyncIterator[tuple[TailorIn, Attempt]]:
+    """领取幂等键：同一键、同样的岗位和请求体，重送时返回原来的 run_id。"""
+    payload = json.dumps(
+        {"job_id": str(job_id), **body.model_dump(mode="json")}, sort_keys=True
+    )
+    scope = KeyScope(user.user_id, Operation.TAILOR, key)
+    async with idempotent_request(db, factory, scope, payload) as attempt:
+        yield body, attempt
+
+
+TailorSubmission = Annotated[
+    tuple[TailorIn, Attempt], Depends(reserve_tailor, scope="function")
+]
+
+
 @router.post("/jobs/{job_id}/tailor", status_code=status.HTTP_202_ACCEPTED)
 async def start_tailoring(
     job_id: UUID,
-    body: TailorIn,
+    submission: TailorSubmission,
     user: CurrentUser,
     db: DbSession,
     session_factory: SessionFactory,
     client: ModelClient,
     launcher: Launcher,
 ) -> TailorStartOut:
-    """固定输入、创建运行并在后台执行，立即返回 run_id。"""
+    """固定输入、创建运行并在后台执行，立即返回 run_id。
+
+    运行和幂等键的成功响应在同一个事务提交；之后才启动后台任务。
+    """
+    body, attempt = submission
     job_row = await get_user_job(db, user.user_id, job_id)
     if job_row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
@@ -123,7 +152,9 @@ async def start_tailoring(
         ) from None
 
     user_id = user.user_id
+    run_id = uuid4()  # 先定好，响应快照和运行一起提交
     run = AiRun(
+        run_id=run_id,
         user_id=user_id,
         kind="tailor",
         user_job_id=user_job.user_job_id,
@@ -131,7 +162,9 @@ async def start_tailoring(
         base_doc_id=base_doc_id,
         job_snapshot_json=snapshot.model_dump(mode="json"),
     )
+    started = TailorStartOut(run_id=run_id, base_doc_id=base_doc_id)
     db.add(run)
+    await save_snapshot(db, attempt, run_id, started, status.HTTP_202_ACCEPTED)
     await db.commit()  # 网关登记调用前运行必须已提交
 
     deps = TailorDeps(
@@ -140,8 +173,8 @@ async def start_tailoring(
         budget=ModelBudget(**_TAILOR_BUDGET),
         limiter=asyncio.Semaphore(_MAX_CONCURRENT_REQUESTS),
     )
-    launcher.launch(execute(deps, user_id, run.run_id, body.sections))
-    return TailorStartOut(run_id=run.run_id, base_doc_id=base_doc_id)
+    launcher.launch(execute(deps, user_id, run_id, body.sections))
+    return started
 
 
 async def _base_doc_id(db: AsyncSession, user_id: UUID, requested: UUID | None) -> UUID:

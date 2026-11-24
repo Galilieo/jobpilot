@@ -529,7 +529,7 @@ class IdempotencyKey(Base):
             ondelete="CASCADE",
         ),
         CheckConstraint(
-            "operation IN ('parse_resume', 'parse_jd', 'match')",
+            "operation IN ('parse_resume', 'parse_jd', 'match', 'tailor')",
             name="ck_idempotency_key_operation",
         ),
         CheckConstraint(
@@ -537,7 +537,8 @@ class IdempotencyKey(Base):
             name="ck_idempotency_key_status",
         ),
         CheckConstraint(
-            "(status = 'succeeded' AND response_status IN (200, 201) "
+            # 启动改写返回 202：运行已创建，在后台执行。
+            "(status = 'succeeded' AND response_status IN (200, 201, 202) "
             "AND response_status IS NOT NULL AND response_body IS NOT NULL "
             "AND result_id IS NOT NULL) OR "
             "(status <> 'succeeded' AND response_status IS NULL "
