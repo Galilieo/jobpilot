@@ -35,7 +35,7 @@ from jobpilot.services.grounding_rules import (
     GroundingRules,
     default_rules,
 )
-from jobpilot.services.keywords import DEFAULT_TABLE, load_keyword_table
+from jobpilot.services.keywords import default_table
 
 
 class IssueKind(StrEnum):
@@ -124,7 +124,7 @@ def check_grounding(
     issues = check_structure(
         fact_ids, available, section=section, experience=experience
     )
-    cited = [available[i] for i in dict.fromkeys(fact_ids) if i in available]
+    cited = _cited(fact_ids, available)
     if cited:
         issues += check_content(text, cited, known_organizations=known_organizations)
     return GroundingResult(tuple(issues))
@@ -148,6 +148,13 @@ def should_run_semantic(
 
 
 # ---------- 第一层：结构 ----------
+
+
+def _cited(
+    fact_ids: Sequence[UUID], available: Mapping[UUID, GroundingFact]
+) -> list[GroundingFact]:
+    """引用里在可用范围内的事实，去重并保持顺序。"""
+    return [available[i] for i in dict.fromkeys(fact_ids) if i in available]
 
 
 def check_structure(
@@ -218,7 +225,7 @@ def check_content(
     keyword_table: Mapping[str, str] | None = None,
 ) -> list[GroundingIssue]:
     rules = rules or default_rules()
-    keyword_table = _default_keywords() if keyword_table is None else keyword_table
+    keyword_table = default_table() if keyword_table is None else keyword_table
     fact_text = "\n".join(fact.text for fact in cited)
     # 经历名本身（如「Redis 缓存优化项目」）也算依据，技术名和组织名可以从这里来。
     context = fact_text + "\n" + "\n".join({fact.experience for fact in cited})
@@ -273,7 +280,7 @@ def _unit_after(text: str, end: int, rules: GroundingRules) -> tuple[str, int]:
     rest = text[end:]
     stripped = rest.lstrip(" ")
     start = end + len(rest) - len(stripped)
-    for candidate in sorted(rules.number_units, key=len, reverse=True):
+    for candidate in rules.units_longest_first:
         if not stripped.startswith(candidate):
             continue
         after = stripped[len(candidate) : len(candidate) + 1]
@@ -307,7 +314,7 @@ def _numbers(text: str, rules: GroundingRules) -> list[tuple[str, str, str]]:
     for match in _NUMBER.finditer(text):
         unit, unit_end = _unit_after(text, match.end(), rules)
         value, unit = _canonical(Decimal(match.group().replace(",", "")), unit)
-        found.append((text[match.start() : max(unit_end, match.end())], value, unit))
+        found.append((text[match.start() : unit_end], value, unit))
     return found
 
 
@@ -346,8 +353,7 @@ def _chinese_numbers(text: str, rules: GroundingRules) -> list[tuple[str, str]]:
     text = _normalize(text)
     found = []
     for match in _CHINESE_NUMBER.finditer(text):
-        after = text[match.end() : match.end() + 2]
-        if not any(after.startswith(word) for word in rules.chinese_classifiers):
+        if not text.startswith(rules.chinese_classifiers, match.end()):
             continue
         number = _chinese_value(match.group())
         if number is None:
@@ -373,11 +379,6 @@ def _check_numbers(
                 )
             )
     return issues
-
-
-@cache
-def _default_keywords() -> Mapping[str, str]:
-    return load_keyword_table(DEFAULT_TABLE)
 
 
 @cache
@@ -453,33 +454,27 @@ def _check_roles(
         for fact in cited
         if fact.responsibility in RESPONSIBILITY_RANK
     ]
-    if not ranks:
+    if ranks:
+        allowed = max(ranks)
+        template = "「{}」高于引用事实的职责程度"
+    else:
         # 职责不适用（教育、志愿者、技能……）时，只允许事实原文自己写了的等级：
         # 事实写「负责晚班签到」，改写也可以说「负责」；原文没有角色词就一个都不能加。
-        stated = [
-            RESPONSIBILITY_RANK[rules.role_levels[word]]
-            for fact in cited
-            for word in rules.role_pattern.findall(fact.text)
-        ]
-        allowed_na = max(stated, default=-1)
-        return [
-            GroundingIssue(
-                kind=IssueKind.ROLE,
-                message=f"引用的事实不涉及职责程度，原文也没有这么写，改写里不能出现「{word}」",
-                fragment=word,
-            )
-            for word in words
-            if RESPONSIBILITY_RANK[rules.role_levels[word]] > allowed_na
-        ]
-    allowed = max(ranks)
+        allowed = max(
+            (
+                rules.role_rank(word)
+                for fact in cited
+                for word in rules.role_pattern.findall(fact.text)
+            ),
+            default=-1,
+        )
+        template = "引用的事实不涉及职责程度，原文也没有这么写，改写里不能出现「{}」"
     return [
         GroundingIssue(
-            kind=IssueKind.ROLE,
-            message=f"「{word}」高于引用事实的职责程度",
-            fragment=word,
+            kind=IssueKind.ROLE, message=template.format(word), fragment=word
         )
         for word in words
-        if RESPONSIBILITY_RANK[rules.role_levels[word]] > allowed
+        if rules.role_rank(word) > allowed
     ]
 
 
@@ -489,10 +484,10 @@ def _check_degrees(
     words = list(dict.fromkeys(rules.degree_pattern.findall(text)))
     if not words:
         return []
-    stated = [
-        rules.degree_levels[word] for word in rules.degree_pattern.findall(fact_text)
-    ]
-    allowed = max(stated) if stated else rules.unstated_degree_max
+    allowed = max(
+        (rules.degree_levels[word] for word in rules.degree_pattern.findall(fact_text)),
+        default=rules.unstated_degree_max,
+    )
     return [
         GroundingIssue(
             kind=IssueKind.DEGREE,

@@ -26,6 +26,7 @@ from evals.runners.e1_extract_facts import eval_user_id, git_state
 from jobpilot.config import REPO_ROOT, ModelPurpose, settings
 from jobpilot.db.models import (
     AiRun,
+    BulletSection,
     FactSource,
     ModelCall,
     Responsibility,
@@ -35,7 +36,6 @@ from jobpilot.db.runs import set_run_status
 from jobpilot.db.session import create_database_engine
 from jobpilot.services.grounding import (
     STRUCTURE_KINDS,
-    BulletSection,
     GroundingFact,
     check_grounding,
     organizations_of,
@@ -65,8 +65,8 @@ def load_fact_set(sample_id: str) -> dict[UUID, GroundingFact]:
     annotation = json.loads(
         (ANNOTATION_DIR / f"{sample_id}.json").read_text(encoding="utf-8")
     )
-    return {
-        fact_id(sample_id, index): GroundingFact(
+    facts = [
+        GroundingFact(
             fact_id=fact_id(sample_id, index),
             experience=fact["experience"],
             responsibility=Responsibility(fact["responsibility"]),
@@ -75,10 +75,16 @@ def load_fact_set(sample_id: str) -> dict[UUID, GroundingFact]:
             quote_verified=True,
         )
         for index, fact in enumerate(annotation["facts"])
-    }
+    ]
+    return {fact.fact_id: fact for fact in facts}
 
 
-def program_layers(case: dict[str, Any], facts: dict[UUID, GroundingFact]) -> dict:
+def program_layers(
+    case: dict[str, Any],
+    facts: dict[UUID, GroundingFact],
+    organizations: set[str],
+) -> dict:
+    """第一、二层的结果，按层分开记，计分时三种组合各取所需。"""
     ids = [fact_id(case["sample_id"], index) for index in case["fact_indexes"]]
     result = check_grounding(
         case["sentence"],
@@ -86,7 +92,7 @@ def program_layers(case: dict[str, Any], facts: dict[UUID, GroundingFact]) -> di
         facts,
         section=BulletSection(case["section"]),
         experience=case.get("experience"),
-        known_organizations=organizations_of({f.experience for f in facts.values()}),
+        known_organizations=organizations,
     )
     issues = [issue.model_dump(mode="json") for issue in result.issues]
     return {
@@ -95,10 +101,32 @@ def program_layers(case: dict[str, Any], facts: dict[UUID, GroundingFact]) -> di
     }
 
 
+def with_program_layers(
+    cases: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, dict[UUID, GroundingFact]]]:
+    """每句加上第一、二层结果；同一份简历的事实库和组织名只算一次。
+
+    运行和 e4_score --recheck 都用它，两边算法一致。返回值另带事实库，供第三层引用。
+    """
+    fact_sets = {s: load_fact_set(s) for s in {case["sample_id"] for case in cases}}
+    organizations = {
+        sample_id: organizations_of({fact.experience for fact in facts.values()})
+        for sample_id, facts in fact_sets.items()
+    }
+    checked = [
+        case
+        | program_layers(
+            case, fact_sets[case["sample_id"]], organizations[case["sample_id"]]
+        )
+        for case in cases
+    ]
+    return checked, fact_sets
+
+
 async def semantic_layer(
     session_factory: async_sessionmaker[AsyncSession],
     client: AsyncOpenAI,
-    user_id: Any,
+    user_id: UUID,
     case: dict[str, Any],
     facts: dict[UUID, GroundingFact],
 ) -> dict[str, Any]:
@@ -107,7 +135,7 @@ async def semantic_layer(
         run = AiRun(user_id=user_id, kind="tailor")
         session.add(run)
 
-    record: dict[str, Any] = {"error": None}
+    record: dict[str, Any] = {"error": None, "verdict": None, "issues": []}
     try:
         result = await ground_check(
             session_factory,
@@ -123,8 +151,6 @@ async def semantic_layer(
         status = RunStatus.SUCCEEDED
     except Exception as error:  # 评测要记下任何失败原因，再继续跑下一句
         record["error"] = f"{type(error).__name__}: {error}"
-        record["verdict"] = None
-        record["issues"] = []
         status = RunStatus.FAILED
 
     async with session_factory.begin() as session:
@@ -152,8 +178,7 @@ async def main(split: str, runs: int) -> int:
         print("未配置 OPENAI_API_KEY，请在仓库根目录 .env 中填写后重试。")
         return 1
 
-    cases = load_cases(split)
-    fact_sets = {s: load_fact_set(s) for s in {case["sample_id"] for case in cases}}
+    cases, fact_sets = with_program_layers(load_cases(split))
     output: dict[str, Any] = {
         "eval": "E4",
         "split": split,
@@ -162,9 +187,7 @@ async def main(split: str, runs: int) -> int:
         "prompt_version": load_prompt("ground_check").label,
         "model": settings.model_for_purpose(ModelPurpose.GROUND_CHECK).model_dump(),
         "runs": runs,
-        "cases": [
-            case | program_layers(case, fact_sets[case["sample_id"]]) for case in cases
-        ],
+        "cases": cases,
         "semantic": [],
     }
 

@@ -132,7 +132,9 @@ def test_report_counts_each_false_block_reason_across_runs() -> None:
         "semantic": records,
     }
     runs = [score_run({"n1": case}, [record]) for record in records]
-    report = render(result, runs, REPO_ROOT / "evals/results/example.json")
+    report = render(
+        result, {"n1": case}, runs, REPO_ROOT / "evals/results/example.json"
+    )
     line = next(line for line in report.splitlines() if "`n1`" in line)
     assert "3/3 次" in line
     assert "连接失败（1 次）" in line

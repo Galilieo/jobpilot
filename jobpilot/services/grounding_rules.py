@@ -45,6 +45,14 @@ class GroundingRules:
     def degree_pattern(self) -> re.Pattern[str]:
         return _longest_first(self.degree_levels)
 
+    @cached_property
+    def units_longest_first(self) -> tuple[str, ...]:
+        # 长的先试：「个月」不会被当成「月」。
+        return tuple(sorted(self.number_units, key=len, reverse=True))
+
+    def role_rank(self, word: str) -> int:
+        return RESPONSIBILITY_RANK[self.role_levels[word]]
+
 
 def _longest_first(words: dict[str, object]) -> re.Pattern[str]:
     # 正则在同一位置取先列出的分支，按长度从长到短排，「负责人」才不会被当成「负责」。
@@ -89,10 +97,7 @@ def load_grounding_rules(path: Path) -> GroundingRules:
             str(k): str(v) for k, v in (data.get("number_units") or {}).items()
         },
         section_words=frozenset(data.get("section_words") or ()),
-        # 长的放前面，「个月」先于「个」被认出来。
-        chinese_classifiers=tuple(
-            sorted(data.get("chinese_classifiers") or (), key=len, reverse=True)
-        ),
+        chinese_classifiers=tuple(data.get("chinese_classifiers") or ()),
     )
 
 

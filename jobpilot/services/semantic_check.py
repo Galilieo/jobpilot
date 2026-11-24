@@ -101,24 +101,21 @@ def to_result(sentence: str, output: SemanticOutput) -> SemanticResult:
         return SemanticResult(output.verdict, ())
 
     label = "部分没有依据" if output.verdict is SemanticVerdict.PARTIAL else "没有依据"
-    spans = [span for span in output.unsupported_spans if span.text in sentence]
-    if not spans:
-        issue = GroundingIssue(
+    issues = tuple(
+        GroundingIssue(
+            kind=IssueKind.SEMANTIC,
+            message=f"「{span.text}」{label}：{span.reason}",
+            fragment=span.text,
+        )
+        for span in output.unsupported_spans
+        if span.text in sentence
+    ) or (
+        GroundingIssue(
             kind=IssueKind.SEMANTIC,
             message=f"语义检查认为这句{label}，但没能指出具体是哪一段",
-        )
-        return SemanticResult(output.verdict, (issue,))
-    return SemanticResult(
-        output.verdict,
-        tuple(
-            GroundingIssue(
-                kind=IssueKind.SEMANTIC,
-                message=f"「{span.text}」{label}：{span.reason}",
-                fragment=span.text,
-            )
-            for span in spans
         ),
     )
+    return SemanticResult(output.verdict, issues)
 
 
 async def ground_check(

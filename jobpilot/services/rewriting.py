@@ -115,14 +115,17 @@ def _to_draft(raw: RawBullet, labels: dict[str, UUID]) -> DraftBullet:
 
 def _facts_payload(facts: Sequence[GroundingFact]) -> str:
     """只给模型 id、职责和事实文字：不给来源、原文片段和真实 ID。"""
+    # 技能概述跨经历，要让模型知道每条事实出自哪段经历。
+    several = len({fact.experience for fact in facts}) > 1
     rows = [
-        {"id": label, "responsibility": fact.responsibility.value, "text": fact.text}
+        {
+            "id": label,
+            "responsibility": fact.responsibility.value,
+            "text": fact.text,
+            **({"experience": fact.experience} if several else {}),
+        }
         for label, fact in zip(labels_of(facts), facts, strict=True)
     ]
-    # 技能概述跨经历，要让模型知道每条事实出自哪段经历。
-    if len({fact.experience for fact in facts}) > 1:
-        for row, fact in zip(rows, facts, strict=True):
-            row["experience"] = fact.experience
     return json.dumps(rows, ensure_ascii=False)
 
 

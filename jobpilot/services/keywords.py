@@ -47,7 +47,7 @@ def load_keyword_table(path: Path) -> dict[str, str]:
 
 
 @cache
-def _default_table() -> dict[str, str]:
+def default_table() -> dict[str, str]:
     return load_keyword_table(DEFAULT_TABLE)
 
 
@@ -55,7 +55,7 @@ def normalize_keywords(
     words: list[str], table: dict[str, str] | None = None
 ) -> list[str]:
     """映射成标准名并按首次出现的顺序去重；空字符串丢弃。"""
-    table = _default_table() if table is None else table
+    table = default_table() if table is None else table
     result: list[str] = []
     seen: set[str] = set()
     for word in words:
