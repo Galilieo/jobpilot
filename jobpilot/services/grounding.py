@@ -52,6 +52,9 @@ class IssueKind(StrEnum):
     ORGANIZATION = "organization"  # 基本信息改动、张冠李戴
     ROLE = "role"  # 角色升级
     DEGREE = "degree"  # 程度升级
+    # 第三层：语义（services/semantic_check.py）
+    SEMANTIC = "semantic"  # 模型判断为部分支持或不支持
+    CHECK_UNAVAILABLE = "check_unavailable"  # 第三层没能完成，按未通过处理
 
 
 STRUCTURE_KINDS = frozenset(
@@ -127,6 +130,23 @@ def check_grounding(
     if cited:
         issues += check_content(text, cited, known_organizations=known_organizations)
     return GroundingResult(tuple(issues))
+
+
+def should_run_semantic(
+    issues: Sequence[GroundingIssue], *, revisions_left: int
+) -> bool:
+    """第一、二层的结果出来后，决定这一轮要不要再调第三层（模型）。
+
+    - 第一层不过：引用本身有问题，判断语义没有意义，不调。
+    - 第一、二层都过：调。
+    - 只有第二层不过：默认不调，反正要修订，省一次调用；
+      但最后一次修订之前照样调，把问题一次给全，
+      免得最后一次修订只修好了数字，又被第三层拦下却没有机会再改。
+    revisions_left：这次检查之后还允许修订几次。
+    """
+    if any(issue.kind in STRUCTURE_KINDS for issue in issues):
+        return False
+    return not issues or revisions_left == 1
 
 
 # ---------- 第一层：结构 ----------

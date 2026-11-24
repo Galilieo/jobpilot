@@ -15,6 +15,7 @@ from jobpilot.services.grounding import (
     IssueKind,
     check_grounding,
     organizations_of,
+    should_run_semantic,
     technologies_in,
 )
 from jobpilot.services.grounding_rules import (
@@ -404,3 +405,29 @@ def test_unknown_unstated_level_is_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(GroundingRulesError, match="unstated_degree_max"):
         load_grounding_rules(path)
+
+
+# ---------- 要不要调第三层 ----------
+
+
+def test_semantic_check_runs_when_first_two_layers_pass() -> None:
+    assert should_run_semantic([], revisions_left=2)
+    assert should_run_semantic([], revisions_left=0)
+
+
+def test_semantic_check_skipped_when_structure_fails() -> None:
+    issues = check("负责运单查询接口").issues  # 没有引用
+    for left in (0, 1, 2):
+        assert not should_run_semantic(issues, revisions_left=left)
+
+
+def test_content_failure_calls_semantic_only_before_last_revision() -> None:
+    issues = check("主导运单查询接口开发", "a1").issues
+    assert kinds_of(issues) == [IssueKind.ROLE]
+    assert not should_run_semantic(issues, revisions_left=2)  # 第一次检查：先修
+    assert should_run_semantic(issues, revisions_left=1)  # 最后一次修订前：问题给全
+    assert not should_run_semantic(issues, revisions_left=0)  # 反正要回退
+
+
+def kinds_of(issues) -> list[IssueKind]:
+    return [issue.kind for issue in issues]
