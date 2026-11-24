@@ -38,8 +38,6 @@ from jobpilot.services.tailoring_store import (
     save_outcome,
 )
 
-MAX_CONCURRENT_REQUESTS = 4
-
 
 @dataclass(frozen=True)
 class TailorDeps:
@@ -242,17 +240,4 @@ async def run_tailoring(
             stop_reason=None,
             outcomes=[],
         )
-    )
-
-
-def new_deps(
-    session_factory: async_sessionmaker[AsyncSession],
-    client: AsyncOpenAI,
-    budget: ModelBudget,
-) -> TailorDeps:
-    return TailorDeps(
-        session_factory=session_factory,
-        client=client,
-        budget=budget,
-        limiter=asyncio.Semaphore(MAX_CONCURRENT_REQUESTS),
     )
