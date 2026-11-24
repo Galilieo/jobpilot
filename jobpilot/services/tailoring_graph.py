@@ -128,7 +128,7 @@ def build_tailor_graph(
             deps.session_factory,
             state["user_id"],
             state["run_id"],
-            fact_set_id=state["inputs"].fact_set_id,
+            inputs=state["inputs"],
             plan=state.get("plan", []),
             outcomes=state.get("outcomes", []),
             stop_reason=state.get("stop_reason"),

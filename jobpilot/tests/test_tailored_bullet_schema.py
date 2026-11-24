@@ -4,12 +4,22 @@
 条目引用的事实必须是同一用户、同一版本里的行。
 """
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.db.models import AiRun, BulletFact, Fact, TailoredBullet, User
+from jobpilot.db.models import (
+    AiRun,
+    BulletFact,
+    Fact,
+    ResumeVersion,
+    TailoredBullet,
+    TailoredResume,
+    User,
+)
 from jobpilot.tests.test_fact_schema import (
     add_document,
     add_fact_set,
@@ -197,6 +207,50 @@ async def test_stop_reason_only_on_finished_runs(session_factory: Factory) -> No
                 plan_json={"blocks": []},
             )
         )
+
+
+async def add_resume(session_factory: Factory, user_id: UUID, run_id: UUID) -> UUID:
+    """一份简历和它的第一个版本，同一事务写入（两张表互相引用，提交时才检查）。"""
+    resume_id, version_id = uuid4(), uuid4()
+    async with session_factory.begin() as session:
+        session.add_all(
+            [
+                TailoredResume(
+                    resume_id=resume_id,
+                    run_id=run_id,
+                    user_id=user_id,
+                    current_version_id=version_id,
+                ),
+                ResumeVersion(
+                    resume_version_id=version_id,
+                    resume_id=resume_id,
+                    user_id=user_id,
+                    version=1,
+                    content_json={"header": [], "sections": []},
+                ),
+            ]
+        )
+    return version_id
+
+
+async def test_one_resume_per_run_and_pointer_stays_inside_it(
+    session_factory: Factory,
+) -> None:
+    a, doc, a_v1, *_ = await setup(session_factory, "resume@bullet.invalid")
+    run_1 = await add_run(session_factory, a, a_v1, doc)
+    run_2 = await add_run(session_factory, a, a_v1, doc)
+    other_version = await add_resume(session_factory, a, run_1)
+
+    # 同一次运行再组装一份：唯一约束拒绝
+    with pytest.raises(IntegrityError) as duplicate:
+        await add_resume(session_factory, a, run_1)
+    assert duplicate.value.orig.diag.constraint_name == "uq_tailored_resume_run_id"
+
+    # 当前版本指向另一份简历的版本：组合外键在提交时拒绝
+    stray = TailoredResume(run_id=run_2, user_id=a, current_version_id=other_version)
+    assert await violated_constraint(session_factory, stray) == (
+        "fk_tailored_resume_current_version_id_resume_version"
+    )
 
 
 async def test_deleting_run_or_account_cascades(session_factory: Factory) -> None:

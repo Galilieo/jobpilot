@@ -24,9 +24,11 @@ from jobpilot.db.models import (
     MatchReport,
     ModelCall,
     ResumeDocument,
+    ResumeVersion,
     RunStatus,
     SectionKind,
     TailoredBullet,
+    TailoredResume,
     User,
     UserJob,
 )
@@ -289,6 +291,22 @@ async def count(session_factory: Factory, query) -> int:
         return await session.scalar(select(func.count()).select_from(query.subquery()))
 
 
+async def versions_of(session_factory: Factory, run_id: UUID) -> list[ResumeVersion]:
+    async with session_factory() as session:
+        rows = await session.scalars(
+            select(ResumeVersion)
+            .join(
+                TailoredResume,
+                (TailoredResume.resume_id == ResumeVersion.resume_id)
+                & (
+                    TailoredResume.current_version_id == ResumeVersion.resume_version_id
+                ),
+            )
+            .where(TailoredResume.run_id == run_id)
+        )
+        return list(rows.all())
+
+
 def match_runs(user_id: UUID):
     return select(AiRun).where(AiRun.user_id == user_id, AiRun.kind == "match")
 
@@ -320,6 +338,16 @@ async def test_full_run_succeeds_and_saves_bullets_in_plan_order(
     # 改写前新建了一次匹配运行和报告；每块一次改写，每条一次第三层
     assert await count(session_factory, match_runs(seeded.user_id)) == 1
     assert model.calls == {"match": 1, "rewrite": 3, "check": 3}
+    # 成功时同一事务组装出完整简历和第一个版本，条目与改写结果一致
+    [first] = await versions_of(session_factory, seeded.run_id)
+    assert first.version == 1
+    in_resume = [
+        bullet["bullet_id"]
+        for section in first.content_json["sections"]
+        for entry in section["entries"]
+        for bullet in entry["bullets"]
+    ]
+    assert sorted(in_resume) == sorted(str(b.bullet_id) for b in bullets)
 
 
 async def test_unchanged_inputs_reuse_the_match_report(
@@ -371,6 +399,7 @@ async def test_budget_running_out_mid_run_ends_budget_exhausted(
     # 存下来的都是定稿的条目，属于完成或中断的块
     assert all(b.check_status == "passed" for b in bullets)
     assert all(statuses[b.experience] in {"done", "interrupted"} for b in bullets)
+    assert await versions_of(session_factory, seeded.run_id) == []  # 没有完整简历
 
 
 async def test_saved_partial_result_shows_finished_block_and_stop_position(
@@ -409,7 +438,7 @@ async def test_saved_partial_result_shows_finished_block_and_stop_position(
         session_factory,
         seeded.user_id,
         seeded.run_id,
-        fact_set_id=inputs.fact_set_id,
+        inputs=inputs,
         plan=[first, second],
         outcomes=[stopped, done],  # 并行完成的顺序不影响编号
         stop_reason=None,
@@ -455,6 +484,7 @@ async def test_failed_match_fails_the_run_without_bullets(
         [match_run] = (await session.scalars(match_runs(seeded.user_id))).all()
     assert match_run.status == RunStatus.FAILED
     assert await count(session_factory, select(MatchReport)) == 0
+    assert await versions_of(session_factory, seeded.run_id) == []  # 没有完整简历
 
 
 async def test_run_finished_elsewhere_writes_nothing(
@@ -474,3 +504,4 @@ async def test_run_finished_elsewhere_writes_nothing(
     # 模型调用照样记账
     calls = select(ModelCall).where(ModelCall.run_id == seeded.run_id)
     assert await count(session_factory, calls) == 6
+    assert await versions_of(session_factory, seeded.run_id) == []  # 没有完整简历

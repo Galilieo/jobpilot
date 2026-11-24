@@ -664,3 +664,64 @@ class BulletFact(Base):
         ForeignKey("user_account.user_id", ondelete="CASCADE")
     )
     fact_set_id: Mapped[UUID] = mapped_column(Uuid)
+
+
+class TailoredResume(Base):
+    """一次成功的改写产出的完整简历，及当前版本指针。"""
+
+    __tablename__ = "tailored_resume"
+    __table_args__ = (
+        # 一次改写只产生一份简历：finalize 重复执行也不会多出一份。
+        UniqueConstraint("run_id"),
+        UniqueConstraint("resume_id", "user_id"),
+        ForeignKeyConstraint(
+            ["run_id", "user_id"],
+            ["ai_run.run_id", "ai_run.user_id"],
+            ondelete="CASCADE",
+        ),
+        # 当前版本必须是这份简历自己的版本。两张表互相引用，提交时才检查。
+        ForeignKeyConstraint(
+            ["current_version_id", "resume_id"],
+            ["resume_version.resume_version_id", "resume_version.resume_id"],
+            deferrable=True,
+            initially="DEFERRED",
+            use_alter=True,
+        ),
+    )
+
+    resume_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    current_version_id: Mapped[UUID] = mapped_column(Uuid)
+
+
+class ResumeVersion(Base):
+    """一份定制简历的一个完整版本：首次组装和每次保存编辑各新增一行，旧版本保留。"""
+
+    __tablename__ = "resume_version"
+    __table_args__ = (
+        UniqueConstraint("user_id", "resume_id", "version"),
+        # 供 tailored_resume 的当前版本指针用两列引用。
+        UniqueConstraint("resume_version_id", "resume_id"),
+        ForeignKeyConstraint(
+            ["resume_id", "user_id"],
+            ["tailored_resume.resume_id", "tailored_resume.user_id"],
+            ondelete="CASCADE",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        CheckConstraint("version >= 1", name="ck_resume_version_version"),
+    )
+
+    resume_version_id: Mapped[UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid4
+    )
+    resume_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    version: Mapped[int]
+    # services/resume_content.ResumeContent：页头、栏目、经历和条目（含检查结论）。
+    content_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
