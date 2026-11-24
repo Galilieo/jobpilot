@@ -226,3 +226,47 @@ async def test_same_quote_in_two_resumes_points_to_each_document(
         raw = (await signed_in.get(f"/api/resumes/{doc_id}")).json()["raw_text"]
         assert raw[fact["span_start"] : fact["span_end"]] == fact["source_quote"]
     assert facts[second["doc_id"]]["span_start"] > facts[first["doc_id"]]["span_start"]
+
+
+async def test_wrong_experience_requires_individual_confirmation(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    quote = "负责数据库迁移"
+    raw = f"甲公司实习\n{quote}\n乙公司实习\n维护前端页面"
+    model_outputs.append(
+        json.dumps(
+            {
+                "experiences": [
+                    {
+                        "name": "乙公司实习",
+                        "section": "internship",
+                        "heading_quote": "乙公司后端研发实习",
+                        "facts": [
+                            {
+                                "kind": "action",
+                                "responsibility": "own",
+                                "responsibility_stated": True,
+                                "text": quote,
+                                "has_number": False,
+                                "source_quote": quote,
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+    )
+    uploaded = await signed_in.post("/api/resumes", json={"raw_text": raw})
+    [item] = uploaded.json()["items"]
+    assert item["experience"] == "乙公司实习"
+    assert (
+        item["quote_verified"] and raw[item["span_start"] : item["span_end"]] == quote
+    )
+    assert item["review_reasons"] == ["experience_uncertain"]
+    batch = await signed_in.post("/api/facts/batch", json={"action": "confirm_clean"})
+    assert batch.json() == {"changed": 0}
+    edited = await signed_in.put(
+        f"/api/facts/{item['lineage_id']}", json={"confirmed": True}
+    )
+    assert edited.status_code == 200
+    assert edited.json()["status"] == "confirmed"

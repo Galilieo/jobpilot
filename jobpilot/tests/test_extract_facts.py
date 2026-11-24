@@ -147,7 +147,10 @@ async def test_heading_not_found_falls_back_to_whole_text(
     [draft] = result.facts
     assert draft.quote_verified
     assert draft.span_start == RESUME.index("负责后端接口开发")  # 第一处，在甲公司
-    assert set(draft.review_reasons) == {ReviewReason.QUOTE_AMBIGUOUS}
+    assert set(draft.review_reasons) == {
+        ReviewReason.QUOTE_AMBIGUOUS,
+        ReviewReason.EXPERIENCE_UNCERTAIN,
+    }
 
 
 # ---------- 原文定位 ----------

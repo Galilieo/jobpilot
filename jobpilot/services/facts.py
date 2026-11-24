@@ -123,6 +123,7 @@ class ReviewReason(StrEnum):
     """需要用户核对的原因。只有 QUOTE_NOT_FOUND 阻止确认，其余要求逐条看过。"""
 
     QUOTE_NOT_FOUND = "quote_not_found"
+    EXPERIENCE_UNCERTAIN = "experience_uncertain"
     QUOTE_AMBIGUOUS = "quote_ambiguous"
     RESPONSIBILITY_UNSTATED = "responsibility_unstated"
     RESPONSIBILITY_UNSUPPORTED = "responsibility_unsupported"
@@ -310,6 +311,8 @@ def _to_draft(
     # 有范围就只在本段找：在别的段找到，说明归属可能错了，不能算通过。
     if section is None:
         spans = locate_quote(raw_text, fact.source_quote)
+        if spans:
+            reasons.append(ReviewReason.EXPERIENCE_UNCERTAIN)
     else:
         spans = locate_quote(raw_text, fact.source_quote, section.start, section.end)
 
