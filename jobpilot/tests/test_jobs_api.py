@@ -265,3 +265,18 @@ async def test_duplicate_requirement_id_is_rejected_before_saving(
     assert response.status_code == 422
     assert entry["requirement_id"] in response.json()["detail"][0]["msg"]
     assert (await signed_in.get(url)).json()["parsed"] == job["parsed"]
+
+
+async def test_dedup_list_and_detail_share_owner_scope(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    first = (await add_job(signed_in, model_outputs)).json()
+    await signed_in.post("/api/auth/logout")
+    await sign_in(signed_in, "other-owner@example.invalid")
+    second = (await add_job(signed_in, model_outputs)).json()
+    duplicate = await signed_in.post("/api/jobs", json={"raw_text": JD})
+    assert duplicate.status_code == 200
+    assert duplicate.json()["job_id"] == second["job_id"]
+    [listed] = (await signed_in.get("/api/jobs")).json()
+    assert listed["job_id"] == second["job_id"]
+    assert (await signed_in.get(f"/api/jobs/{first['job_id']}")).status_code == 404

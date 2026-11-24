@@ -11,7 +11,6 @@ from uuid import UUID, uuid4
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
@@ -120,26 +119,6 @@ def effective_parsed_job(posting: JobPosting, user_job: UserJob) -> ParsedJob:
     if "keywords" in overrides:
         parsed.keywords = list(overrides["keywords"])
     return parsed
-
-
-async def get_user_job(
-    db: AsyncSession, user_id: UUID, job_id: UUID
-) -> tuple[JobPosting, UserJob] | None:
-    """按用户归属查询岗位及其关系，不属于该用户时返回 None。"""
-    row = (
-        await db.execute(
-            select(JobPosting, UserJob)
-            .join(
-                UserJob,
-                (UserJob.posting_id == JobPosting.posting_id)
-                & (UserJob.user_id == JobPosting.owner_id),
-            )
-            .where(UserJob.user_job_id == job_id, UserJob.user_id == user_id)
-        )
-    ).one_or_none()
-    if row is None:
-        return None
-    return row.JobPosting, row.UserJob
 
 
 def _locate(raw_text: str, quote: str) -> dict[str, object]:

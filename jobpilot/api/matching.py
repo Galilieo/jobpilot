@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import Select, select
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
     AiRun,
     Fact,
@@ -32,7 +33,6 @@ from jobpilot.services.jobs import (
     ParsedJob,
     RequirementType,
     effective_parsed_job,
-    get_user_job,
 )
 from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelBudget
 from jobpilot.services.matching import (

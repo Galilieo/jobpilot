@@ -13,10 +13,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Response, status
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.db.jobs import find_existing_job, get_user_job, list_user_jobs
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
 from jobpilot.db.runs import set_run_status
 from jobpilot.services.facts import TruncatedOutputError
@@ -27,7 +27,6 @@ from jobpilot.services.jobs import (
     Requirement,
     RequirementType,
     effective_parsed_job,
-    get_user_job,
     parse_job,
 )
 from jobpilot.services.keywords import normalize_keywords
@@ -137,21 +136,6 @@ async def _load(
     return row
 
 
-async def _find_existing(
-    db: DbSession, user_id: UUID, content_hash: str
-) -> UUID | None:
-    """本人以前提交过同样正文的岗位；按正文指纹查，只查自己的。"""
-    return await db.scalar(
-        select(UserJob.user_job_id)
-        .join(
-            JobPosting,
-            (UserJob.posting_id == JobPosting.posting_id)
-            & (UserJob.user_id == JobPosting.owner_id),
-        )
-        .where(JobPosting.owner_id == user_id, JobPosting.content_hash == content_hash)
-    )
-
-
 @router.post("/jobs", status_code=status.HTTP_201_CREATED)
 async def add_job(
     body: JobIn,
@@ -169,7 +153,7 @@ async def add_job(
         )
     content_hash = sha256(raw_text.encode("utf-8")).hexdigest()
 
-    existing = await _find_existing(db, user.user_id, content_hash)
+    existing = await find_existing_job(db, user.user_id, content_hash)
     if existing is not None:
         response.status_code = status.HTTP_200_OK
         return _job_out(*await _load(db, user.user_id, existing))
@@ -215,7 +199,7 @@ async def add_job(
             raise
         await set_run_status(db, user_id, run_id, RunStatus.CANCELLED)
         await db.commit()
-        existing = await _find_existing(db, user_id, content_hash)
+        existing = await find_existing_job(db, user_id, content_hash)
         assert existing is not None
         response.status_code = status.HTTP_200_OK
         return _job_out(*await _load(db, user_id, existing))
@@ -230,16 +214,7 @@ async def add_job(
 
 @router.get("/jobs")
 async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
-    rows = await db.execute(
-        select(JobPosting, UserJob)
-        .join(
-            UserJob,
-            (UserJob.posting_id == JobPosting.posting_id)
-            & (UserJob.user_id == JobPosting.owner_id),
-        )
-        .where(UserJob.user_id == user.user_id)
-        .order_by(UserJob.updated_at.desc())
-    )
+    rows = await list_user_jobs(db, user.user_id)
     summaries = []
     for posting, user_job in rows:
         parsed = effective_parsed_job(posting, user_job)
