@@ -173,6 +173,10 @@ async def run_match(
     """新建一次匹配运行，用改写运行的预算调用模型，报告和终态在同一个事务提交。
 
     返回图状态的更新：成功时给 match_items，否则给 stop_reason。
+    与匹配接口（api/matching.py 的 create_match_report）共用调用、建报告和收尾的函数，
+    只有编排不同，所以不合并：接口要在请求的 session 里建运行（幂等键在 flush 时绑定）、
+    把重放快照和报告放在同一事务、出错返回 502；这里用独立短事务、共用改写的预算、
+    出错记为停止原因。
     """
     snapshot_json = inputs.snapshot.model_dump(mode="json")
     async with deps.session_factory.begin() as session:
