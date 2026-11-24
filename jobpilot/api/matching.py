@@ -32,6 +32,7 @@ from jobpilot.db.models import (
     Responsibility,
     RunStatus,
 )
+from jobpilot.db.reports import add_match_report
 from jobpilot.db.runs import set_run_status
 from jobpilot.services import drafts
 from jobpilot.services.facts import TruncatedOutputError
@@ -244,13 +245,12 @@ async def create_match_report(
             detail="匹配分析失败，请稍后重试",
         ) from None
 
-    report = MatchReport(
-        user_id=user_id,
-        run_id=run_id,
-        items_json=[item.model_dump(mode="json") for item in built.items],
+    report = add_match_report(
+        db,
+        run,
+        items=[item.model_dump(mode="json") for item in built.items],
         main_gaps=built.main_gaps,
     )
-    db.add(report)
     await finish_product(db, user_id, run_id)
     await db.commit()
     await db.refresh(report)

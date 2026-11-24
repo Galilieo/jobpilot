@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -14,6 +15,7 @@ from jobpilot.db.models import (
     User,
     UserJob,
 )
+from jobpilot.db.reports import add_match_report
 from jobpilot.tests.test_fact_schema import (
     add_document,
     add_fact_set,
@@ -148,3 +150,23 @@ async def test_deleting_user_cascades_across_match_reports(
     async with session_factory() as reader:
         for table in (MatchReport, AiRun, UserJob, JobPosting, Fact, FactSet):
             assert (await reader.scalars(select(table))).all() == []
+
+
+@pytest.mark.parametrize("missing", ["kind", "fact_set", "snapshot"])
+async def test_report_requires_complete_match_run(
+    session_factory: async_sessionmaker[AsyncSession], missing: str
+) -> None:
+    owner = await add_user(session_factory, "owner@report.invalid")
+    version = await add_fact_set(session_factory, owner, 1)
+    async with session_factory.begin() as db:
+        run = AiRun(
+            user_id=owner,
+            kind="parse_resume" if missing == "kind" else "match",
+            fact_set_id=None if missing == "fact_set" else version,
+            job_snapshot_json=None if missing == "snapshot" else {"requirements": []},
+        )
+        db.add(run)
+        await db.flush()
+        with pytest.raises(ValueError, match="匹配运行"):
+            add_match_report(db, run, items=[], main_gaps=[])
+        assert await db.scalar(select(MatchReport)) is None
