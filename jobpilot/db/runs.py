@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.models import AiRun, RunStatus
+from jobpilot.db.models import AiRun, RunStatus, StopReason
 
 
 async def set_run_status(
@@ -42,3 +42,22 @@ async def finish_run(
         select(AiRun.status).where(AiRun.user_id == user_id, AiRun.run_id == run_id)
     )
     raise RunAlreadyFinishedError(current)
+
+
+async def fail_abandoned_runs(session: AsyncSession) -> int:
+    """启动时把上次进程留下的 running 标为失败，原因「服务重启」，返回条数。
+
+    V1 只有一个后端进程，启动时不会有别的进程正在执行运行；多进程部署前要改成按进程
+    或租约回收（02 第 3.3 节）。waiting_confirmation 继续等待用户确认，不动。
+    已经提交的模型调用和产物保留。
+    """
+    result = await session.execute(
+        update(AiRun)
+        .where(AiRun.status == RunStatus.RUNNING)
+        .values(
+            status=RunStatus.FAILED,
+            finished_at=func.now(),
+            stop_reason=StopReason.SERVICE_RESTARTED,
+        )
+    )
+    return result.rowcount
