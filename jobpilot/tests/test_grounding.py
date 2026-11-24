@@ -608,3 +608,40 @@ def test_known_limit_copied_role_word_can_change_meaning() -> None:
     # 「负责人」原文指别人，改写把它安到自己身上；程序只比词，交给第三层。
     fact = _single("和测试负责人商量后加了独立门店配置", responsibility=PART)
     assert _check_one("作为负责人增加独立门店配置", fact).passed
+
+
+# ---------- 年月 ----------
+
+
+@pytest.mark.parametrize(
+    ("fact_text", "sentence"),
+    [
+        (
+            "2025.03-2025.06 参与运单查询接口开发",
+            "2025 年 3 月至 6 月参与运单查询接口开发",
+        ),
+        ("2025年3月上线", "2025.03 上线"),
+        ("2025/3 上线", "2025-03 上线"),
+        ("三月上线", "3 月上线"),
+        ("2024-2025 学年担任助教", "2024-2025 学年担任助教"),  # 年份区间不是年月
+        ("2025 年 3 个月内完成上线", "3 个月内完成上线"),  # 「3 个月」是时长
+    ],
+)
+def test_year_month_written_differently_passes(fact_text, sentence) -> None:
+    assert _check_one(sentence, _single(fact_text)).passed
+
+
+@pytest.mark.parametrize(
+    ("fact_text", "sentence", "fragment"),
+    [
+        ("2025.03 上线", "2025 年 5 月上线", "2025 年 5 月"),  # 月份改了
+        ("2025.03 上线", "2024.03 上线", "2024.03"),  # 年份改了
+        ("2025.03 上线", "2024 年 5 月上线", "2024 年 5 月"),  # 都改了，只报一次
+        ("实习 3 个月", "3 月完成实习", "3 月"),  # 时长不能当成月份
+        ("2025.03 入职", "入职 3 个月", "3 个月"),  # 月份不能当成时长
+    ],
+)
+def test_changed_year_month_is_flagged(fact_text, sentence, fragment) -> None:
+    result = _check_one(sentence, _single(fact_text))
+    assert kinds(result) == [IssueKind.NUMBER]
+    assert result.issues[0].fragment == fragment

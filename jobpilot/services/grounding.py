@@ -273,6 +273,7 @@ def organizations_of(facts: Iterable[GroundingFact]) -> set[str]:
 # 数字：前面紧挨着英文字母或数字的不算（P95、Vue3、H5 属于名字，交给技术名检查）。
 _NUMBER = re.compile(r"(?<![A-Za-z0-9.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d])")
 _COUNT = "count"
+_CALENDAR_MONTH = "calendar_month"  # 「3 月」是三月；时长写「3 个月」，单位是 month
 
 
 def _normalize(text: str) -> str:
@@ -315,10 +316,32 @@ def _canonical(value: Decimal, unit: str) -> tuple[str, str]:
     return format(value.normalize(), "f"), unit
 
 
+# 年月：2025.03、2025-03、2025/3、2025 年 3 月。「2025 年 3 个月」里的 3 是时长，不算。
+_YEAR_MONTH = re.compile(
+    r"(?<![\d.])((?:19|20)\d{2})\s*(?:[./-]|年)\s*(\d{1,2})(?!\d)(?!\s*个)(?:\s*月)?"
+)
+
+
+def _year_months(text: str) -> tuple[list[tuple[str, str, str]], str]:
+    """先认出年月，拆成年份和月份两个数；返回它们和挖掉年月后的文字。
+
+    拆开比较，事实写「2025.03-2025.06」，改写写「2025 年 3 月至 6 月」也能对上；
+    不拆的话「2025.03」会被当成小数 2025.03。
+    """
+    found = []
+
+    def take(match: re.Match[str]) -> str:
+        fragment = match.group()
+        found.append((fragment, str(int(match.group(1))), "year"))
+        found.append((fragment, str(int(match.group(2))), _CALENDAR_MONTH))
+        return " " * len(fragment)  # 保持长度，后面的位置不变
+
+    return found, _YEAR_MONTH.sub(take, text)
+
+
 def _numbers(text: str, rules: GroundingRules) -> list[tuple[str, str, str]]:
     """返回 (原文片段, 规范数值, 规范单位)。只认阿拉伯数字。"""
-    text = _normalize(text)
-    found = []
+    found, text = _year_months(_normalize(text))
     for match in _NUMBER.finditer(text):
         unit, unit_end = _unit_after(text, match.end(), rules)
         value, unit = _canonical(Decimal(match.group().replace(",", "")), unit)
@@ -376,17 +399,20 @@ def _check_numbers(
 ) -> list[GroundingIssue]:
     supported = {(value, unit) for _, value, unit in _numbers(fact_text, rules)}
     supported |= set(_chinese_numbers(fact_text, rules))
-    issues = []
-    for fragment, value, unit in _numbers(text, rules):
-        if (value, unit) not in supported:
-            issues.append(
-                GroundingIssue(
-                    kind=IssueKind.NUMBER,
-                    message=f"数字「{fragment}」在引用的事实里找不到（数值和单位都要一致）",
-                    fragment=fragment,
-                )
-            )
-    return issues
+    # 年月拆成两个数，年和月都对不上时同一个片段只报一次。
+    unsupported = dict.fromkeys(
+        fragment
+        for fragment, value, unit in _numbers(text, rules)
+        if (value, unit) not in supported
+    )
+    return [
+        GroundingIssue(
+            kind=IssueKind.NUMBER,
+            message=f"数字「{fragment}」在引用的事实里找不到（数值和单位都要一致）",
+            fragment=fragment,
+        )
+        for fragment in unsupported
+    ]
 
 
 @cache

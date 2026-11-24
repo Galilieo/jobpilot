@@ -42,7 +42,7 @@ number_units:
   天: d
   周: week
   个月: month
-  月: month
+  月: calendar_month  # 「3 月」是三月，不是三个月；与 grounding.py 的年月识别一致
   年: year
   万: 万
   w: 万
