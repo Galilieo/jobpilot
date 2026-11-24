@@ -16,6 +16,7 @@ from jobpilot.api.jobs import router as jobs_router
 from jobpilot.api.match_idempotency import include_matching_routes
 from jobpilot.api.ocr import router as ocr_router
 from jobpilot.api.resumes import router as resumes_router
+from jobpilot.api.tailored_resume import router as tailored_resume_router
 from jobpilot.api.tailoring import RunLauncher
 from jobpilot.api.tailoring import router as tailoring_router
 from jobpilot.config import settings
@@ -56,6 +57,7 @@ app.include_router(resumes_router)
 app.include_router(facts_router)
 app.include_router(jobs_router)
 app.include_router(tailoring_router)
+app.include_router(tailored_resume_router)
 include_matching_routes(app)
 
 

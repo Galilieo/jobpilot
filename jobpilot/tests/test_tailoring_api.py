@@ -4,6 +4,7 @@
 数据直接写进数据库，只经由改写接口和登录接口调用，不依赖上传、确认等其他接口。
 """
 
+import copy
 from collections.abc import AsyncIterator
 from uuid import UUID
 
@@ -285,3 +286,55 @@ async def test_restart_fails_running_runs_but_keeps_waiting_ones(
     assert (running.status, running.stop_reason) == ("failed", "service_restarted")
     assert running.finished_at is not None
     assert waiting.status == RunStatus.WAITING_CONFIRMATION
+
+
+# ---------- 完整简历 ----------
+
+
+async def test_resume_edits_add_versions_and_stale_saves_conflict(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """06 T2.5 验收：编辑保存后仍能读旧版本；两个标签页都从 v1 开始，后保存的 409。"""
+    user_id = await sign_in(async_client, "resume@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+    run_id = (await start(async_client, inputs.user_job_id)).json()["run_id"]
+    await launcher.wait_all()
+
+    v1 = (await async_client.get(f"/api/tailor-runs/{run_id}/resume")).json()
+    assert v1["version"] == 1 and v1["facts"]
+    content = copy.deepcopy(v1["content"])  # 不改动 v1 的数据，后面要和旧版本对照
+    bullet = next(
+        b for s in content["sections"] for e in s["entries"] for b in e["bullets"]
+    )
+    bullet["text"] = "主导" + bullet["text"]  # 第二层会提示角色升级
+    bullet["fact_ids"] = []  # 客户端改引用无效
+
+    saved = await async_client.put(
+        f"/api/tailor-runs/{run_id}/resume",
+        json={"base_version_id": v1["version_id"], "content": content},
+    )
+    assert saved.status_code == 200, saved.text
+    v2 = saved.json()
+    edited = next(
+        b
+        for s in v2["content"]["sections"]
+        for e in s["entries"]
+        for b in e["bullets"]
+        if b["bullet_id"] == bullet["bullet_id"]
+    )
+    assert edited["edited"] and edited["fact_ids"]
+    assert edited["check"]["layers"] == "program" and edited["check"]["issues"]
+
+    stale = await async_client.put(
+        f"/api/tailor-runs/{run_id}/resume",
+        json={"base_version_id": v1["version_id"], "content": v1["content"]},
+    )
+    assert stale.status_code == 409
+    old = (await async_client.get(f"/api/tailor-runs/{run_id}/resume?version=1")).json()
+    assert old["content"] == v1["content"]
+    current = (await async_client.get(f"/api/tailor-runs/{run_id}/resume")).json()
+    assert current["version"] == 2

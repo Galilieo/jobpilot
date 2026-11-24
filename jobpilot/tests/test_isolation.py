@@ -240,8 +240,25 @@ OWNED_RESOURCES: list[OwnedResource] = [
         name="tailor_run",
         create=_create_tailor_run,
         read=("GET", "/api/tailor-runs/{id}"),
-        attempts=(Attempt("GET", "/api/tailor-runs/{id}"),),
-        routes=frozenset({("GET", "/api/tailor-runs/{run_id}")}),
+        attempts=(
+            Attempt("GET", "/api/tailor-runs/{id}"),
+            Attempt("GET", "/api/tailor-runs/{id}/resume"),
+            Attempt(
+                "PUT",
+                "/api/tailor-runs/{id}/resume",
+                {
+                    "base_version_id": "{id}",
+                    "content": {"header": [], "sections": []},
+                },
+            ),
+        ),
+        routes=frozenset(
+            {
+                ("GET", "/api/tailor-runs/{run_id}"),
+                ("GET", "/api/tailor-runs/{run_id}/resume"),
+                ("PUT", "/api/tailor-runs/{run_id}/resume"),
+            }
+        ),
     ),
 ]
 
