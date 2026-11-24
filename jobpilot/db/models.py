@@ -81,6 +81,20 @@ class RunStatus(StrEnum):
     BUDGET_EXHAUSTED = "budget_exhausted"
 
 
+class StopReason(StrEnum):
+    """运行没有成功结束的原因，供状态接口展示。"""
+
+    BUDGET_EXHAUSTED = "budget_exhausted"  # 模型额度用完
+    MATCH_FAILED = "match_failed"  # 改写前的匹配分析失败
+    REWRITE_FAILED = "rewrite_failed"  # 有一块改写调用失败
+    SERVICE_RESTARTED = "service_restarted"  # 进程重启时运行还没结束
+
+
+STOP_REASONS = (
+    "('budget_exhausted', 'match_failed', 'rewrite_failed', 'service_restarted')"
+)
+
+
 class CallOutcome(StrEnum):
     """一次模型发送的结果；unknown 表示没拿到响应，用量也无从得知。"""
 
@@ -115,6 +129,12 @@ class AiRun(Base):
         CheckConstraint(
             "(status IN ('running', 'waiting_confirmation')) = (finished_at IS NULL)",
             name="ck_ai_run_finished_at",
+        ),
+        # 停止原因只属于已结束的运行。
+        CheckConstraint(
+            f"stop_reason IS NULL OR (stop_reason IN {STOP_REASONS} "
+            "AND status NOT IN ('running', 'waiting_confirmation'))",
+            name="ck_ai_run_stop_reason",
         ),
         Index("ix_ai_run_user_id_started_at", "user_id", "started_at"),
         # 运行使用的事实库版本必须属于同一用户。
@@ -153,6 +173,10 @@ class AiRun(Base):
     base_doc_id: Mapped[UUID | None] = mapped_column(Uuid)
     # 匹配和改写启动时固定合并个人修改后的岗位内容，重读旧报告不受后续编辑影响。
     job_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    stop_reason: Mapped[str | None] = mapped_column(String(32))
+    # 改写计划和每块的结果（done / interrupted / failed / not_started），
+    # 预算用完时查询接口据此说明哪几块没写完；不读 LangGraph 检查点。
+    plan_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -503,8 +527,10 @@ class CheckStatus(StrEnum):
     """条目最后的检查结果。"""
 
     PASSED = "passed"  # 三层检查通过（可能经过修订，见 revision_count）
-    FALLBACK = "fallback"  # 修订两次仍不通过，退回本次事实库里的事实原文
-    PENDING = "pending"  # 没有可用的事实，标「待处理」，不自动填入原简历的句子
+    FALLBACK = "fallback"  # 修订两次仍不通过或修订失败，退回本次事实库里的事实原文
+    PENDING = (
+        "pending"  # 回退时没有可用的事实：标「待处理」，保留模型的句子和问题供用户处理
+    )
 
 
 class TailoredBullet(Base):

@@ -170,6 +170,35 @@ async def test_run_base_doc_must_belong_to_same_user(session_factory: Factory) -
     )
 
 
+async def test_stop_reason_only_on_finished_runs(session_factory: Factory) -> None:
+    user = await add_user(session_factory, "stop@bullet.invalid")
+    running = AiRun(user_id=user, kind="tailor", stop_reason="budget_exhausted")
+    assert (
+        await violated_constraint(session_factory, running) == "ck_ai_run_stop_reason"
+    )
+    unknown = AiRun(
+        user_id=user,
+        kind="tailor",
+        status="failed",
+        finished_at=func.now(),
+        stop_reason="tired",
+    )
+    assert (
+        await violated_constraint(session_factory, unknown) == "ck_ai_run_stop_reason"
+    )
+    async with session_factory.begin() as session:
+        session.add(
+            AiRun(
+                user_id=user,
+                kind="tailor",
+                status="budget_exhausted",
+                finished_at=func.now(),
+                stop_reason="budget_exhausted",
+                plan_json={"blocks": []},
+            )
+        )
+
+
 async def test_deleting_run_or_account_cascades(session_factory: Factory) -> None:
     a, _, a_v1, _, fact_v1, a_run = await setup(session_factory, "i@bullet.invalid")
     bullet_id = await add_bullet(session_factory, bullet(a, a_run, a_v1))
