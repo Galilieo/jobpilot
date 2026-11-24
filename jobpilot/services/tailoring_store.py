@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from jobpilot.db.models import (
     AiRun,
     BulletFact,
-    Fact,
     MatchReport,
     ResumeDocument,
     RunStatus,
@@ -23,6 +22,7 @@ from jobpilot.db.models import (
     TailoredBullet,
 )
 from jobpilot.db.runs import finish_run
+from jobpilot.services import drafts
 from jobpilot.services.jobs import ParsedJob
 from jobpilot.services.matching import FactCandidate, MatchItem
 from jobpilot.services.tailoring import BlockOutcome, BlockStatus
@@ -71,20 +71,7 @@ async def load_inputs(
                 ResumeDocument.user_id == user_id,
             )
         )
-        facts = (
-            await session.scalars(
-                select(Fact)
-                .where(Fact.fact_set_id == run.fact_set_id, Fact.user_id == user_id)
-                # 同一版本的事实在一个事务里写入，created_at 相同；
-                # 再按出处和原文位置排，才是简历本来的顺序（用户补充的排后面）。
-                .order_by(
-                    Fact.created_at,
-                    Fact.source_doc_id.nulls_last(),
-                    Fact.span_start.nulls_last(),
-                    Fact.fact_id,
-                )
-            )
-        ).all()
+        facts = await drafts.facts_in(session, user_id, run.fact_set_id)
     return TailorInputs(
         fact_set_id=run.fact_set_id,
         user_job_id=run.user_job_id,

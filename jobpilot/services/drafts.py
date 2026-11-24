@@ -178,13 +178,25 @@ async def latest_fact_set(db: AsyncSession, user_id: UUID) -> FactSet | None:
 async def facts_of(db: AsyncSession, fact_set: FactSet | None) -> list[Fact]:
     if fact_set is None:
         return []
+    return await facts_in(db, fact_set.user_id, fact_set.fact_set_id)
+
+
+async def facts_in(db: AsyncSession, user_id: UUID, fact_set_id: UUID) -> list[Fact]:
+    """一个版本的事实，按简历本来的顺序。
+
+    同一版本的事实在发布时的一个事务里写入，created_at 相同，只按 fact_id 排等于随机；
+    所以再按出处和原文位置排，用户补充的（没有出处）排在后面。
+    匹配和改写的提示词、改写计划都依赖这个顺序，顺序不稳定会让结果不可复现。
+    """
     query = (
         select(Fact)
-        .where(
-            Fact.fact_set_id == fact_set.fact_set_id,
-            Fact.user_id == fact_set.user_id,
+        .where(Fact.fact_set_id == fact_set_id, Fact.user_id == user_id)
+        .order_by(
+            Fact.created_at,
+            Fact.source_doc_id.nulls_last(),
+            Fact.span_start.nulls_last(),
+            Fact.fact_id,
         )
-        .order_by(Fact.created_at, Fact.fact_id)
     )
     return list((await db.scalars(query)).all())
 

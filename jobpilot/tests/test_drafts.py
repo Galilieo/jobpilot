@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -33,6 +33,12 @@ from jobpilot.services.drafts import (
     VersionConflictError,
 )
 from jobpilot.services.facts import DraftFact, ReviewReason
+from jobpilot.tests.test_fact_schema import (
+    add_document,
+    add_fact_set,
+    add_user,
+    resume_fact,
+)
 
 Factory = async_sessionmaker[AsyncSession]
 
@@ -542,3 +548,43 @@ async def test_failed_publish_leaves_no_partial_version(
         assert await db.scalar(select(func.count()).select_from(FactSet)) == 0
         assert await db.scalar(select(func.count()).select_from(Fact)) == 0
     assert await draft_items(session_factory, user_id) == before
+
+
+async def test_facts_of_a_version_follow_resume_order(session_factory: Factory) -> None:
+    """同一版本的事实一起写入、created_at 相同；顺序按原文位置，补充的事实排最后。"""
+    user_id = await add_user(session_factory, "order@drafts.invalid")
+    doc_id = await add_document(session_factory, user_id)
+    fact_set_id = await add_fact_set(session_factory, user_id, 1)
+    positions = [30, 0, 12]
+    async with session_factory.begin() as session:
+        added = Fact(
+            user_id=user_id,
+            fact_set_id=fact_set_id,
+            lineage_id=uuid4(),
+            experience="课外项目",
+            kind="action",
+            responsibility="own",
+            text="用户补充",
+            has_number=False,
+            source="user",
+        )
+        session.add_all(
+            [
+                added,
+                *(
+                    resume_fact(
+                        user_id,
+                        fact_set_id,
+                        doc_id,
+                        text=f"第 {start} 个字开始",
+                        span_start=start,
+                        span_end=start + 5,
+                    )
+                    for start in positions
+                ),
+            ]
+        )
+
+    async with session_factory() as session:
+        facts = await drafts.facts_in(session, user_id, fact_set_id)
+    assert [fact.span_start for fact in facts] == [0, 12, 30, None]
