@@ -5,12 +5,13 @@ job_posting 存原文和解析结果，不随个人修改而变；个人的进�
 本周 MVP 不做薪资换算、筛选、统计和自定义字段（见 06 执行进度）。
 """
 
+from collections.abc import AsyncIterator
 from datetime import datetime
 from hashlib import sha256
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +23,8 @@ from jobpilot.api.deps import (
     SessionFactory,
     finish_product,
 )
+from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
+from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import find_existing_job, get_user_job, list_user_jobs
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
 from jobpilot.db.runs import set_run_status
@@ -147,16 +150,36 @@ async def _load(
     return row
 
 
+async def reserve_job(
+    body: JobIn,
+    user: CurrentUser,
+    db: DbSession,
+    factory: SessionFactory,
+    key: RequiredKey,
+) -> AsyncIterator[tuple[JobIn, Attempt]]:
+    async with idempotent_request(
+        db,
+        factory,
+        KeyScope(user.user_id, Operation.PARSE_JD, key),
+        body.model_dump_json(),
+    ) as attempt:
+        yield body, attempt
+
+
+JobSubmission = Annotated[tuple[JobIn, Attempt], Depends(reserve_job, scope="function")]
+
+
 @router.post("/jobs", status_code=status.HTTP_201_CREATED)
 async def add_job(
-    body: JobIn,
+    submission: JobSubmission,
     response: Response,
-    user: CurrentUser,
     db: DbSession,
     session_factory: SessionFactory,
     client: ModelClient,
 ) -> JobOut:
     """解析 JD 并加入岗位库。同一用户再次提交同样的正文，直接返回已有的岗位（200）。"""
+    body, attempt = submission
+    user_id = attempt.scope.user_id
     raw_text = normalize_text(body.raw_text)
     if not raw_text.strip():
         raise HTTPException(
@@ -164,41 +187,53 @@ async def add_job(
         )
     content_hash = sha256(raw_text.encode("utf-8")).hexdigest()
 
-    existing = await find_existing_job(db, user.user_id, content_hash)
+    existing = await find_existing_job(db, user_id, content_hash)
     if existing is not None:
-        response.status_code = status.HTTP_200_OK
-        return _job_out(*await _load(db, user.user_id, existing))
+        return await _reuse_job(db, response, attempt, existing)
 
-    run = AiRun(user_id=user.user_id, kind="parse_jd")
+    run = AiRun(user_id=user_id, kind=Operation.PARSE_JD)
     db.add(run)
     await db.commit()
-    # flush 失败后 session 处于待回滚状态，回滚又会让对象过期；之后再读 user.user_id
-    # 都会触发异步里不允许的隐式加载。所以趁现在把要用的 ID 取出来。
-    user_id, run_id = user.user_id, run.run_id
-    try:
-        parsed = await parse_job(
-            session_factory,
-            user.user_id,
-            run.run_id,
-            client=client,
-            budget=ModelBudget(**_PARSE_BUDGET),
-            raw_text=raw_text,
-        )
-    except _MODEL_ERRORS:
-        await set_run_status(db, user.user_id, run.run_id, RunStatus.FAILED)
-        await db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail="JD 解析失败，请稍后重试"
-        ) from None
-
+    parsed = await _parse_posting(db, session_factory, client, run, raw_text)
     posting = JobPosting(
-        owner_id=user.user_id,
+        owner_id=user_id,
         raw_text=raw_text,
         content_hash=content_hash,
         parsed_json=parsed.model_dump(mode="json"),
         keywords=parsed.keywords,
         injection_flags=[flag.to_json() for flag in detect_injection(raw_text)],
     )
+    return await _store_job(db, response, attempt, run, posting)
+
+
+async def _parse_posting(
+    db: DbSession,
+    session_factory: SessionFactory,
+    client: ModelClient,
+    run: AiRun,
+    raw_text: str,
+) -> ParsedJob:
+    try:
+        return await parse_job(
+            session_factory,
+            run.user_id,
+            run.run_id,
+            client=client,
+            budget=ModelBudget(**_PARSE_BUDGET),
+            raw_text=raw_text,
+        )
+    except _MODEL_ERRORS:
+        await set_run_status(db, run.user_id, run.run_id, RunStatus.FAILED)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="JD 解析失败，请稍后重试"
+        ) from None
+
+
+async def _store_job(
+    db: DbSession, response: Response, attempt: Attempt, run: AiRun, posting: JobPosting
+) -> JobOut:
+    user_id, run_id, content_hash = run.user_id, run.run_id, posting.content_hash
     db.add(posting)
     try:
         await db.flush()
@@ -209,18 +244,28 @@ async def add_job(
         if error.orig.diag.constraint_name != _POSTING_UNIQUE:
             raise
         await set_run_status(db, user_id, run_id, RunStatus.CANCELLED)
-        await db.commit()
         existing = await find_existing_job(db, user_id, content_hash)
         assert existing is not None
-        response.status_code = status.HTTP_200_OK
-        return _job_out(*await _load(db, user_id, existing))
-    user_job = UserJob(user_id=user.user_id, posting_id=posting.posting_id)
+        return await _reuse_job(db, response, attempt, existing)
+    user_job = UserJob(user_id=user_id, posting_id=posting.posting_id)
     db.add(user_job)
     await db.flush()
     run.user_job_id = user_job.user_job_id
-    await finish_product(db, user.user_id, run.run_id)
+    await finish_product(db, user_id, run_id)
+    output = _job_out(posting, user_job)
+    await save_snapshot(db, attempt, output.job_id, output, status.HTTP_201_CREATED)
     await db.commit()
-    return _job_out(posting, user_job)
+    return output
+
+
+async def _reuse_job(
+    db: DbSession, response: Response, attempt: Attempt, job_id: UUID
+) -> JobOut:
+    output = _job_out(*await _load(db, attempt.scope.user_id, job_id))
+    await save_snapshot(db, attempt, job_id, output, status.HTTP_200_OK)
+    await db.commit()
+    response.status_code = status.HTTP_200_OK
+    return output
 
 
 @router.get("/jobs")

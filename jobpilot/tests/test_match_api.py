@@ -22,7 +22,7 @@ from jobpilot.tests.test_call_accounting import (
     empty_choices_response,
     fake_upstream,
 )
-from jobpilot.tests.test_facts_api import EXTRACTION, RESUME
+from jobpilot.tests.test_facts_api import EXTRACTION, RESUME, new_idempotency_headers
 
 JOB_RAW = (
     "星桥数据 · 后端开发实习生\n"
@@ -85,7 +85,9 @@ async def _publish_resume_facts(
     client: httpx.AsyncClient, outputs: list[str]
 ) -> dict[str, Any]:
     outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
-    uploaded = await client.post("/api/resumes", json={"raw_text": RESUME})
+    uploaded = await client.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
     assert uploaded.status_code == 201, uploaded.text
     revision = uploaded.json()["revision"]
     for item in uploaded.json()["items"]:
@@ -142,7 +144,9 @@ async def _add_job(
     client: httpx.AsyncClient, outputs: list[str], raw_text: str = JOB_RAW
 ) -> dict[str, Any]:
     outputs.append(json.dumps(JOB_PARSED, ensure_ascii=False))
-    response = await client.post("/api/jobs", json={"raw_text": raw_text})
+    response = await client.post(
+        "/api/jobs", json={"raw_text": raw_text}, headers=new_idempotency_headers()
+    )
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -183,7 +187,9 @@ async def test_match_persists_report_separates_summaries_and_outputs_no_score(
         )
     )
 
-    resp = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    resp = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert resp.status_code == 201, resp.text
     report = resp.json()
 
@@ -281,7 +287,9 @@ async def test_user_only_fact_covered_becomes_expression_gap(
         )
     )
 
-    resp = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    resp = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert resp.status_code == 201, resp.text
     report = resp.json()
     assert [i["verdict"] for i in report["items"]] == ["covered", "expression_gap"]
@@ -304,7 +312,9 @@ async def test_matching_uses_only_published_facts_and_ignores_draft(
         signed_in, "草稿里的高并发实践", base_fact_set_id=None, commit=False
     )
     requests.clear()
-    blocked = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    blocked = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert blocked.status_code == 422
     assert requests == []
 
@@ -349,7 +359,9 @@ async def test_matching_uses_only_published_facts_and_ignores_draft(
             ensure_ascii=False,
         )
     )
-    ok_resp = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    ok_resp = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert ok_resp.status_code == 201, ok_resp.text
     assert len(requests) == 1
     sent_text = json.dumps(requests[0], ensure_ascii=False)
@@ -381,17 +393,19 @@ async def test_matching_uses_only_published_facts_and_ignores_draft(
             ensure_ascii=False,
         )
     )
-    rejected = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    rejected = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert rejected.status_code == 502
     async with session_factory() as db:
         reports = (await db.scalars(select(MatchReport))).all()
         assert len(reports) == 1  # 只有成功的那一次
-        runs = (
-            await db.scalars(
-                select(AiRun).where(AiRun.kind == "match").order_by(AiRun.started_at)
-            )
-        ).all()
-        assert [r.status for r in runs] == [RunStatus.SUCCEEDED, RunStatus.FAILED]
+        runs = await db.scalars(select(AiRun).where(AiRun.kind == "match"))
+        statuses = {str(run.run_id): run.status for run in runs}
+        successful_run_id = ok_resp.json()["run_id"]
+        assert str(reports[0].run_id) == successful_run_id
+        assert statuses.pop(successful_run_id) == RunStatus.SUCCEEDED
+        assert list(statuses.values()) == [RunStatus.FAILED]
 
 
 async def test_match_rejects_job_without_requirements(
@@ -400,11 +414,15 @@ async def test_match_rejects_job_without_requirements(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _publish_resume_facts(signed_in, model_outputs)
-    created = await signed_in.post("/api/jobs", json={"raw_text": "空要求岗位"})
+    created = await signed_in.post(
+        "/api/jobs", json={"raw_text": "空要求岗位"}, headers=new_idempotency_headers()
+    )
     assert created.status_code == 201
     job_id = created.json()["job_id"]
 
-    resp = await signed_in.post(f"/api/jobs/{job_id}/match")
+    resp = await signed_in.post(
+        f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+    )
     assert resp.status_code == 422
     async with session_factory() as db:
         runs = (await db.scalars(select(AiRun).where(AiRun.kind == "match"))).all()
@@ -419,7 +437,9 @@ async def test_editing_jd_preserves_old_report_snapshot(
     fact_id = lib["facts"][0]["fact_id"]
 
     # 创建只带一条旧要求的岗位
-    created = await signed_in.post("/api/jobs", json={"raw_text": "后端岗位"})
+    created = await signed_in.post(
+        "/api/jobs", json={"raw_text": "后端岗位"}, headers=new_idempotency_headers()
+    )
     job_id = created.json()["job_id"]
     put_old = await signed_in.put(
         f"/api/jobs/{job_id}",
@@ -444,7 +464,11 @@ async def test_editing_jd_preserves_old_report_snapshot(
             ensure_ascii=False,
         )
     )
-    report_1 = (await signed_in.post(f"/api/jobs/{job_id}/match")).json()
+    report_1 = (
+        await signed_in.post(
+            f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+        )
+    ).json()
 
     # 修改岗位要求为两条新要求，事实库不变
     put_new = await signed_in.put(
@@ -482,7 +506,11 @@ async def test_editing_jd_preserves_old_report_snapshot(
             ensure_ascii=False,
         )
     )
-    report_2 = (await signed_in.post(f"/api/jobs/{job_id}/match")).json()
+    report_2 = (
+        await signed_in.post(
+            f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+        )
+    ).json()
 
     reread_1 = (
         await signed_in.get(f"/api/match-reports/{report_1['report_id']}")
@@ -536,7 +564,11 @@ async def test_updating_fact_from_30_to_20_and_editing_jd_preserves_v3_report(
     assert "30%" in perf_v3["text"]
 
     # 创建岗位并做 v3 匹配
-    job_resp = await signed_in.post("/api/jobs", json={"raw_text": "性能优化岗位"})
+    job_resp = await signed_in.post(
+        "/api/jobs",
+        json={"raw_text": "性能优化岗位"},
+        headers=new_idempotency_headers(),
+    )
     job_id = job_resp.json()["job_id"]
     put_v3 = await signed_in.put(
         f"/api/jobs/{job_id}",
@@ -561,7 +593,11 @@ async def test_updating_fact_from_30_to_20_and_editing_jd_preserves_v3_report(
             ensure_ascii=False,
         )
     )
-    report_v3 = (await signed_in.post(f"/api/jobs/{job_id}/match")).json()
+    report_v3 = (
+        await signed_in.post(
+            f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+        )
+    ).json()
 
     # 修订同一条事实为 20% 并发布为 v4，同时修改 JD 要求
     edited = await signed_in.put(
@@ -610,7 +646,11 @@ async def test_updating_fact_from_30_to_20_and_editing_jd_preserves_v3_report(
             ensure_ascii=False,
         )
     )
-    report_v4 = (await signed_in.post(f"/api/jobs/{job_id}/match")).json()
+    report_v4 = (
+        await signed_in.post(
+            f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+        )
+    ).json()
 
     # 回读旧报告：仍显示 v3、30% 与旧要求；新报告显示 v4、20% 与新要求
     reread_v3 = (
@@ -686,7 +726,9 @@ async def test_citing_other_version_fact_id_of_same_user_is_rejected(
         )
     )
 
-    resp = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    resp = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert resp.status_code == 502
 
     async with session_factory() as db:
@@ -735,7 +777,9 @@ async def test_invalid_json_repaired_once_and_double_failure_marks_failed(
     )
     model_outputs.extend(["不是 JSON", valid_json])
 
-    repaired = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    repaired = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert repaired.status_code == 201, repaired.text
     repaired_run_id = repaired.json()["run_id"]
 
@@ -755,7 +799,9 @@ async def test_invalid_json_repaired_once_and_double_failure_marks_failed(
         assert calls[1].prompt_version == "match_job@1+repair_json@1"
 
     model_outputs.extend(["还是坏的", "仍然坏的"])
-    failed = await signed_in.post(f"/api/jobs/{job['job_id']}/match")
+    failed = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
     assert failed.status_code == 502
     async with session_factory() as db:
         assert len((await db.scalars(select(MatchReport))).all()) == 1
@@ -781,7 +827,11 @@ async def test_outgoing_match_request_wraps_untrusted_text_and_redacts_pii(
     )
     fact_id = (await signed_in.get("/api/facts")).json()["facts"][0]["fact_id"]
 
-    job_resp = await signed_in.post("/api/jobs", json={"raw_text": "包含联系方式的 JD"})
+    job_resp = await signed_in.post(
+        "/api/jobs",
+        json={"raw_text": "包含联系方式的 JD"},
+        headers=new_idempotency_headers(),
+    )
     job_id = job_resp.json()["job_id"]
     put_resp = await signed_in.put(
         f"/api/jobs/{job_id}",
@@ -811,7 +861,9 @@ async def test_outgoing_match_request_wraps_untrusted_text_and_redacts_pii(
             ensure_ascii=False,
         )
     )
-    resp = await signed_in.post(f"/api/jobs/{job_id}/match")
+    resp = await signed_in.post(
+        f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+    )
     assert resp.status_code == 201, resp.text
 
     assert len(requests) == 1
@@ -843,7 +895,9 @@ async def test_empty_choices_finishes_run_as_failed(
         url, body = "/api/jobs", {"raw_text": JOB_RAW}
     async with fake_upstream(lambda _: empty_choices_response()) as client:
         monkeypatch.setitem(app.dependency_overrides, get_model_client, lambda: client)
-        response = await signed_in.post(url, json=body)
+        response = await signed_in.post(
+            url, json=body, headers=new_idempotency_headers()
+        )
     assert response.status_code == 502
     async with session_factory() as db:
         run = (await db.scalars(select(AiRun).where(AiRun.kind == kind))).one()

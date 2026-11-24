@@ -11,13 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.auth import router as auth_router
 from jobpilot.api.facts import router as facts_router
+from jobpilot.api.idempotency import IdempotentReplay, replay_response
 from jobpilot.api.jobs import router as jobs_router
-from jobpilot.api.matching import router as matching_router
+from jobpilot.api.match_idempotency import include_matching_routes
 from jobpilot.api.ocr import router as ocr_router
 from jobpilot.api.resumes import router as resumes_router
 from jobpilot.api.tailoring import RunLauncher
 from jobpilot.api.tailoring import router as tailoring_router
 from jobpilot.config import settings
+from jobpilot.db.idempotency import fail_interrupted_keys
 from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.db.session import check_database, create_database_engine, get_session
 
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.db_session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with app.state.db_session_factory.begin() as session:
         await fail_abandoned_runs(session)
+        await fail_interrupted_keys(session)
     app.state.model_client = AsyncOpenAI(
         api_key=settings.deepseek_api_key.get_secret_value() or "not-configured",
         base_url=settings.deepseek_base_url,
@@ -46,13 +49,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="JobPilot", lifespan=lifespan)
 # 改写的后台任务。不依赖事件循环；测试客户端不运行 lifespan，也要有它。
 app.state.run_launcher = RunLauncher()
+app.add_exception_handler(IdempotentReplay, replay_response)
 app.include_router(auth_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)
 app.include_router(facts_router)
 app.include_router(jobs_router)
 app.include_router(tailoring_router)
-app.include_router(matching_router)
+include_matching_routes(app)
 
 
 @app.get("/api/health")

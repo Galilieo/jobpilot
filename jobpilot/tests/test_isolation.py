@@ -17,6 +17,7 @@ import httpx
 import pytest
 
 from jobpilot.main import app
+from jobpilot.tests.test_facts_api import new_idempotency_headers
 
 Route = tuple[str, str]  # (HTTP 方法, 路径模板)
 
@@ -42,6 +43,7 @@ class Attempt:
     method: str
     path: str
     json: dict[str, Any] | None = None
+    headers: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -82,14 +84,22 @@ async def _create_fact(client: httpx.AsyncClient, _model_outputs: list[str]) -> 
 
 async def _create_resume(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
     """B 上传一份简历；假模型返回「没有经历」，只留下原文。"""
-    created = await client.post("/api/resumes", json={"raw_text": "B 的简历原文"})
+    created = await client.post(
+        "/api/resumes",
+        json={"raw_text": "B 的简历原文"},
+        headers=new_idempotency_headers(),
+    )
     assert created.status_code == 201, created.text
     return created.json()["doc_id"]
 
 
 async def _create_job(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
     """B 提交一份 JD；假模型返回空的解析结果。"""
-    created = await client.post("/api/jobs", json={"raw_text": "B 收藏的岗位"})
+    created = await client.post(
+        "/api/jobs",
+        json={"raw_text": "B 收藏的岗位"},
+        headers=new_idempotency_headers(),
+    )
     assert created.status_code == 201, created.text
     return created.json()["job_id"]
 
@@ -100,7 +110,11 @@ async def _create_match_report(
     """B 发布一条事实、建一个带要求的岗位并生成匹配报告。"""
     await _create_fact(client, model_outputs)
     fact_id = (await client.get("/api/facts")).json()["facts"][0]["fact_id"]
-    created_job = await client.post("/api/jobs", json={"raw_text": "B 的匹配岗位"})
+    created_job = await client.post(
+        "/api/jobs",
+        json={"raw_text": "B 的匹配岗位"},
+        headers=new_idempotency_headers(),
+    )
     assert created_job.status_code == 201, created_job.text
     job_id = created_job.json()["job_id"]
     updated = await client.put(
@@ -126,7 +140,9 @@ async def _create_match_report(
             ensure_ascii=False,
         )
     )
-    matched = await client.post(f"/api/jobs/{job_id}/match")
+    matched = await client.post(
+        f"/api/jobs/{job_id}/match", headers=new_idempotency_headers()
+    )
     assert matched.status_code == 201, matched.text
     return matched.json()["report_id"]
 
@@ -193,7 +209,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
         attempts=(
             Attempt("GET", "/api/jobs/{id}"),
             Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
-            Attempt("POST", "/api/jobs/{id}/match"),
+            Attempt("POST", "/api/jobs/{id}/match", headers=new_idempotency_headers()),
             Attempt("GET", "/api/jobs/{id}/matches"),
             Attempt("POST", "/api/jobs/{id}/tailor", {}),
         ),
@@ -341,6 +357,7 @@ async def test_other_users_resources_are_not_found(
             attempt.method,
             _fill(attempt.path, resource_id),
             json=_fill(attempt.json, resource_id),
+            headers=attempt.headers,
         )
         assert response.status_code == 404, (attempt, response.text)
 

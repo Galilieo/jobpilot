@@ -15,7 +15,7 @@ from jobpilot.db.models import (
     RunStatus,
 )
 from jobpilot.db.runs import set_run_status
-from jobpilot.tests.test_facts_api import EXTRACTION, RESUME
+from jobpilot.tests.test_facts_api import EXTRACTION, RESUME, new_idempotency_headers
 from jobpilot.tests.test_jobs_api import JD, OUTPUT
 from jobpilot.tests.test_match_api import _add_job, _publish_resume_facts, _sign_in
 
@@ -56,7 +56,9 @@ async def test_late_product_rolls_back(
 
     monkeypatch.setattr(module, attr, finish_elsewhere)
     model_outputs.append(json.dumps(output))
-    response = await async_client.post(path, json=body)
+    response = await async_client.post(
+        path, json=body, headers=new_idempotency_headers()
+    )
     assert (
         response.status_code == 409 and response.json()["detail"]["status"] == "failed"
     )

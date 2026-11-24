@@ -4,6 +4,7 @@
 """
 
 import json
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -42,6 +43,10 @@ EXTRACTION = {
         }
     ]
 }
+
+
+def new_idempotency_headers() -> dict[str, str]:
+    return {"Idempotency-Key": str(uuid4())}
 
 
 @pytest.fixture
@@ -89,7 +94,9 @@ async def test_review_requires_displayed_revision(
     signed_in: httpx.AsyncClient, model_outputs: list[str], changes: dict[str, object]
 ) -> None:
     model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
-    uploaded = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
     assert uploaded.status_code == 201
     clean, _ = uploaded.json()["items"]
 
@@ -106,7 +113,9 @@ async def test_stale_confirmation_does_not_confirm_edited_text(
     signed_in: httpx.AsyncClient, model_outputs: list[str]
 ) -> None:
     model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
-    uploaded = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
     _, item = uploaded.json()["items"]
     path = f"/api/facts/{item['lineage_id']}"
     displayed = (await signed_in.get(path)).json()
@@ -141,7 +150,9 @@ async def test_stale_batch_does_not_confirm_new_resume_items(
 ) -> None:
     experience = EXTRACTION["experiences"][0]
     model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
-    await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
     displayed = (await signed_in.get("/api/facts")).json()["draft"]
 
     quotes = [f"负责实现第 {week} 周课程筛选" for week in range(1, 6)]
@@ -160,7 +171,9 @@ async def test_stale_batch_does_not_confirm_new_resume_items(
         )
     )
     raw_text = "\n".join([experience["heading_quote"], *quotes])
-    uploaded = await signed_in.post("/api/resumes", json={"raw_text": raw_text})
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": raw_text}, headers=new_idempotency_headers()
+    )
     assert uploaded.status_code == 201
     assert len(uploaded.json()["items"]) == 5
     assert uploaded.json()["revision"] == displayed["revision"] + 1
@@ -215,7 +228,9 @@ async def test_upload_confirm_and_publish(
     model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
 
     uploaded = await signed_in.post(
-        "/api/resumes", json={"filename": "resume.txt", "raw_text": RESUME}
+        "/api/resumes",
+        json={"filename": "resume.txt", "raw_text": RESUME},
+        headers=new_idempotency_headers(),
     )
     assert uploaded.status_code == 201, uploaded.text
     body = uploaded.json()
@@ -294,7 +309,9 @@ async def test_set_responsibility_then_confirm_clean(
     """回答「这段经历里没写职责的是你负责的吗」，之后一键确认就能覆盖它们。"""
     previous = (await signed_in.get("/api/facts")).json()["draft"]["revision"]
     model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
-    await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
     before = (await signed_in.get("/api/facts")).json()["draft"]
     responsibility = {
         "action": "set_responsibility",
@@ -332,7 +349,9 @@ async def test_quote_failure_blocks_confirmation(
     bad = json.loads(json.dumps(EXTRACTION))
     bad["experiences"][0]["facts"][0]["source_quote"] = "原文里没有这一句"
     model_outputs.append(json.dumps(bad, ensure_ascii=False))
-    uploaded = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
     blocked, _ = uploaded.json()["items"]
 
     response = await signed_in.put(
@@ -354,7 +373,9 @@ async def test_model_failure_marks_run_failed_and_keeps_resume(
     model_outputs.append("不是 JSON")
     model_outputs.append("还不是 JSON")  # JSON 修复重发也失败
 
-    response = await signed_in.post("/api/resumes", json={"raw_text": RESUME})
+    response = await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
 
     assert response.status_code == 502
     async with session_factory() as db:
@@ -371,7 +392,9 @@ async def test_requests_cannot_carry_user_id(
 ) -> None:
     """身份只来自登录态：请求体多一个 user_id 就拒绝。"""
     response = await signed_in.post(
-        "/api/resumes", json={"raw_text": RESUME, "user_id": "someone-else"}
+        "/api/resumes",
+        json={"raw_text": RESUME, "user_id": "someone-else"},
+        headers=new_idempotency_headers(),
     )
 
     assert response.status_code == 422
@@ -383,9 +406,17 @@ async def test_same_quote_in_two_resumes_points_to_each_document(
     """两份简历写了同一句话：各自的事实指向各自的文档，位置按各自的原文计算。"""
     extraction = json.dumps(EXTRACTION, ensure_ascii=False)
     model_outputs.extend([extraction, extraction])
-    first = (await signed_in.post("/api/resumes", json={"raw_text": RESUME})).json()
+    first = (
+        await signed_in.post(
+            "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+        )
+    ).json()
     second = (
-        await signed_in.post("/api/resumes", json={"raw_text": "补充说明\n" + RESUME})
+        await signed_in.post(
+            "/api/resumes",
+            json={"raw_text": "补充说明\n" + RESUME},
+            headers=new_idempotency_headers(),
+        )
     ).json()
     confirmed = await signed_in.post(
         "/api/facts/batch",
@@ -439,7 +470,9 @@ async def test_wrong_experience_requires_individual_confirmation(
             }
         )
     )
-    uploaded = await signed_in.post("/api/resumes", json={"raw_text": raw})
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": raw}, headers=new_idempotency_headers()
+    )
     [item] = uploaded.json()["items"]
     assert item["experience"] == "乙公司实习"
     assert (

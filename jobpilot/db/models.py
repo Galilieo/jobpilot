@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -515,6 +516,48 @@ class MatchReport(Base):
     main_gaps: Mapped[list[str]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )
+
+
+class IdempotencyKey(Base):
+    """保存付费 POST 的当前尝试，以及成功后可原样重放的响应。"""
+
+    __tablename__ = "idempotency_key"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "user_id"],
+            ["ai_run.run_id", "ai_run.user_id"],
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "operation IN ('parse_resume', 'parse_jd', 'match')",
+            name="ck_idempotency_key_operation",
+        ),
+        CheckConstraint(
+            "status IN ('processing', 'succeeded', 'failed')",
+            name="ck_idempotency_key_status",
+        ),
+        CheckConstraint(
+            "(status = 'succeeded' AND response_status IN (200, 201) "
+            "AND response_status IS NOT NULL AND response_body IS NOT NULL "
+            "AND result_id IS NOT NULL) OR "
+            "(status <> 'succeeded' AND response_status IS NULL "
+            "AND response_body IS NULL)",
+            name="ck_idempotency_key_response",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE"), primary_key=True
+    )
+    operation: Mapped[str] = mapped_column(String(32), primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    request_hash: Mapped[str] = mapped_column(String(64))
+    attempt_id: Mapped[UUID] = mapped_column(Uuid)
+    run_id: Mapped[UUID | None] = mapped_column(Uuid)
+    status: Mapped[str] = mapped_column(String(16))
+    result_id: Mapped[UUID | None] = mapped_column(Uuid)
+    response_status: Mapped[int | None] = mapped_column(Integer)
+    response_body: Mapped[str | None] = mapped_column(Text)
 
 
 class BulletSection(StrEnum):

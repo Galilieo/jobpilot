@@ -4,11 +4,12 @@
 必须在拆分之前由用户改掉，与 OCR 的做法一致（见 02 第 6 节 2026-11-23 的调整）。
 """
 
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -21,7 +22,9 @@ from jobpilot.api.deps import (
     SessionFactory,
     finish_product,
 )
+from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
 from jobpilot.api.ocr import read_limited
+from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.models import AiRun, ResumeDocument, RunStatus
 from jobpilot.db.runs import set_run_status
 from jobpilot.services import drafts
@@ -85,6 +88,27 @@ class ResumeDocumentOut(BaseModel):
     created_at: datetime
 
 
+async def reserve_resume(
+    body: ResumeIn,
+    user: CurrentUser,
+    db: DbSession,
+    factory: SessionFactory,
+    key: RequiredKey,
+) -> AsyncIterator[tuple[ResumeIn, Attempt]]:
+    async with idempotent_request(
+        db,
+        factory,
+        KeyScope(user.user_id, Operation.PARSE_RESUME, key),
+        body.model_dump_json(),
+    ) as attempt:
+        yield body, attempt
+
+
+ResumeSubmission = Annotated[
+    tuple[ResumeIn, Attempt], Depends(reserve_resume, scope="function")
+]
+
+
 @router.post("/resumes/extract")
 async def extract(
     user: CurrentUser,
@@ -115,8 +139,7 @@ async def extract(
 
 @router.post("/resumes", status_code=status.HTTP_201_CREATED)
 async def upload(
-    body: ResumeIn,
-    user: CurrentUser,
+    submission: ResumeSubmission,
     db: DbSession,
     session_factory: SessionFactory,
     client: ModelClient,
@@ -125,23 +148,23 @@ async def upload(
 
     原文和运行先提交，网关才能登记调用；拆分失败时运行记为失败，原文保留。
     """
+    body, attempt = submission
+    user_id = attempt.scope.user_id
     raw_text = normalize_text(body.raw_text)
     if not raw_text.strip():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="简历内容为空"
         )
 
-    doc = ResumeDocument(
-        user_id=user.user_id, filename=body.filename, raw_text=raw_text
-    )
-    run = AiRun(user_id=user.user_id, kind="parse_resume")
-    db.add_all([doc, run])
+    doc = await _resume_for_attempt(db, attempt, body.filename, raw_text)
+    run = AiRun(user_id=user_id, kind=Operation.PARSE_RESUME)
+    db.add(run)
     await db.commit()
 
     try:
         result = await extract_facts(
             session_factory,
-            user.user_id,
+            user_id,
             run.run_id,
             client=client,
             budget=ModelBudget(**_EXTRACT_BUDGET),
@@ -149,20 +172,42 @@ async def upload(
             raw_text=raw_text,
         )
     except _MODEL_ERRORS:
-        await set_run_status(db, user.user_id, run.run_id, RunStatus.FAILED)
+        await set_run_status(db, user_id, run.run_id, RunStatus.FAILED)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail="事实拆分失败，请稍后重试"
         ) from None
 
     doc.sections_json = [section.model_dump(mode="json") for section in result.sections]
-    items = await drafts.add_extracted(db, user.user_id, result.facts)
-    await finish_product(db, user.user_id, run.run_id)
-    revision = await drafts.read_revision(db, user.user_id)
-    await db.commit()
-    return ResumeOut(
+    items = await drafts.add_extracted(db, user_id, result.facts)
+    await finish_product(db, user_id, run.run_id)
+    revision = await drafts.read_revision(db, user_id)
+    output = ResumeOut(
         doc_id=doc.doc_id, run_id=run.run_id, items=items, revision=revision
     )
+    await save_snapshot(db, attempt, doc.doc_id, output, status.HTTP_201_CREATED)
+    await db.commit()
+    return output
+
+
+async def _resume_for_attempt(
+    db: DbSession, attempt: Attempt, filename: str | None, raw_text: str
+) -> ResumeDocument:
+    if attempt.resume_doc_id is None:
+        doc = ResumeDocument(
+            user_id=attempt.scope.user_id, filename=filename, raw_text=raw_text
+        )
+        db.add(doc)
+        return doc
+    doc = await db.scalar(
+        select(ResumeDocument).where(
+            ResumeDocument.doc_id == attempt.resume_doc_id,
+            ResumeDocument.user_id == attempt.scope.user_id,
+        )
+    )
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="简历不存在")
+    return doc
 
 
 @router.get("/resumes/{doc_id}")

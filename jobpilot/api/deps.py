@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from jobpilot.api.idempotency import complete_reserved_product
 from jobpilot.config import settings
 from jobpilot.db.accounts import LoginSession, find_login_session
 from jobpilot.db.models import RunStatus, User
@@ -64,3 +65,4 @@ async def finish_product(db: AsyncSession, user_id: UUID, run_id: UUID) -> None:
     except RunAlreadyFinishedError as error:
         await db.rollback()
         raise HTTPException(status_code=409, detail={"status": error.status}) from error
+    await complete_reserved_product(db, run_id)

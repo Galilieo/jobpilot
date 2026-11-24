@@ -14,6 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import AiRun, JobPosting, RunStatus, UserJob
+from jobpilot.tests.test_facts_api import new_idempotency_headers
 
 JD = (
     "星桥数据 · 后端开发实习生（上海）\n"
@@ -65,7 +66,9 @@ async def add_job(
     client: httpx.AsyncClient, outputs: list[str], raw_text: str = JD
 ) -> httpx.Response:
     outputs.append(json.dumps(OUTPUT, ensure_ascii=False))
-    return await client.post("/api/jobs", json={"raw_text": raw_text})
+    return await client.post(
+        "/api/jobs", json={"raw_text": raw_text}, headers=new_idempotency_headers()
+    )
 
 
 async def test_parse_verifies_quotes_and_normalizes_keywords(
@@ -107,7 +110,9 @@ async def test_same_user_same_jd_is_deduplicated(
 ) -> None:
     first = await add_job(signed_in, model_outputs)
     # 第二次只差行尾空白，规范化后相同；不应再调用模型
-    second = await signed_in.post("/api/jobs", json={"raw_text": JD + "  \n"})
+    second = await signed_in.post(
+        "/api/jobs", json={"raw_text": JD + "  \n"}, headers=new_idempotency_headers()
+    )
 
     assert (first.status_code, second.status_code) == (201, 200)
     assert second.json()["job_id"] == first.json()["job_id"]
@@ -182,7 +187,9 @@ async def test_model_failure_saves_nothing(
 ) -> None:
     model_outputs.extend(["不是 JSON", "还不是 JSON"])
 
-    response = await signed_in.post("/api/jobs", json={"raw_text": JD})
+    response = await signed_in.post(
+        "/api/jobs", json={"raw_text": JD}, headers=new_idempotency_headers()
+    )
 
     assert response.status_code == 502
     async with session_factory() as db:
@@ -275,7 +282,9 @@ async def test_dedup_list_and_detail_share_owner_scope(
     await signed_in.post("/api/auth/logout")
     await sign_in(signed_in, "other-owner@example.invalid")
     second = (await add_job(signed_in, model_outputs)).json()
-    duplicate = await signed_in.post("/api/jobs", json={"raw_text": JD})
+    duplicate = await signed_in.post(
+        "/api/jobs", json={"raw_text": JD}, headers=new_idempotency_headers()
+    )
     assert duplicate.status_code == 200
     assert duplicate.json()["job_id"] == second["job_id"]
     [listed] = (await signed_in.get("/api/jobs")).json()
