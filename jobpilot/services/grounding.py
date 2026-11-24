@@ -10,7 +10,8 @@
 
 设计见 notes/求职助手Agent/03-可信安全与隐私.md 第 1 节。已知局限：
 中文数字（「三成」）不检查；同义词表里没有的技术名识别不出；只认得事实库里出现过的组织名；
-角色词和程度词只看是否出现，「不负责」也算出现了「负责」；隐含的夸大由第三层（模型）检查。
+角色词和程度词只看是否出现，「不负责」也算出现了「负责」，
+照抄事实里提到别人的角色词（「负责人」）也会放过；隐含的夸大由第三层（模型）检查。
 """
 
 import re
@@ -450,38 +451,45 @@ def _check_organizations(
     ]
 
 
+def _fact_role_rank(fact: GroundingFact, rules: GroundingRules) -> int | None:
+    """这条事实允许的最高角色等级；没有等级时返回 None。
+
+    有职责程度的看 responsibility。职责不适用（教育、志愿者、技能……）的看原文：
+    取原文角色词里最低的等级，「协助负责人整理清单」按「协助」算，
+    不能因为提到了「负责人」就允许写「主导」。
+    """
+    if fact.responsibility in RESPONSIBILITY_RANK:
+        return RESPONSIBILITY_RANK[fact.responsibility]
+    stated = [rules.role_rank(word) for word in rules.role_pattern.findall(fact.text)]
+    return min(stated, default=None)
+
+
 def _check_roles(
     text: str, cited: Sequence[GroundingFact], rules: GroundingRules
 ) -> list[GroundingIssue]:
+    """改写里的角色词：事实原文写了同一个词就可以用，否则不能高于事实的等级。
+
+    「同一个词」让「和测试负责人商量」这类提到别人的角色词能照抄；
+    照抄后意思变没变（「作为负责人」）由第三层判断。
+    """
     words = list(dict.fromkeys(rules.role_pattern.findall(text)))
     if not words:
         return []
+    stated = {word for fact in cited for word in rules.role_pattern.findall(fact.text)}
     ranks = [
-        RESPONSIBILITY_RANK[fact.responsibility]
-        for fact in cited
-        if fact.responsibility in RESPONSIBILITY_RANK
+        rank for fact in cited if (rank := _fact_role_rank(fact, rules)) is not None
     ]
-    if ranks:
-        allowed = max(ranks)
+    allowed = max(ranks, default=-1)
+    if any(fact.responsibility in RESPONSIBILITY_RANK for fact in cited):
         template = "「{}」高于引用事实的职责程度"
     else:
-        # 职责不适用（教育、志愿者、技能……）时，只允许事实原文自己写了的等级：
-        # 事实写「负责晚班签到」，改写也可以说「负责」；原文没有角色词就一个都不能加。
-        allowed = max(
-            (
-                rules.role_rank(word)
-                for fact in cited
-                for word in rules.role_pattern.findall(fact.text)
-            ),
-            default=-1,
-        )
         template = "引用的事实不涉及职责程度，原文也没有这么写，改写里不能出现「{}」"
     return [
         GroundingIssue(
             kind=IssueKind.ROLE, message=template.format(word), fragment=word
         )
         for word in words
-        if rules.role_rank(word) > allowed
+        if word not in stated and rules.role_rank(word) > allowed
     ]
 
 

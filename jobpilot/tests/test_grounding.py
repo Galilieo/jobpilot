@@ -572,6 +572,8 @@ def test_na_fact_allows_role_words_its_text_states(fact_text, sentence) -> None:
             "主导需求拆解和客户验收",
             "主导",
         ),  # 原文没有角色词
+        # 原文提到的「负责人」是别人，按原文最低的「协助」算
+        ("协助负责人整理物资清单", "主导整理物资清单", "主导"),
     ],
 )
 def test_na_fact_still_blocks_role_words_beyond_its_text(
@@ -580,3 +582,29 @@ def test_na_fact_still_blocks_role_words_beyond_its_text(
     result = _check_one(sentence, _single(fact_text, responsibility=NA))
     assert kinds(result) == [IssueKind.ROLE]
     assert result.issues[0].fragment == word
+
+
+@pytest.mark.parametrize(
+    ("responsibility", "fact_text", "sentence"),
+    [
+        # test-068：事实提到别人的角色，改写照抄不算升级
+        (
+            PART,
+            "和测试负责人商量后加了独立门店配置",
+            "与测试负责人商量后增加独立门店配置",
+        ),
+        (NA, "协助负责人整理物资清单", "协助负责人整理物资清单"),
+    ],
+)
+def test_role_word_copied_from_the_fact_passes(
+    responsibility, fact_text, sentence
+) -> None:
+    assert _check_one(
+        sentence, _single(fact_text, responsibility=responsibility)
+    ).passed
+
+
+def test_known_limit_copied_role_word_can_change_meaning() -> None:
+    # 「负责人」原文指别人，改写把它安到自己身上；程序只比词，交给第三层。
+    fact = _single("和测试负责人商量后加了独立门店配置", responsibility=PART)
+    assert _check_one("作为负责人增加独立门店配置", fact).passed
