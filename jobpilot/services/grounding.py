@@ -375,19 +375,20 @@ def _chinese_value(word: str) -> int | None:
 
 
 def _chinese_numbers(text: str, rules: GroundingRules) -> list[tuple[str, str]]:
-    """事实里写在量词前的中文数字：「两种」「四人」「前十位」「每百张」。
+    """事实里的中文数字：「两种」「四人」「前十位」「每百张」「十二周」。
 
     只用来扩充「依据里有的数字」，不检查改写里的中文数字：
     改写写「一次性」不该被当成数字 1。
-    后面不接量词或单位的（「一起」「一些」）不算。
+    事实这一侧宁可多认：多认一个最多放过一个数字（第三层还会看），漏认就会误拦。
+    只有「一」常是普通字（一起、统一、一致），后面接量词才算数字 1。
     """
     text = _normalize(text)
     found = []
     for match in _CHINESE_NUMBER.finditer(text):
-        if not text.startswith(rules.chinese_classifiers, match.end()):
-            continue
         number = _chinese_value(match.group())
         if number is None:
+            continue
+        if number == 1 and not text.startswith(rules.chinese_classifiers, match.end()):
             continue
         unit, _ = _unit_after(text, match.end(), rules)
         found.append(_canonical(Decimal(number), unit))

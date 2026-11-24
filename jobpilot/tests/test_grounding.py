@@ -515,6 +515,10 @@ def _check_one(sentence: str, fact: GroundingFact):
         ("一百零五条记录", "整理 105 条记录"),
         ("连续十二周值班", "连续值班 12 周"),
         ("雅思 7.0（2025）", "2025 年考取雅思 7.0"),
+        # 量词表里没有的量词也认（只有「一」要求接量词）
+        ("复核三段对话记录", "复核 3 段对话记录"),
+        ("巡检两栋宿舍楼", "巡检 2 栋宿舍楼"),
+        ("开放一间机房", "开放 1 间机房"),
     ],
 )
 def test_chinese_numerals_and_years_in_facts_support_digits(
@@ -536,6 +540,7 @@ def test_chinese_numerals_and_years_in_facts_support_digits(
             "1",
         ),  # 「一起」后面不是量词，不算数字 1
         ("雅思 7.0（2025）", "2024 年考取雅思 7.0", "2024 年"),
+        ("统一接口返回格式", "统一 1 类接口返回格式", "1"),  # 「统一」不是数字 1
     ],
 )
 def test_chinese_numerals_do_not_cover_other_numbers(
