@@ -15,18 +15,23 @@ from jobpilot.api.jobs import router as jobs_router
 from jobpilot.api.matching import router as matching_router
 from jobpilot.api.ocr import router as ocr_router
 from jobpilot.api.resumes import router as resumes_router
+from jobpilot.api.tailoring import RunLauncher
+from jobpilot.api.tailoring import router as tailoring_router
 from jobpilot.config import settings
+from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.db.session import check_database, create_database_engine, get_session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """启动时准备连接池、session 工厂和模型客户端，退出时一并释放。"""
+    """启动时准备连接池、session 工厂和模型客户端，回收遗留运行；退出时释放。"""
     engine = create_database_engine(
         settings.database_url,
         connect_timeout_seconds=settings.database_connect_timeout_seconds,
     )
     app.state.db_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with app.state.db_session_factory.begin() as session:
+        await fail_abandoned_runs(session)
     app.state.model_client = AsyncOpenAI(
         api_key=settings.deepseek_api_key.get_secret_value() or "not-configured",
         base_url=settings.deepseek_base_url,
@@ -39,11 +44,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="JobPilot", lifespan=lifespan)
+# 改写的后台任务。不依赖事件循环；测试客户端不运行 lifespan，也要有它。
+app.state.run_launcher = RunLauncher()
 app.include_router(auth_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)
 app.include_router(facts_router)
 app.include_router(jobs_router)
+app.include_router(tailoring_router)
 app.include_router(matching_router)
 
 

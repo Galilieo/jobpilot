@@ -54,6 +54,31 @@ FACT_ROWS = [
 RAW_TEXT = "\n".join(text for *_, text in FACT_ROWS)
 
 
+SNAPSHOT = {
+    "basic_fields": {"title": "后端开发实习生"},
+    "requirements": [
+        {"requirement_id": rid, "type": kind, "text": text}
+        for rid, kind, text in [
+            ("11111111-1111-4111-8111-111111111111", "hard", "熟悉 Redis"),
+            ("22222222-2222-4222-8222-222222222222", "preferred", "了解 Flask"),
+        ]
+    ],
+    "duties": [],
+    "keywords": ["Redis"],
+}
+REQUIREMENT_IDS = [r["requirement_id"] for r in SNAPSHOT["requirements"]]
+
+
+@dataclass
+class SeededInputs:
+    """一个用户已上传的简历、已发布的事实和收藏的岗位，还没有改写运行。"""
+
+    doc_id: UUID
+    fact_set_id: UUID
+    fact_ids: list[UUID]
+    user_job_id: UUID
+
+
 @dataclass
 class Seeded:
     user_id: UUID
@@ -62,40 +87,28 @@ class Seeded:
     requirement_ids: list[str]
 
 
-async def seed(session_factory: Factory, email: str) -> Seeded:
-    snapshot = {
-        "basic_fields": {"title": "后端开发实习生"},
-        "requirements": [
-            {"requirement_id": rid, "type": kind, "text": text}
-            for rid, kind, text in [
-                ("11111111-1111-4111-8111-111111111111", "hard", "熟悉 Redis"),
-                ("22222222-2222-4222-8222-222222222222", "preferred", "了解 Flask"),
-            ]
-        ],
-        "duties": [],
-        "keywords": ["Redis"],
-    }
+async def seed_inputs(
+    session_factory: Factory, user_id: UUID, *, sections: bool = True
+) -> SeededInputs:
+    """sections=False 时事实都没有段落类型（模拟旧版本），改写前要用户指定。"""
     async with session_factory.begin() as session:
-        user = User(email=email, hashed_password="test")
-        session.add(user)
-        await session.flush()
-        doc = ResumeDocument(user_id=user.user_id, raw_text=RAW_TEXT)
-        fact_set = FactSet(user_id=user.user_id, version=1)
+        doc = ResumeDocument(user_id=user_id, raw_text=RAW_TEXT)
+        fact_set = FactSet(user_id=user_id, version=1)
         posting = JobPosting(
-            owner_id=user.user_id,
+            owner_id=user_id,
             raw_text="岗位原文",
-            content_hash=email.ljust(64, "x")[:64],
-            parsed_json=snapshot,
+            content_hash=str(user_id).replace("-", "").ljust(64, "x"),
+            parsed_json=SNAPSHOT,
         )
         session.add_all([doc, fact_set, posting])
         await session.flush()
         facts = [
             Fact(
-                user_id=user.user_id,
+                user_id=user_id,
                 fact_set_id=fact_set.fact_set_id,
                 lineage_id=uuid4(),
                 experience=experience,
-                section=section,
+                section=section if sections else None,
                 kind=kind,
                 responsibility="own" if section != "skill" else "na",
                 text=text,
@@ -109,25 +122,40 @@ async def seed(session_factory: Factory, email: str) -> Seeded:
             )
             for experience, section, kind, text in FACT_ROWS
         ]
-        session.add_all(facts)
-        user_job = UserJob(user_id=user.user_id, posting_id=posting.posting_id)
-        session.add(user_job)
+        user_job = UserJob(user_id=user_id, posting_id=posting.posting_id)
+        session.add_all([*facts, user_job])
         await session.flush()
-        run = AiRun(
-            user_id=user.user_id,
-            kind="tailor",
-            user_job_id=user_job.user_job_id,
+        return SeededInputs(
+            doc_id=doc.doc_id,
             fact_set_id=fact_set.fact_set_id,
-            base_doc_id=doc.doc_id,
-            job_snapshot_json=snapshot,
+            fact_ids=[fact.fact_id for fact in facts],
+            user_job_id=user_job.user_job_id,
+        )
+
+
+async def seed(session_factory: Factory, email: str) -> Seeded:
+    async with session_factory.begin() as session:
+        user = User(email=email, hashed_password="test")
+        session.add(user)
+        await session.flush()
+        user_id = user.user_id
+    inputs = await seed_inputs(session_factory, user_id)
+    async with session_factory.begin() as session:
+        run = AiRun(
+            user_id=user_id,
+            kind="tailor",
+            user_job_id=inputs.user_job_id,
+            fact_set_id=inputs.fact_set_id,
+            base_doc_id=inputs.doc_id,
+            job_snapshot_json=SNAPSHOT,
         )
         session.add(run)
         await session.flush()
         return Seeded(
-            user_id=user.user_id,
+            user_id=user_id,
             run_id=run.run_id,
-            fact_ids=[fact.fact_id for fact in facts],
-            requirement_ids=[r["requirement_id"] for r in snapshot["requirements"]],
+            fact_ids=inputs.fact_ids,
+            requirement_ids=REQUIREMENT_IDS,
         )
 
 
@@ -162,8 +190,8 @@ _TASK = re.compile(r'<untrusted_data label="task">\n(.*?)\n</untrusted_data>', r
 class FakeModel:
     """按提示词分辨调用；改写按 task 里的经历回复（各块并行，到达顺序不固定）。"""
 
-    def __init__(self, seeded: Seeded, *, match_status: int = 200) -> None:
-        self.seeded = seeded
+    def __init__(self, fact_ids: list[UUID], *, match_status: int = 200) -> None:
+        self.fact_ids = fact_ids  # 事实库里的四条，匹配结果按它引用
         self.match_status = match_status
         self.calls: dict[str, int] = {"match": 0, "rewrite": 0, "check": 0}
         self._kinds = {
@@ -186,8 +214,8 @@ class FakeModel:
         return self._reply(SUPPORTED)
 
     def _match(self) -> dict:
-        redis, flask = self.seeded.requirement_ids
-        _, cache, orders, _ = self.seeded.fact_ids
+        redis, flask = REQUIREMENT_IDS
+        _, cache, orders, _ = self.fact_ids
         return {
             "items": [
                 {
@@ -272,7 +300,7 @@ async def test_full_run_succeeds_and_saves_bullets_in_plan_order(
     session_factory: Factory,
 ) -> None:
     seeded = await seed(session_factory, "full@tailor.invalid")
-    model = FakeModel(seeded)
+    model = FakeModel(seeded.fact_ids)
     await tailor(session_factory, seeded, model)
 
     run = await read_run(session_factory, seeded.run_id)
@@ -298,10 +326,10 @@ async def test_unchanged_inputs_reuse_the_match_report(
     session_factory: Factory,
 ) -> None:
     seeded = await seed(session_factory, "reuse@tailor.invalid")
-    await tailor(session_factory, seeded, FakeModel(seeded))
+    await tailor(session_factory, seeded, FakeModel(seeded.fact_ids))
 
     second = await another_tailor_run(session_factory, seeded)
-    model = FakeModel(seeded)
+    model = FakeModel(seeded.fact_ids)
     await tailor(session_factory, seeded, model, run_id=second)
 
     assert model.calls["match"] == 0
@@ -313,13 +341,13 @@ async def test_changed_job_snapshot_runs_a_new_match(
     session_factory: Factory,
 ) -> None:
     seeded = await seed(session_factory, "changed@tailor.invalid")
-    await tailor(session_factory, seeded, FakeModel(seeded))
+    await tailor(session_factory, seeded, FakeModel(seeded.fact_ids))
 
     second = await another_tailor_run(session_factory, seeded)
     async with session_factory.begin() as session:
         run = await session.get_one(AiRun, second)
         run.job_snapshot_json = {**run.job_snapshot_json, "keywords": ["Go"]}
-    model = FakeModel(seeded)
+    model = FakeModel(seeded.fact_ids)
     await tailor(session_factory, seeded, model, run_id=second)
 
     assert model.calls["match"] == 1
@@ -331,7 +359,7 @@ async def test_budget_running_out_mid_run_ends_budget_exhausted(
 ) -> None:
     """各块并行，哪一块先拿到最后的额度不固定；这里只断言与调度顺序无关的结果。"""
     seeded = await seed(session_factory, "budget@tailor.invalid")
-    model = FakeModel(seeded)
+    model = FakeModel(seeded.fact_ids)
     await tailor(session_factory, seeded, model, calls=5)
 
     run = await read_run(session_factory, seeded.run_id)
@@ -403,7 +431,7 @@ async def test_budget_used_up_by_match_leaves_every_block_not_started(
     session_factory: Factory,
 ) -> None:
     seeded = await seed(session_factory, "early@tailor.invalid")
-    await tailor(session_factory, seeded, FakeModel(seeded), calls=1)
+    await tailor(session_factory, seeded, FakeModel(seeded.fact_ids), calls=1)
 
     run = await read_run(session_factory, seeded.run_id)
     # 匹配用掉唯一一次额度后，三块都在改写前就停下
@@ -416,7 +444,7 @@ async def test_failed_match_fails_the_run_without_bullets(
     session_factory: Factory,
 ) -> None:
     seeded = await seed(session_factory, "nomatch@tailor.invalid")
-    model = FakeModel(seeded, match_status=400)
+    model = FakeModel(seeded.fact_ids, match_status=400)
     await tailor(session_factory, seeded, model)
 
     run = await read_run(session_factory, seeded.run_id)
@@ -438,7 +466,7 @@ async def test_run_finished_elsewhere_writes_nothing(
         await set_run_status(session, seeded.user_id, seeded.run_id, RunStatus.FAILED)
 
     with pytest.raises(RunAlreadyFinishedError):
-        await tailor(session_factory, seeded, FakeModel(seeded))
+        await tailor(session_factory, seeded, FakeModel(seeded.fact_ids))
 
     run = await read_run(session_factory, seeded.run_id)
     assert (run.status, run.stop_reason, run.plan_json) == ("failed", None, None)

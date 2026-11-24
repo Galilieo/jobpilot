@@ -131,6 +131,21 @@ async def _create_match_report(
     return matched.json()["report_id"]
 
 
+async def _create_tailor_run(
+    client: httpx.AsyncClient, model_outputs: list[str]
+) -> str:
+    """B 上传简历、生成匹配报告，再对同一岗位启动改写，等后台任务结束。"""
+    await _create_resume(client, model_outputs)
+    report_id = await _create_match_report(client, model_outputs)
+    job_id = (await client.get(f"/api/match-reports/{report_id}")).json()["job_id"]
+    started = await client.post(
+        f"/api/jobs/{job_id}/tailor", json={"sections": {"B 的项目": "project"}}
+    )
+    assert started.status_code == 202, started.text
+    await app.state.run_launcher.wait_all()
+    return started.json()["run_id"]
+
+
 # T1.4 起每加一类业务资源，就在这里登记一项。
 OWNED_RESOURCES: list[OwnedResource] = [
     OwnedResource(
@@ -180,6 +195,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
             Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
             Attempt("POST", "/api/jobs/{id}/match"),
             Attempt("GET", "/api/jobs/{id}/matches"),
+            Attempt("POST", "/api/jobs/{id}/tailor", {}),
         ),
         routes=frozenset(
             {
@@ -189,6 +205,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("PUT", "/api/jobs/{job_id}"),
                 ("POST", "/api/jobs/{job_id}/match"),
                 ("GET", "/api/jobs/{job_id}/matches"),
+                ("POST", "/api/jobs/{job_id}/tailor"),
             }
         ),
     ),
@@ -198,6 +215,13 @@ OWNED_RESOURCES: list[OwnedResource] = [
         read=("GET", "/api/match-reports/{id}"),
         attempts=(Attempt("GET", "/api/match-reports/{id}"),),
         routes=frozenset({("GET", "/api/match-reports/{report_id}")}),
+    ),
+    OwnedResource(
+        name="tailor_run",
+        create=_create_tailor_run,
+        read=("GET", "/api/tailor-runs/{id}"),
+        attempts=(Attempt("GET", "/api/tailor-runs/{id}"),),
+        routes=frozenset({("GET", "/api/tailor-runs/{run_id}")}),
     ),
 ]
 
