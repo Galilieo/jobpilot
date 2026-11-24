@@ -238,3 +238,17 @@ async def test_double_submit_returns_the_first_job(
         assert len((await db.scalars(select(JobPosting))).all()) == 1
         [run] = (await db.scalars(select(AiRun))).all()
         assert run.status == RunStatus.CANCELLED
+
+
+async def test_partial_basic_field_edits_keep_existing_values_and_allow_clear(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    job = (await add_job(signed_in, model_outputs)).json()
+    url = f"/api/jobs/{job['job_id']}"
+    original = job["parsed"]["basic_fields"]
+    for patch in ({"location": "苏州"}, {"company": None}):
+        response = await signed_in.put(url, json={"basic_fields": patch})
+        assert response.status_code == 200
+        original.update(patch)
+        assert response.json()["parsed"]["basic_fields"] == original
+    assert (await signed_in.get(url)).json()["parsed"]["basic_fields"] == original

@@ -261,7 +261,10 @@ async def update_job(
 
     overrides = dict(user_job.field_overrides_json)
     if body.basic_fields is not None:
-        overrides["basic_fields"] = body.basic_fields.model_dump(mode="json")
+        fields = effective_parsed_job(posting, user_job).basic_fields
+        overrides["basic_fields"] = fields.model_dump(mode="json") | (
+            body.basic_fields.model_dump(mode="json", exclude_unset=True)
+        )
     if body.requirements is not None:
         current = {
             r.requirement_id: r
