@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
-from jobpilot.db.models import FactKind, Responsibility
+from jobpilot.db.models import FactKind, Responsibility, SectionKind
 from jobpilot.services.grounding_rules import RESPONSIBILITY_RANK, default_rules
 from jobpilot.services.llm_gateway import (
     ModelBudget,
@@ -61,17 +61,6 @@ def locate_quote(
 
 
 # ---------- 模型输出：按经历分组的事实 ----------
-
-
-class SectionKind(StrEnum):
-    """简历的段落类型，对应 01 F1 的六类。"""
-
-    EDUCATION = "education"
-    PROJECT = "project"
-    INTERNSHIP = "internship"
-    SKILL = "skill"
-    AWARD = "award"
-    OTHER = "other"
 
 
 # 只有项目和实习区分职责程度，其他段落的事实一律为 na。

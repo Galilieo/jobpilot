@@ -217,6 +217,17 @@ class Responsibility(StrEnum):
     NA = "na"
 
 
+class SectionKind(StrEnum):
+    """简历的段落类型，对应 01 F1 的六类。"""
+
+    EDUCATION = "education"
+    PROJECT = "project"
+    INTERNSHIP = "internship"
+    SKILL = "skill"
+    AWARD = "award"
+    OTHER = "other"
+
+
 class FactSource(StrEnum):
     """事实来源：从简历解析，或用户手动补充与纠正。"""
 

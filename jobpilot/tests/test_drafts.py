@@ -18,6 +18,7 @@ from jobpilot.db.models import (
     FactSource,
     Responsibility,
     ResumeDocument,
+    SectionKind,
     User,
 )
 from jobpilot.services import drafts
@@ -30,7 +31,7 @@ from jobpilot.services.drafts import (
     NothingToPublishError,
     VersionConflictError,
 )
-from jobpilot.services.facts import DraftFact, ReviewReason, SectionKind
+from jobpilot.services.facts import DraftFact, ReviewReason
 
 Factory = async_sessionmaker[AsyncSession]
 

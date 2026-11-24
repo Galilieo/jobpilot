@@ -23,12 +23,12 @@ from jobpilot.db.models import (
     FactSet,
     FactSource,
     Responsibility,
+    SectionKind,
 )
 from jobpilot.services.facts import (
     RESPONSIBILITY_SECTIONS,
     DraftFact,
     ReviewReason,
-    SectionKind,
     contains_number,
 )
 
