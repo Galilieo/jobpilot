@@ -8,8 +8,8 @@
     "sha256": "5c5d0fdf1e94c637422efd3df4215d6f129b5bf2dde809bb63419e2c8c99271d"
   },
   "parse_jd": {
-    "version": 6,
-    "sha256": "54e3c5bed52916a33e8dddf6bcba8b47c22d21ea7061acef04d4f25ab3b698b6"
+    "version": 7,
+    "sha256": "d68752bd196b2852848d65656bfc9b9fe7c76859e329aa031b47d70d8a075383"
   },
   "repair_json": {
     "version": 1,
