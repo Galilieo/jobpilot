@@ -528,9 +528,8 @@ class CheckStatus(StrEnum):
 
     PASSED = "passed"  # 三层检查通过（可能经过修订，见 revision_count）
     FALLBACK = "fallback"  # 修订两次仍不通过或修订失败，退回本次事实库里的事实原文
-    PENDING = (
-        "pending"  # 回退时没有可用的事实：标「待处理」，保留模型的句子和问题供用户处理
-    )
+    # 回退时没有可用的事实：标「待处理」，保留模型的句子和问题供用户处理。
+    PENDING = "pending"
 
 
 class TailoredBullet(Base):
