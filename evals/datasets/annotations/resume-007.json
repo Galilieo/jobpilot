@@ -71,16 +71,24 @@
       "text": "在同一批 200 条合成活动数据上测量构建前后变化",
       "has_number": true,
       "source_quote": "在同一批 200 条合成活动数据上测量构建前后变化",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["合成活动数据"]
     },
     {
       "experience": "社区志愿活动日历",
       "kind": "result",
       "responsibility": "participate",
-      "text": "首屏脚本的 gzip 体积从 310 KB 减至 240 KB",
+      "text": "首屏脚本的 gzip 体积从 310 KB 减至 240 KB，未统计线上加载时间",
       "has_number": true,
-      "source_quote": "首屏脚本的 gzip 体积从 310 KB 减至 240 KB",
-      "needs_confirmation": true
+      "source_quote": "首屏脚本的 gzip 体积从 310 KB 减至 240 KB。未统计线上加载时间",
+      "needs_confirmation": true,
+      "qualifiers": ["未统计线上加载时间"]
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

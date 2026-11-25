@@ -71,7 +71,8 @@
       "text": "在预发布回放一周内的 37 次资料更新",
       "has_number": true,
       "source_quote": "在预发布回放一周内的 37 次资料更新",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["在预发布"]
     },
     {
       "experience": "栖桐文档科技 AI 工程实习",
@@ -125,7 +126,8 @@
       "text": "固定 Top-5 时，同一批问题上命中包含答案的资料页从 57 条到 68 条",
       "has_number": true,
       "source_quote": "固定 Top-5，在同一批问题上命中包含答案的资料页从 57 条到 68 条",
-      "needs_confirmation": false
+      "needs_confirmation": false,
+      "qualifiers": ["固定 Top-5"]
     },
     {
       "experience": "栖桐文档科技 AI 工程实习",
@@ -270,6 +272,31 @@
       "has_number": false,
       "source_quote": "能够说明检索指标的计算口径",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": {
+      "value": 5,
+      "source_quote": "每周 5 天"
+    },
+    "internship_months": {
+      "value": 5,
+      "source_quote": "可实习 5 个月"
+    },
+    "earliest_start": {
+      "value": "寒假起",
+      "source_quote": "寒假起"
+    }
+  },
+  "education": [
+    {
+      "school": "澄海大学",
+      "major": "计算机科学与技术",
+      "degree": "bachelor",
+      "status": "enrolled",
+      "start_text": "2023.09",
+      "end_text": "2027.06（预计）",
+      "source_quote": "2023.09–2027.06（预计）  澄海大学（双一流）  计算机科学与技术 本科"
     }
   ]
 }

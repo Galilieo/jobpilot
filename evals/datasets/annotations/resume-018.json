@@ -80,7 +80,8 @@
       "text": "用仓库借出的 3 台机型做回归，其中 1 台是较旧的手持机",
       "has_number": true,
       "source_quote": "用仓库借出的 3 台机型做回归，其中有 1 台是较旧的手持机",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["用仓库借出的 3 台机型"]
     },
     {
       "experience": "青帆巡检设备 Android 开发实习",
@@ -89,7 +90,8 @@
       "text": "跟了两次小范围发布",
       "has_number": true,
       "source_quote": "跟了两次小范围发布",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["小范围发布"]
     },
     {
       "experience": "青帆巡检设备 Android 开发实习",
@@ -216,6 +218,22 @@
       "has_number": false,
       "source_quote": "接触过协程、Retrofit 和 Jetpack Compose",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": [
+    {
+      "school": "岭潭机电职业学院",
+      "major": "移动应用开发",
+      "degree": "associate",
+      "status": "enrolled",
+      "start_text": "2024.09",
+      "end_text": "2027.06（预计）",
+      "source_quote": "岭潭机电职业学院　移动应用开发　专科　2024.09—2027.06（预计）"
     }
   ]
 }

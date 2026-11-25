@@ -143,7 +143,8 @@
       "text": "负责逐笔核对试点店的几种电子小票",
       "has_number": false,
       "source_quote": "负责逐笔核对试点店的几种电子小票",
-      "needs_confirmation": false
+      "needs_confirmation": false,
+      "qualifiers": ["试点店"]
     },
     {
       "experience": "晚自习教室管理页面",
@@ -234,6 +235,25 @@
       "has_number": false,
       "source_quote": "接触过 Jenkins 定时任务配置",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": {
+      "value": 4,
+      "source_quote": "每周 4 天"
+    },
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": [
+    {
+      "school": "湘桐师范学院",
+      "major": "信息与计算科学",
+      "degree": "bachelor",
+      "status": "enrolled",
+      "start_text": "2023.09",
+      "end_text": "2027.06（预计）",
+      "source_quote": "湘桐师范学院，信息与计算科学本科，2023.09–2027.06（预计）"
     }
   ]
 }

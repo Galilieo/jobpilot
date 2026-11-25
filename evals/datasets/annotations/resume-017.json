@@ -62,7 +62,8 @@
       "text": "和团队拿 12 个账号在测试库里同时抢一个剩余名额",
       "has_number": true,
       "source_quote": "我们拿 12 个账号在测试库里同时抢一个剩余名额",
-      "needs_confirmation": false
+      "needs_confirmation": false,
+      "qualifiers": ["在测试库里"]
     },
     {
       "experience": "校园运动队训练报名工具",
@@ -198,6 +199,38 @@
       "has_number": false,
       "source_quote": "最近在补消息队列",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": {
+      "value": 4,
+      "source_quote": "每周 4 天"
+    },
+    "internship_months": null,
+    "earliest_start": {
+      "value": "12 月起可实习",
+      "source_quote": "12 月起可实习"
+    }
+  },
+  "education": [
+    {
+      "school": "临皖工学院",
+      "major": "软件工程",
+      "degree": "bachelor",
+      "status": "enrolled",
+      "start_text": "2025.09",
+      "end_text": "2027.06 预计",
+      "source_quote": "临皖工学院　软件工程，本科（专升本）  2025.09–2027.06 预计"
+    },
+    {
+      "school": "庐川职业技术学院",
+      "major": "计算机应用技术",
+      "degree": "associate",
+      "status": "completed",
+      "status_context": "higher_degree_enrolled",
+      "start_text": "2022.09",
+      "end_text": "2025.06",
+      "source_quote": "庐川职业技术学院　计算机应用技术，专科  2022.09–2025.06"
     }
   ]
 }

@@ -35,7 +35,14 @@
       "text": "根据助教提供的两条样例请求验证返回字段",
       "has_number": true,
       "source_quote": "根据助教提供的两条样例请求验证返回字段",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["助教提供的两条样例请求"]
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

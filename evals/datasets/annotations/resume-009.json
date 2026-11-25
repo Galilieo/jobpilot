@@ -53,7 +53,14 @@
       "text": "在留出的 60 条查询上，融合方案的 Recall@5 高于单独使用 BM25 的方案",
       "has_number": true,
       "source_quote": "在留出的 60 条查询上，融合方案的 Recall@5 高于单独使用 BM25 的方案",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["在留出的 60 条查询上"]
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

@@ -8,7 +8,8 @@
       "text": "用 Python 调用大模型 API，根据自己写的虚构会议文本生成行动项",
       "has_number": false,
       "source_quote": "用 Python 调用大模型 API，根据自己写的虚构会议文本生成行动项",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["自己写的虚构会议文本"]
     },
     {
       "experience": "会议纪要整理",
@@ -37,5 +38,11 @@
       "source_quote": "试了 4 段输入",
       "needs_confirmation": true
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

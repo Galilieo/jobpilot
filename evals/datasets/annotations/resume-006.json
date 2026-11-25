@@ -35,7 +35,8 @@
       "text": "在 36 条合成工单上回放测试",
       "has_number": true,
       "source_quote": "在 36 条合成工单上回放测试",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["合成工单"]
     },
     {
       "experience": "客服工单分派助手",
@@ -53,7 +54,14 @@
       "text": "在请求日志里记录耗时和错误类别，工单正文未写入日志",
       "has_number": false,
       "source_quote": "在请求日志里记录耗时和错误类别，工单正文未写入日志",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["工单正文未写入日志"]
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }
