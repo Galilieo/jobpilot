@@ -74,8 +74,6 @@ async def idempotent_request(
 ) -> AsyncIterator[Attempt]:
     """认证后的请求先释放读事务，再用独立短事务领取键。"""
     await db.commit()
-    if not await lock_active_account(db, scope.user_id):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="账号当前无法发起运行")
     async with session_factory.begin() as reservation:
         outcome = await claim(reservation, scope, sha256(payload.encode()).hexdigest())
     if outcome == ClaimConflict.HASH_MISMATCH:
@@ -95,6 +93,11 @@ async def idempotent_request(
     if finish is not None:
         db.info[_FINISH_CALLBACK] = (finish, outcome)
     try:
+        # 领取键后只占用请求连接，锁持续到新运行第一次提交为止。
+        if not await lock_active_account(db, scope.user_id):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, detail="账号当前无法发起运行"
+            )
         yield outcome
     except Exception:
         await db.rollback()

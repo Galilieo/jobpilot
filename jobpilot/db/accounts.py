@@ -115,6 +115,7 @@ async def mark_deletion_requested(session: AsyncSession, login: LoginSession) ->
         return False
     valid_session = exists().where(
         UserSession.session_id == login.session_id,
+        UserSession.user_id == user_id,
         UserSession.expires_at > func.clock_timestamp(),
     )
     changed = await session.scalar(

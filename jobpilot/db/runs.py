@@ -69,13 +69,15 @@ async def fail_abandoned_runs(session: AsyncSession) -> int:
     return result.rowcount
 
 
-async def cancel_account_runs(session: AsyncSession, user_id: UUID) -> None:
+async def cancel_account_runs(session: AsyncSession, user_id: UUID) -> list[UUID]:
     """收尾与取消通过同一运行行串行化，避免迟到的任务覆盖取消状态。"""
-    await session.execute(
+    cancelled = await session.scalars(
         update(AiRun)
         .where(
             AiRun.user_id == user_id,
             AiRun.status.in_(_ACTIVE_STATUSES),
         )
         .values(status=RunStatus.CANCELLED, finished_at=func.now())
+        .returning(AiRun.run_id)
     )
+    return list(cancelled)

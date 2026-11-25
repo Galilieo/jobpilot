@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.account_export import export_business_records, export_identity
 from jobpilot.services.resume_content import ResumeContent
@@ -11,9 +11,9 @@ from jobpilot.services.resume_export import RenderMode, render_html
 
 
 async def build_account_export(
-    factory: async_sessionmaker[AsyncSession], user_id: UUID
+    session: AsyncSession, user_id: UUID
 ) -> dict[str, Any] | None:
-    async with factory() as session:
+    async with session.begin():
         # 各表在同一快照读取，此时保存新简历也不会让版本指针悬空。
         await session.connection(
             execution_options={"isolation_level": "REPEATABLE READ"}

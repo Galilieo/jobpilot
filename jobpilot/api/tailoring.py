@@ -8,14 +8,16 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Coroutine
+from collections.abc import AsyncIterator, Coroutine, Iterable
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from psycopg.errors import CheckViolation
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
@@ -56,15 +58,25 @@ class RunLauncher:
     """进程内后台任务。持有任务引用，避免任务还没跑完就被垃圾回收；测试可以等它们结束。"""
 
     def __init__(self) -> None:
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks: dict[UUID, asyncio.Task[None]] = {}
 
-    def launch(self, work: Coroutine[Any, Any, None]) -> None:
+    def launch(self, run_id: UUID, work: Coroutine[Any, Any, None]) -> None:
         task = asyncio.create_task(work)
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        self._tasks[run_id] = task
+        task.add_done_callback(lambda _: self._tasks.pop(run_id))
+
+    def cancel_runs(self, run_ids: Iterable[UUID]) -> None:
+        """提交账号删除后停止已取消的进程内任务，避免恢复后旧任务继续派生步骤。"""
+        for run_id in run_ids:
+            if task := self._tasks.get(run_id):
+                task.cancel()
 
     async def wait_all(self) -> None:
-        await asyncio.gather(*self._tasks)
+        if self._tasks:
+            done, _ = await asyncio.wait(tuple(self._tasks.values()))
+            for task in done:
+                if not task.cancelled():
+                    task.result()
 
 
 def get_run_launcher(request: Request) -> RunLauncher:
@@ -174,7 +186,7 @@ async def start_tailoring(
         budget=ModelBudget(**_TAILOR_BUDGET),
         limiter=asyncio.Semaphore(_MAX_CONCURRENT_REQUESTS),
     )
-    launcher.launch(execute(deps, user_id, run_id, body.sections))
+    launcher.launch(run_id, execute(deps, user_id, run_id, body.sections))
     return started
 
 
@@ -211,9 +223,21 @@ async def execute(
         await run_tailoring(deps, user_id, run_id, section_overrides=sections)
     except RunAlreadyFinishedError:
         return  # 运行已被别处结束（例如重启回收），结果不写入
+    except IntegrityError as error:
+        # 账号删号后，后台图可能才开始派生匹配运行。数据库已阻止写入。
+        if (
+            isinstance(error.orig, CheckViolation)
+            and error.orig.diag.constraint_name == "ck_ai_run_account_active"
+        ):
+            return
+        await _fail_execution(deps, user_id, run_id)
     except Exception:  # noqa: BLE001 — 后台任务里的任何错误都不能让运行停在 running
-        logger.exception("改写运行 %s 出错", run_id)
-        await mark_failed(deps.session_factory, user_id, run_id)
+        await _fail_execution(deps, user_id, run_id)
+
+
+async def _fail_execution(deps: TailorDeps, user_id: UUID, run_id: UUID) -> None:
+    logger.exception("改写运行 %s 出错", run_id)
+    await mark_failed(deps.session_factory, user_id, run_id)
 
 
 async def mark_failed(

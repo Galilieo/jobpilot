@@ -5,12 +5,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from jobpilot.api.auth import clear_session_cookie
-from jobpilot.api.deps import (
-    AuthenticatedSession,
-    DbSession,
-    SessionFactory,
-    current_user,
-)
+from jobpilot.api.deps import AuthenticatedSession, DbSession, current_user
+from jobpilot.api.tailoring import Launcher
 from jobpilot.db.accounts import restore_account
 from jobpilot.services.account_export import build_account_export
 from jobpilot.services.accounts import request_account_deletion
@@ -24,10 +20,11 @@ router = APIRouter(prefix="/api/account", tags=["account"])
     dependencies=[Depends(current_user)],
 )
 async def request_deletion(
-    response: Response, login: AuthenticatedSession, db: DbSession
+    response: Response, login: AuthenticatedSession, db: DbSession, launcher: Launcher
 ) -> None:
     """记录删除申请并清除已撤销的登录 Cookie。"""
-    await request_account_deletion(db, login)
+    cancelled = await request_account_deletion(db, login)
+    launcher.cancel_runs(cancelled)
     clear_session_cookie(response)
 
 
@@ -40,9 +37,12 @@ async def restore(login: AuthenticatedSession, db: DbSession) -> None:
 
 
 @router.get("/export", response_class=JSONResponse)
-async def export(login: AuthenticatedSession, factory: SessionFactory) -> JSONResponse:
+async def export(login: AuthenticatedSession, db: DbSession) -> JSONResponse:
     """下载个人归档，待删除期间也可使用。"""
-    archive = await build_account_export(factory, login.user.user_id)
+    user_id = login.user.user_id
+    # 结束鉴权的读事务，再用同一请求 session 开启导出快照。
+    await db.rollback()
+    archive = await build_account_export(db, user_id)
     if archive is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="账号已删除")
     return JSONResponse(

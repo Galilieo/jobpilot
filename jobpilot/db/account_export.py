@@ -37,6 +37,10 @@ _EXPORT_TABLES = {
     "tailored_resumes": TailoredResume.__table__,
     "resume_versions": ResumeVersion.__table__,
 }
+_VERSION_ORDER = {
+    FactSet.__table__: (FactSet.version,),
+    ResumeVersion.__table__: (ResumeVersion.resume_id, ResumeVersion.version),
+}
 
 
 async def export_identity(
@@ -73,13 +77,7 @@ async def _owned_rows(
     columns = [
         column for column in table.c if column.key not in {"thread_id", "content_hash"}
     ]
-    ordering = (
-        (table.c.resume_id, table.c.version)
-        if table is ResumeVersion.__table__
-        else (table.c.version,)
-        if table is FactSet.__table__
-        else tuple(table.primary_key)
-    )
+    ordering = _VERSION_ORDER.get(table, tuple(table.primary_key))
     rows = await session.execute(
         select(*columns).where(owner == user_id).order_by(*ordering)
     )

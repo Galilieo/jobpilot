@@ -4,6 +4,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -17,17 +18,21 @@ from jobpilot.db.accounts import (
 )
 from jobpilot.db.runs import cancel_account_runs
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error").getChild("accounts")
 _PURGE_INTERVAL_SECONDS = timedelta(days=1).total_seconds()
 
 
-async def request_account_deletion(session: AsyncSession, login: LoginSession) -> None:
-    """首次申请一次性记录状态、注销会话、取消运行。"""
+async def request_account_deletion(
+    session: AsyncSession, login: LoginSession
+) -> list[UUID]:
+    """首次申请原子更新账号和运行，提交后交回本次取消的运行 ID。"""
+    cancelled = []
     if await mark_deletion_requested(session, login):
         user_id = login.user.user_id
         await revoke_account_sessions(session, user_id)
-        await cancel_account_runs(session, user_id)
+        cancelled = await cancel_account_runs(session, user_id)
     await session.commit()
+    return cancelled
 
 
 @dataclass(frozen=True)
