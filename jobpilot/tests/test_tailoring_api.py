@@ -539,6 +539,8 @@ async def test_preview_and_exports_download_from_the_saved_version(
         f"/api/tailor-runs/{run_id}/resume/reset",
     )
     assert editor["export_url"] == f"/api/tailor-runs/{run_id}/export?format=html"
+    # 编辑器按这个版本号导出（&version=n）：导出的是页面上看到的这一版
+    assert editor["version"] == 1
     exported = await async_client.get(f"/api/tailor-runs/{run_id}/export")
     assert (
         'id="jobpilot-resume"' in exported.text and '"save_url": null' in exported.text

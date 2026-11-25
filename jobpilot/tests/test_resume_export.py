@@ -133,12 +133,14 @@ def test_export_file_embeds_only_visible_text_and_style():
 
     assert set(data) == {
         "content",
+        "version",
         "version_id",
         "storage_key",
         "save_url",
         "export_url",
         "reset_url",
     }
+    assert data["version"] == 3  # 编辑器按版本号导出：导出的是它看到的这一版
     assert set(content) == {"header", "sections", "style"}
     assert content["header"] == built.header
     assert content["style"] == {

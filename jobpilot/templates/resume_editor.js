@@ -11,6 +11,7 @@
   const online = Boolean(data.save_url);
   const SAVE_DELAY_MS = 1000;
   let versionId = data.version_id;
+  let version = data.version; // 页面上这一版是第几版；导出时按它下载
   let editing = false;
   let saveTimer = null;
   let saving = null; // 进行中的保存；它没结束之前不发下一次
@@ -162,6 +163,7 @@
       if (response.ok) {
         const saved = await response.json();
         versionId = saved.version_id;
+        version = saved.version;
         data.content = saved.content;
         refreshMarks(saved.content);
         storage.remove(DRAFT_KEY);
@@ -418,13 +420,23 @@
     else setStatus(response.status === 409 ? "简历已在别处保存过，请刷新后再重置" : "重置失败");
   }
 
+  // 导出的是存到服务器上的那一版：先把修改存完，再按返回的版本号下载。没存上就不导出，
+  // 不然下载到的还是改之前的文字。
+  async function exportHtml() {
+    setStatus("保存后导出…");
+    const saved = await flush();
+    if (!saved.ok) {
+      setStatus(`没有导出，有修改没能保存。${saved.reason}`);
+      return;
+    }
+    window.location.href = `${data.export_url}&version=${version}`;
+  }
+
   function buildToolbar() {
     addButton("edit", "编辑", () => setEditing(!editing));
     addFormatting();
     if (online && data.export_url) {
-      addButton("export", "导出 HTML", () => {
-        window.location.href = data.export_url;
-      });
+      addButton("export", "导出 HTML", exportHtml);
     } else {
       addButton("download", "保存 HTML", downloadHtml);
     }

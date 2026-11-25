@@ -134,7 +134,7 @@ class EditorContext:
 EDITOR_SCRIPT = (TEMPLATES / "resume_editor.js").read_text(encoding="utf-8")
 
 
-def _editor_json(content: ResumeContent, editor: EditorContext) -> Markup:
+def _editor_json(content: ResumeContent, version: int, editor: EditorContext) -> Markup:
     """嵌在 <script type="application/json"> 里的数据。
 
     预览页（应用里）嵌整份内容；导出的离线文件只嵌看得见的文字和版式。
@@ -143,6 +143,7 @@ def _editor_json(content: ResumeContent, editor: EditorContext) -> Markup:
     embedded = content if editor.online else OfflineContent.of(content)
     data = {
         "content": embedded.model_dump(mode="json"),
+        "version": version,
         "version_id": str(editor.version_id),
         "storage_key": editor.storage_key,
         "save_url": editor.save_url,
@@ -195,7 +196,7 @@ def render_html(
         style=content.style,
         visible=_visible(content, mode),
         marks=mode is RenderMode.PREVIEW,
-        editor_json=_editor_json(content, editor) if editor else None,
+        editor_json=_editor_json(content, version, editor) if editor else None,
         editor_script=Markup(EDITOR_SCRIPT) if editor else None,
     )
 
