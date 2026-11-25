@@ -29,6 +29,7 @@ from jobpilot.db.models import (
     RunStatus,
     SectionKind,
     TailoredBullet,
+    TailoredResume,
 )
 from jobpilot.db.runs import RunAlreadyFinishedError, set_run_status
 from jobpilot.services import drafts
@@ -249,6 +250,49 @@ class TailorRunOut(BaseModel):
     # 计划里的每块和它的结果；运行结束前为空。
     blocks: list[dict[str, Any]]
     bullets: list[BulletOut]
+
+
+class TailorRunSummary(BaseModel):
+    run_id: UUID
+    status: RunStatus
+    stop_reason: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    has_resume: bool  # 成功的运行才有完整简历
+
+
+@router.get("/jobs/{job_id}/tailor-runs")
+async def list_tailor_runs(
+    job_id: UUID, user: CurrentUser, db: DbSession
+) -> list[TailorRunSummary]:
+    """这个岗位的改写运行，最新的在前。岗位不是本人的返回 404。"""
+    if await get_user_job(db, user.user_id, job_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    rows = await db.execute(
+        select(AiRun, TailoredResume.resume_id)
+        .outerjoin(
+            TailoredResume,
+            (TailoredResume.run_id == AiRun.run_id)
+            & (TailoredResume.user_id == AiRun.user_id),
+        )
+        .where(
+            AiRun.user_id == user.user_id,
+            AiRun.user_job_id == job_id,
+            AiRun.kind == "tailor",
+        )
+        .order_by(AiRun.started_at.desc())
+    )
+    return [
+        TailorRunSummary(
+            run_id=run.run_id,
+            status=RunStatus(run.status),
+            stop_reason=run.stop_reason,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            has_resume=resume_id is not None,
+        )
+        for run, resume_id in rows.all()
+    ]
 
 
 @router.get("/tailor-runs/{run_id}")

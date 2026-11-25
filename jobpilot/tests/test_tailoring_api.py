@@ -92,6 +92,12 @@ async def test_start_runs_in_background_and_result_reads_back(
 
     result = (await async_client.get(f"/api/tailor-runs/{run_id}")).json()
     assert (result["status"], result["stop_reason"]) == ("succeeded", None)
+    runs = (
+        await async_client.get(f"/api/jobs/{inputs.user_job_id}/tailor-runs")
+    ).json()
+    assert [(r["run_id"], r["status"], r["has_resume"]) for r in runs] == [
+        (run_id, "succeeded", True)
+    ]
     assert result["base_doc_id"] == str(inputs.doc_id)
     assert result["job_id"] == str(inputs.user_job_id)
     assert [b["status"] for b in result["blocks"]] == ["done", "done", "done"]
