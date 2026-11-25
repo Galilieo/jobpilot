@@ -1,11 +1,12 @@
 // 我的 · 简历：每份定制简历一行，展示对应岗位、事实库版本、当前版本号与状态。
 import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Empty, Skeleton, Space, Table, Tag, Typography } from 'antd'
+import { Button, Card, Skeleton, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { tailoring } from '../../api/endpoints'
 import type { TailoredResumeSummary } from '../../api/types'
+import { EmptyHint } from '../../components/EmptyHint'
 import { TAILORED_RESUME_STATUS, formatDateTime } from '../../labels'
 import { TAILORED_RESUMES_QUERY } from '../../queryKeys'
 
@@ -20,20 +21,24 @@ export function TailoredResumeList(): ReactElement {
   if (query.isError) {
     return (
       <Card>
-        <Empty description={query.error.message}>
-          <Button onClick={() => void query.refetch()}>重试</Button>
-        </Empty>
+        <EmptyHint
+          description={query.error.message}
+          action={<Button onClick={() => void query.refetch()}>重试</Button>}
+        />
       </Card>
     )
   }
   if (query.data.length === 0) {
     return (
       <Card>
-        <Empty description="还没有定制简历。打开一个岗位并生成定制简历后，会显示在这里。">
-          <Button type="primary" onClick={() => void navigate('/jobs')}>
-            打开岗位库
-          </Button>
-        </Empty>
+        <EmptyHint
+          description="还没有定制简历。打开一个岗位并生成定制简历后，会显示在这里。"
+          action={
+            <Button type="primary" onClick={() => void navigate('/jobs')}>
+              打开岗位库
+            </Button>
+          }
+        />
       </Card>
     )
   }

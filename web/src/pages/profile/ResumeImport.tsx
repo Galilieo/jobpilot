@@ -1,7 +1,7 @@
 // 导入简历：粘贴、上传文件、上传截图三种方式都先变成文字，用户核对修改后再提交拆分。
-// 原文位置按提交的文字计算，所以提取错误（硬换行、双栏交错）要在这里改掉。
+// 0 条事实时内联展示（ResumeImport），已有事实时通过弹窗打开（ImportResumeModal）。
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Typography } from 'antd'
+import { App, Button, Card, Modal, Typography } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { resumes } from '../../api/endpoints'
 import { newIdempotencyKey } from '../../api/http'
@@ -15,7 +15,7 @@ const RESUME_COPY = {
   placeholder: '简历文字',
 }
 
-export function ResumeImport(): ReactElement {
+function useResumeUpload(onDone?: () => void) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [text, setText] = useState('')
@@ -30,6 +30,7 @@ export function ResumeImport(): ReactElement {
       submissionKey.current = newIdempotencyKey()
       setText('')
       setFilename(null)
+      onDone?.()
       await queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY })
       message.success(`拆出 ${uploaded.items.length} 条经历事实，请在下方逐条核对`)
     },
@@ -37,6 +38,12 @@ export function ResumeImport(): ReactElement {
       void message.error(error.message)
     },
   })
+
+  return { text, setText, setFilename, reading, setReading, submit }
+}
+
+export function ResumeImport(): ReactElement {
+  const { text, setText, setFilename, reading, setReading, submit } = useResumeUpload()
 
   return (
     <Card title="导入简历">
@@ -61,5 +68,50 @@ export function ResumeImport(): ReactElement {
         )}
       </div>
     </Card>
+  )
+}
+
+export function ImportResumeModal({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}): ReactElement {
+  const { text, setText, setFilename, reading, setReading, submit } = useResumeUpload(onClose)
+  const [segmentedKey, setSegmentedKey] = useState(0)
+
+  return (
+    <Modal
+      title="导入简历"
+      open={open}
+      onCancel={onClose}
+      afterOpenChange={(visible) => {
+        if (visible) setSegmentedKey((prev) => prev + 1)
+      }}
+      width={720}
+      okText="提交并拆分经历"
+      cancelText="取消"
+      okButtonProps={{ disabled: !text.trim() || reading }}
+      confirmLoading={submit.isPending}
+      onOk={() => submit.mutate()}
+      styles={{ body: { maxHeight: '65vh', overflowY: 'auto' } }}
+      destroyOnHidden
+    >
+      <TextSourceInput
+        value={text}
+        onChange={setText}
+        copy={RESUME_COPY}
+        maxRows={10}
+        segmentedKey={segmentedKey}
+        onFilenameChange={setFilename}
+        onReadingChange={setReading}
+      />
+      {submit.isPending && (
+        <Typography.Text type="secondary" className="import-hint">
+          正在拆分，通常需要半分钟左右
+        </Typography.Text>
+      )}
+    </Modal>
   )
 }

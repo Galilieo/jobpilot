@@ -1,4 +1,4 @@
-// 教育经历卡片：一段一行，整条确认，支持增删改；409 冲突刷新时保留本地输入。
+// 教育经历卡片：一段一行，与事实行共用行内样式，整条确认并支持增删改。
 import {
   CheckOutlined,
   DeleteOutlined,
@@ -11,7 +11,6 @@ import { useMutation } from '@tanstack/react-query'
 import {
   Button,
   Card,
-  Empty,
   Input,
   Modal,
   Popconfirm,
@@ -29,6 +28,9 @@ import type {
   EducationStatus,
   PublishedEducation,
 } from '../../api/types'
+import { EmptyHint } from '../../components/EmptyHint'
+import { HoverRow } from '../../components/HoverRow'
+import { UserFilledTag } from '../../components/UserFilledTag'
 import { DEGREE_LABEL, EDUCATION_STATUS_LABEL, ITEM_STATUS, REVIEW_REASON } from '../../labels'
 
 interface EduForm {
@@ -169,33 +171,88 @@ export function EducationCard({
       }
     >
       {rows.length === 0 ? (
-        <Empty description="暂无教育经历，上传简历后自动拆出或点击右上角添加" />
+        <EmptyHint description="暂无教育经历，上传简历后自动拆出或点击右上角添加" />
       ) : (
         <ul className="row-list">
           {rows.map(({ id, published: p, draft: d }) => {
             const cur = d ?? p!
             const isDeleted = d?.draft_status === 'deleted'
+            const isPending = d?.draft_status === 'pending'
             const blocked = Boolean(
               d && ((d.source === 'resume' && !d.quote_verified) || d.status === null),
             )
-            const needsCheck = d?.draft_status === 'pending' && d.review_reasons.length > 0
             const period = [cur.start_text, cur.end_text].filter(Boolean).join('–')
+            const summary = `${cur.school}${cur.major ? ` · ${cur.major}` : ''} · ${DEGREE_LABEL[cur.degree]}`
+
+            const actions = (
+              <>
+                {isPending && (
+                  <Tooltip title={blocked ? '请先核对就读状态或修改后确认' : undefined}>
+                    <Button
+                      size="small"
+                      icon={<CheckOutlined />}
+                      disabled={busy || blocked}
+                      onClick={() =>
+                        update.mutate({
+                          id,
+                          body: { confirmed: true, expected_revision: revision },
+                        })
+                      }
+                    >
+                      确认
+                    </Button>
+                  </Tooltip>
+                )}
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<EditOutlined />}
+                  disabled={busy}
+                  aria-label={`编辑${cur.school}`}
+                  onClick={() => openEdit(cur)}
+                />
+                {isDeleted ? (
+                  <Button
+                    size="small"
+                    icon={<UndoOutlined />}
+                    disabled={busy}
+                    onClick={() =>
+                      update.mutate({
+                        id,
+                        body: { confirmed: false, expected_revision: revision },
+                      })
+                    }
+                  >
+                    撤销删除
+                  </Button>
+                ) : (
+                  <Popconfirm
+                    title={`删除「${cur.school}」这段教育经历？`}
+                    okText="删除"
+                    cancelText="保留"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => remove.mutate(id)}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      disabled={busy}
+                      aria-label={`删除${cur.school}`}
+                    />
+                  </Popconfirm>
+                )}
+              </>
+            )
+
             return (
-              <li
-                key={id}
-                className={
-                  needsCheck || d?.draft_status === 'pending'
-                    ? 'fact-item fact-item-warn'
-                    : 'fact-item'
-                }
-              >
+              <HoverRow key={id} highlight={isPending ? 'warning' : 'none'} actions={actions}>
                 <div className="fact-row">
+                  <Typography.Paragraph className="fact-text" delete={isDeleted}>
+                    {summary}
+                    {period ? ` · ${period}` : ''}
+                  </Typography.Paragraph>
                   <Space size={8} wrap>
-                    <Typography.Text strong delete={isDeleted}>
-                      {cur.school}
-                      {cur.major ? ` · ${cur.major}` : ''}
-                      {` · ${DEGREE_LABEL[cur.degree]}`}
-                    </Typography.Text>
                     {cur.status ? (
                       <Tag>{EDUCATION_STATUS_LABEL[cur.status]}</Tag>
                     ) : (
@@ -213,94 +270,25 @@ export function EducationCard({
                         }))}
                       />
                     )}
-                    {period && <Typography.Text type="secondary">{period}</Typography.Text>}
-                    {d ? (
-                      <Tag
-                        color={
-                          d.draft_status === 'confirmed'
-                            ? 'success'
-                            : d.draft_status === 'deleted'
-                              ? 'error'
-                              : 'warning'
-                        }
-                      >
+                    {d && d.draft_status !== 'pending' && (
+                      <Tag color={d.draft_status === 'confirmed' ? 'success' : 'error'}>
                         {ITEM_STATUS[d.draft_status]}
                       </Tag>
-                    ) : (
-                      <Tag color="success">已发布</Tag>
                     )}
-                    {cur.source === 'user' && <Tag color="processing">你补充的</Tag>}
+                    {cur.source === 'user' && <UserFilledTag label="你补充的" />}
                     {d?.review_reasons.map((reason) => (
                       <Tag key={reason} color="warning" icon={<WarningOutlined />}>
                         {REVIEW_REASON[reason] ?? reason}
                       </Tag>
                     ))}
                   </Space>
-                  {cur.source_quote && (
+                  {cur.source_quote && cur.source_quote !== summary && (
                     <Typography.Text type="secondary" className="fact-quote">
                       原文：{cur.source_quote}
                     </Typography.Text>
                   )}
                 </div>
-                <div className="fact-actions">
-                  {d?.draft_status === 'pending' && (
-                    <Tooltip title={blocked ? '请先核对就读状态或修改后确认' : undefined}>
-                      <Button
-                        size="small"
-                        icon={<CheckOutlined />}
-                        disabled={busy || blocked}
-                        onClick={() =>
-                          update.mutate({
-                            id,
-                            body: { confirmed: true, expected_revision: revision },
-                          })
-                        }
-                      >
-                        确认
-                      </Button>
-                    </Tooltip>
-                  )}
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EditOutlined />}
-                    disabled={busy}
-                    aria-label={`编辑${cur.school}`}
-                    onClick={() => openEdit(cur)}
-                  />
-                  {isDeleted ? (
-                    <Button
-                      size="small"
-                      icon={<UndoOutlined />}
-                      disabled={busy}
-                      onClick={() =>
-                        update.mutate({
-                          id,
-                          body: { confirmed: false, expected_revision: revision },
-                        })
-                      }
-                    >
-                      撤销删除
-                    </Button>
-                  ) : (
-                    <Popconfirm
-                      title={`删除「${cur.school}」这段教育经历？`}
-                      okText="删除"
-                      cancelText="保留"
-                      onConfirm={() => remove.mutate(id)}
-                    >
-                      <Button
-                        size="small"
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        disabled={busy}
-                        aria-label={`删除${cur.school}`}
-                      />
-                    </Popconfirm>
-                  )}
-                </div>
-              </li>
+              </HoverRow>
             )
           })}
         </ul>

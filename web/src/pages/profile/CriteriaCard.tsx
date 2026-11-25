@@ -1,4 +1,4 @@
-// 求职条件卡片：每周到岗天数、可实习月数、最早到岗时间，共用事实库草稿修订号与发布流程。
+// 求职条件卡片：每周到岗天数、可实习月数、最早到岗时间，与事实行共用行内样式与草稿流程。
 import {
   CheckOutlined,
   DeleteOutlined,
@@ -11,6 +11,8 @@ import { Button, Card, Input, InputNumber, Popconfirm, Space, Tag, Tooltip, Typo
 import { useState, type ReactElement } from 'react'
 import { facts } from '../../api/endpoints'
 import type { CriterionField, DraftCriterion, PublishedCriterion } from '../../api/types'
+import { HoverRow } from '../../components/HoverRow'
+import { UserFilledTag } from '../../components/UserFilledTag'
 import { CRITERION_LABEL, ITEM_STATUS, REVIEW_REASON } from '../../labels'
 
 const FIELDS: readonly CriterionField[] = [
@@ -77,47 +79,84 @@ export function CriteriaCard({
           const current = d ?? p
           const isEditing = editingField === field
           const isDeleted = d?.status === 'deleted'
+          const isPending = d?.status === 'pending'
           const blocked = Boolean(d && d.source === 'resume' && !d.quote_verified)
-          const needsCheck = d?.status === 'pending' && d.review_reasons.length > 0
           const hasAny = Boolean(current)
+          const formatted = current
+            ? formatValue(field, current.int_value, current.text_value)
+            : '未填写'
+
+          const actions = (
+            <>
+              {isPending && (
+                <Tooltip title={blocked ? '原文里找不到，请修改后保存' : undefined}>
+                  <Button
+                    size="small"
+                    icon={<CheckOutlined />}
+                    disabled={save.isPending || blocked}
+                    onClick={() =>
+                      save.mutate({ field, confirmed: true, expected_revision: revision })
+                    }
+                  >
+                    确认
+                  </Button>
+                </Tooltip>
+              )}
+              {!isEditing && (
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<EditOutlined />}
+                  disabled={save.isPending}
+                  aria-label={`编辑${CRITERION_LABEL[field]}`}
+                  onClick={() => beginEdit(field)}
+                />
+              )}
+              {isDeleted ? (
+                <Button
+                  size="small"
+                  icon={<UndoOutlined />}
+                  disabled={save.isPending}
+                  onClick={() =>
+                    save.mutate({ field, confirmed: false, expected_revision: revision })
+                  }
+                >
+                  撤销删除
+                </Button>
+              ) : (
+                hasAny && (
+                  <Popconfirm
+                    title={`删除「${CRITERION_LABEL[field]}」？`}
+                    okText="删除"
+                    cancelText="保留"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() =>
+                      save.mutate({ field, delete: true, expected_revision: revision })
+                    }
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<DeleteOutlined />}
+                      disabled={save.isPending}
+                      aria-label={`删除${CRITERION_LABEL[field]}`}
+                    />
+                  </Popconfirm>
+                )
+              )}
+            </>
+          )
 
           return (
-            <li
-              key={field}
-              className={
-                needsCheck || d?.status === 'pending' ? 'fact-item fact-item-warn' : 'fact-item'
-              }
-            >
+            <HoverRow key={field} highlight={isPending ? 'warning' : 'none'} actions={actions}>
               <div className="fact-row">
                 <Space size={8} wrap>
-                  <Typography.Text strong>{CRITERION_LABEL[field]}</Typography.Text>
+                  <Typography.Text type="secondary">{CRITERION_LABEL[field]}</Typography.Text>
                   {!isEditing && (
                     <Typography.Text delete={isDeleted} type={hasAny ? undefined : 'secondary'}>
-                      {current
-                        ? formatValue(field, current.int_value, current.text_value)
-                        : '未填写'}
+                      {formatted}
                     </Typography.Text>
                   )}
-                  {d && (
-                    <Tag
-                      color={
-                        d.status === 'confirmed'
-                          ? 'success'
-                          : d.status === 'deleted'
-                            ? 'error'
-                            : 'warning'
-                      }
-                    >
-                      {ITEM_STATUS[d.status]}
-                    </Tag>
-                  )}
-                  {!d && p && <Tag color="success">已发布</Tag>}
-                  {current?.source === 'user' && <Tag color="processing">你补充的</Tag>}
-                  {d?.review_reasons.map((reason) => (
-                    <Tag key={reason} color="warning" icon={<WarningOutlined />}>
-                      {REVIEW_REASON[reason] ?? reason}
-                    </Tag>
-                  ))}
                 </Space>
                 {isEditing && (
                   <Space size={8} wrap>
@@ -161,71 +200,31 @@ export function CriteriaCard({
                     </Button>
                   </Space>
                 )}
-                {current?.source_quote && (
+                {(d?.status === 'confirmed' ||
+                  d?.status === 'deleted' ||
+                  current?.source === 'user' ||
+                  (d && d.review_reasons.length > 0)) && (
+                  <Space size={8} wrap>
+                    {d && d.status !== 'pending' && (
+                      <Tag color={d.status === 'confirmed' ? 'success' : 'error'}>
+                        {ITEM_STATUS[d.status]}
+                      </Tag>
+                    )}
+                    {current?.source === 'user' && <UserFilledTag label="你补充的" />}
+                    {d?.review_reasons.map((reason) => (
+                      <Tag key={reason} color="warning" icon={<WarningOutlined />}>
+                        {REVIEW_REASON[reason] ?? reason}
+                      </Tag>
+                    ))}
+                  </Space>
+                )}
+                {current?.source_quote && current.source_quote !== formatted && (
                   <Typography.Text type="secondary" className="fact-quote">
                     原文：{current.source_quote}
                   </Typography.Text>
                 )}
               </div>
-              <div className="fact-actions">
-                {d?.status === 'pending' && (
-                  <Tooltip title={blocked ? '原文里找不到，请修改后保存' : undefined}>
-                    <Button
-                      size="small"
-                      icon={<CheckOutlined />}
-                      disabled={save.isPending || blocked}
-                      onClick={() =>
-                        save.mutate({ field, confirmed: true, expected_revision: revision })
-                      }
-                    >
-                      确认
-                    </Button>
-                  </Tooltip>
-                )}
-                {!isEditing && (
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EditOutlined />}
-                    disabled={save.isPending}
-                    aria-label={`编辑${CRITERION_LABEL[field]}`}
-                    onClick={() => beginEdit(field)}
-                  />
-                )}
-                {isDeleted ? (
-                  <Button
-                    size="small"
-                    icon={<UndoOutlined />}
-                    disabled={save.isPending}
-                    onClick={() =>
-                      save.mutate({ field, confirmed: false, expected_revision: revision })
-                    }
-                  >
-                    撤销删除
-                  </Button>
-                ) : (
-                  hasAny && (
-                    <Popconfirm
-                      title={`删除「${CRITERION_LABEL[field]}」？`}
-                      okText="删除"
-                      cancelText="保留"
-                      onConfirm={() =>
-                        save.mutate({ field, delete: true, expected_revision: revision })
-                      }
-                    >
-                      <Button
-                        size="small"
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        disabled={save.isPending}
-                        aria-label={`删除${CRITERION_LABEL[field]}`}
-                      />
-                    </Popconfirm>
-                  )
-                )}
-              </div>
-            </li>
+            </HoverRow>
           )
         })}
       </ul>
