@@ -12,6 +12,7 @@ from jobpilot.services.resume_content import ResumeContent, assemble, bullet_of
 from jobpilot.services.resume_export import (
     RenderMode,
     render_html,
+    rich,
     to_docx,
     to_markdown,
 )
@@ -108,3 +109,21 @@ def test_export_html_is_a_single_self_contained_file():
     assert "<style>" in html
     for external in ('src="http', 'href="http', "<link"):
         assert external not in html
+
+
+def test_bold_markers_render_as_strong_after_escaping():
+    html = str(rich("负责**运单<查询>**接口"))
+    assert html == "负责<strong>运单&lt;查询&gt;</strong>接口"
+
+
+def test_docx_turns_bold_markers_into_bold_runs():
+    built = content()
+    built.sections[0].entries[0].bullets[0].text = "负责**月结清单**接口"
+    document = Document(io.BytesIO(to_docx(built)))
+    runs = [
+        (run.text, bool(run.bold))
+        for paragraph in document.paragraphs
+        if paragraph.text == "负责月结清单接口"
+        for run in paragraph.runs
+    ]
+    assert runs == [("负责", False), ("月结清单", True), ("接口", False)]

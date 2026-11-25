@@ -14,10 +14,11 @@ from docx import Document
 from docx.enum.text import WD_TAB_ALIGNMENT
 from docx.shared import Mm, Pt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup, escape
 
 from jobpilot.config import REPO_ROOT
 from jobpilot.db.models import CheckStatus
-from jobpilot.services.resume_content import Bullet, ResumeContent
+from jobpilot.services.resume_content import BOLD, Bullet, ResumeContent
 
 TEMPLATES = REPO_ROOT / "jobpilot" / "templates"
 _ENV = Environment(
@@ -26,6 +27,26 @@ _ENV = Environment(
     trim_blocks=True,
     lstrip_blocks=True,
 )
+
+
+def rich(text: str) -> Markup:
+    """先整体转义，再把 **加粗** 换成 <strong>：用户文字里的标签不会生效。"""
+    return Markup(BOLD.sub(r"<strong>\1</strong>", str(escape(text))))
+
+
+_ENV.filters["rich"] = rich
+
+
+def _add_rich(paragraph, text: str) -> None:
+    """按 **加粗** 拆成几段 run，加粗的那段设为粗体。"""
+    position = 0
+    for match in BOLD.finditer(text):
+        if match.start() > position:
+            paragraph.add_run(text[position : match.start()])
+        paragraph.add_run(match.group(1)).bold = True
+        position = match.end()
+    if position < len(text):
+        paragraph.add_run(text[position:])
 
 
 class RenderMode(StrEnum):
@@ -105,7 +126,7 @@ def to_docx(content: ResumeContent) -> bytes:
         run = name.add_run(content.header[0])
         run.bold, run.font.size = True, Pt(18)
         for line in content.header[1:]:
-            document.add_paragraph(line)
+            _add_rich(document.add_paragraph(), line)
     for part in content.sections:
         if part.title:
             document.add_heading(part.title, level=2)
@@ -118,9 +139,9 @@ def to_docx(content: ResumeContent) -> bytes:
             if entry.time:
                 head.add_run(f"\t{entry.time}")
             for line in entry.lines:
-                document.add_paragraph(line)
+                _add_rich(document.add_paragraph(), line)
             for bullet in exported_bullets(entry.bullets):
-                document.add_paragraph(bullet.text, style="List Bullet")
+                _add_rich(document.add_paragraph(style="List Bullet"), bullet.text)
 
     buffer = io.BytesIO()
     document.save(buffer)

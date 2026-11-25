@@ -30,6 +30,7 @@ from jobpilot.services.resume_content import (
     CheckLayers,
     Entry,
     ResumeContent,
+    plain,
 )
 
 
@@ -120,12 +121,12 @@ def _recheck_bullet(
     organizations: frozenset[str],
 ) -> Bullet:
     text = sent.text.strip()
-    if text == before.check.text:
-        check = before.check
+    if plain(text) == plain(before.check.text):
+        check = before.check  # 只改了加粗，结论不变
     else:
         skills = kind is SectionKind.SKILL
         issues = check_grounding(
-            text,
+            plain(text),
             before.fact_ids,
             available,
             section=BulletSection.SKILLS if skills else BulletSection.EXPERIENCE,
@@ -138,7 +139,7 @@ def _recheck_bullet(
         text=text,
         fact_ids=before.fact_ids,
         origin=before.origin,
-        edited=before.edited or text != before.text,
+        edited=before.edited or plain(text) != plain(before.text),
         check=check,
     )
 

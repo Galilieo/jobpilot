@@ -23,6 +23,13 @@ from jobpilot.db.models import CheckStatus, SectionKind
 from jobpilot.services.grounding import GroundingIssue
 
 SKILLS_TITLE = "专业技能"  # 底稿没有技能栏、却有技能概述时新加的栏目名
+# 编辑器里的加粗按 Markdown 的写法存在文字里：「负责**运单查询**接口」。
+BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def plain(text: str) -> str:
+    """去掉加粗标记。依据检查和「改没改过」只看文字本身，加粗不算修改。"""
+    return BOLD.sub(r"\1", text)
 
 
 class CheckLayers(StrEnum):
@@ -52,8 +59,8 @@ class Bullet(BaseModel):
 
     @property
     def check_current(self) -> bool:
-        """检查结论是不是针对现在这段文字。"""
-        return self.check.text == self.text
+        """检查结论是不是针对现在这段文字（加粗与否不影响）。"""
+        return plain(self.check.text) == plain(self.text)
 
 
 class Entry(BaseModel):

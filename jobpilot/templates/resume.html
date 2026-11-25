@@ -51,9 +51,9 @@
 <body>
 <main class="page" data-resume-version="{{ version }}">
   <header>
-    {% if header %}<h1 class="name" data-part="header" data-index="0">{{ header[0] }}</h1>{% endif %}
+    {% if header %}<h1 class="name" data-part="header" data-index="0">{{ header[0] | rich }}</h1>{% endif %}
     {% for line in header[1:] %}
-    <p class="contact" data-part="header" data-index="{{ loop.index }}">{{ line }}</p>
+    <p class="contact" data-part="header" data-index="{{ loop.index }}">{{ line | rich }}</p>
     {% endfor %}
   </header>
   {% for section in sections %}
@@ -62,15 +62,15 @@
     {% for entry in section.entries %}
     <div class="entry" data-entry-id="{{ entry.entry_id }}">
       <div class="entry-head">
-        <span class="entry-title">{{ entry.title }}</span>
-        {% if entry.time %}<span class="entry-time">{{ entry.time }}</span>{% endif %}
+        <span class="entry-title" data-part="title">{{ entry.title | rich }}</span>
+        {% if entry.time %}<span class="entry-time" data-part="time">{{ entry.time }}</span>{% endif %}
       </div>
-      {% for line in entry.lines %}<p data-part="line">{{ line }}</p>{% endfor %}
+      {% for line in entry.lines %}<p data-part="line">{{ line | rich }}</p>{% endfor %}
       {% set shown = entry.bullets | selectattr("bullet_id", "in", visible) | list %}
       {% if shown %}
       <ul>
         {% for bullet in shown %}
-        <li data-bullet-id="{{ bullet.bullet_id }}"{% if bullet.origin.value == "pending" %} class="pending"{% endif %}>{{ bullet.text }}
+        <li data-bullet-id="{{ bullet.bullet_id }}"{% if bullet.origin.value == "pending" %} class="pending"{% endif %}><span data-part="text">{{ bullet.text | rich }}</span>
           {%- if marks -%}
             {%- if bullet.origin.value == "pending" %}<span class="mark mark-issue">待处理</span>
             {%- elif not bullet.check_current %}<span class="mark mark-stale">待检查</span>

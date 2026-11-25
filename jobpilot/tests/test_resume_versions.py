@@ -172,3 +172,10 @@ def test_unknown_or_duplicate_parts_are_rejected(change, problem):
     with pytest.raises(UnknownPartError) as error:
         run(content)
     assert any(problem in p for p in error.value.problems)
+
+
+def test_bolding_alone_is_not_an_edit():
+    result = first(run(edit("负责**运单查询**接口")))
+    assert result.text == "负责**运单查询**接口"
+    assert result.check == BULLET.check and not result.edited
+    assert result.check_current
