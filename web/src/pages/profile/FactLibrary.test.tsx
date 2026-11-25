@@ -252,7 +252,11 @@ describe('FactLibrary 409 冲突刷新、手动补充与编辑已发布事实', 
     await user.click(screen.getByRole('button', { name: '删除' }))
     await user.click(await screen.findByRole('button', { name: '删 除' }))
     await waitFor(() =>
-      expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/facts/lin-draft-1?expected_revision=9')).toBe(true),
+      expect(
+        calls.some(
+          (c) => c.method === 'DELETE' && c.url === '/api/facts/lin-draft-1?expected_revision=9',
+        ),
+      ).toBe(true),
     )
   })
 })

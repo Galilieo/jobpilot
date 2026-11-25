@@ -100,13 +100,8 @@ export function EducationCard({
   })
 
   const update = useMutation({
-    mutationFn: ({
-      id,
-      body,
-    }: {
-      id: string
-      body: Parameters<typeof facts.updateEducation>[1]
-    }) => facts.updateEducation(id, body),
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof facts.updateEducation>[1] }) =>
+      facts.updateEducation(id, body),
     onSuccess: async (_data, variables) => {
       if (variables.body.school !== undefined) {
         setModalOpen(false)
@@ -249,9 +244,7 @@ export function EducationCard({
                 </div>
                 <div className="fact-actions">
                   {d?.draft_status === 'pending' && (
-                    <Tooltip
-                      title={blocked ? '请先核对就读状态或修改后确认' : undefined}
-                    >
+                    <Tooltip title={blocked ? '请先核对就读状态或修改后确认' : undefined}>
                       <Button
                         size="small"
                         icon={<CheckOutlined />}

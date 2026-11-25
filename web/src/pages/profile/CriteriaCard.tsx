@@ -7,17 +7,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { useMutation } from '@tanstack/react-query'
-import {
-  Button,
-  Card,
-  Input,
-  InputNumber,
-  Popconfirm,
-  Space,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
+import { Button, Card, Input, InputNumber, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { facts } from '../../api/endpoints'
 import type { CriterionField, DraftCriterion, PublishedCriterion } from '../../api/types'
@@ -153,9 +143,7 @@ export function CriteriaCard({
                       size="small"
                       type="primary"
                       loading={save.isPending}
-                      disabled={
-                        field === 'earliest_start' ? !draftText.trim() : draftInt === null
-                      }
+                      disabled={field === 'earliest_start' ? !draftText.trim() : draftInt === null}
                       onClick={() =>
                         save.mutate({
                           field,
