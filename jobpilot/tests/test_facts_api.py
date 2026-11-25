@@ -122,7 +122,9 @@ async def test_stale_confirmation_does_not_confirm_edited_text(
     assert "30%" in displayed["draft"]["text"]
 
     revised_text = "优化查询后响应时间降低 20%"
-    edited = await signed_in.put(path, json={"text": revised_text})
+    edited = await signed_in.put(
+        path, json={"text": revised_text, "expected_revision": displayed["revision"]}
+    )
     assert edited.status_code == 200
     assert edited.json()["revision"] == displayed["revision"] + 1
 
@@ -205,7 +207,7 @@ async def test_stale_confirmation_of_removed_item_reports_conflict(
     assert added.status_code == 201
     item = added.json()
     path = f"/api/facts/{item['lineage_id']}"
-    deleted = await signed_in.delete(path)
+    deleted = await signed_in.delete(f"{path}?expected_revision={item['revision']}")
     assert deleted.status_code == 204
     assert deleted.content == b""
     revision = int(deleted.headers["X-Draft-Revision"])
@@ -493,3 +495,61 @@ async def test_wrong_experience_requires_individual_confirmation(
     )
     assert edited.status_code == 200
     assert edited.json()["status"] == "confirmed"
+
+
+@pytest.mark.parametrize("changes", [{"text": "改了文字"}, {"kind": "technology"}])
+async def test_text_and_kind_edits_require_expected_revision(
+    signed_in: httpx.AsyncClient, model_outputs: list[str], changes: dict[str, object]
+) -> None:
+    model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
+    clean, _ = uploaded.json()["items"]
+    path = f"/api/facts/{clean['lineage_id']}"
+    rev = uploaded.json()["revision"]
+
+    missing = await signed_in.put(path, json=changes)
+    assert missing.status_code == 422
+
+    # 另一窗口先推进修订号，再用旧修订号改文字/类型应 409。
+    await signed_in.put(path, json={"confirmed": True, "expected_revision": rev})
+    stale = await signed_in.put(path, json={**changes, "expected_revision": rev})
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["revision"] == rev + 1
+
+
+async def test_delete_requires_current_revision_and_blocks_stale_window(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    model_outputs.append(json.dumps(EXTRACTION, ensure_ascii=False))
+    uploaded = await signed_in.post(
+        "/api/resumes", json={"raw_text": RESUME}, headers=new_idempotency_headers()
+    )
+    clean, _ = uploaded.json()["items"]
+    path = f"/api/facts/{clean['lineage_id']}"
+    stale_rev = uploaded.json()["revision"]
+
+    missing = await signed_in.delete(path)
+    assert missing.status_code == 422
+
+    # 窗口 A 先确认了这条草稿事实；窗口 B 拿着旧修订号删除，
+    # 必须返回 409 且保留已确认状态。
+    confirmed = await signed_in.put(
+        path, json={"confirmed": True, "expected_revision": stale_rev}
+    )
+    assert confirmed.status_code == 200
+    new_rev = confirmed.json()["revision"]
+
+    stale_delete = await signed_in.delete(f"{path}?expected_revision={stale_rev}")
+    assert stale_delete.status_code == 409
+    assert stale_delete.json()["detail"]["revision"] == new_rev
+
+    detail = (await signed_in.get(path)).json()
+    assert detail["draft"]["status"] == "confirmed"
+    assert detail["revision"] == new_rev
+
+    # 用最新修订号删除则成功。
+    ok_delete = await signed_in.delete(f"{path}?expected_revision={new_rev}")
+    assert ok_delete.status_code == 204
+    assert int(ok_delete.headers["X-Draft-Revision"]) == new_rev + 1

@@ -7,8 +7,8 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Body, HTTPException, Response, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from fastapi import APIRouter, Body, HTTPException, Query, Response, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.api.deps import CurrentUser, DbSession
@@ -26,6 +26,7 @@ from jobpilot.services.drafts import (
 
 router = APIRouter(prefix="/api", tags=["facts"])
 ExpectedRevision = Annotated[int, Field(ge=0, strict=True)]
+QueryRevision = Annotated[int, Query(ge=0)]
 
 
 class FactSetOut(BaseModel):
@@ -94,15 +95,7 @@ class NewFactIn(BaseModel):
 class FactChangesIn(FactChanges):
     model_config = ConfigDict(extra="forbid")
 
-    expected_revision: ExpectedRevision | None = None
-
-    @model_validator(mode="after")
-    def require_revision_for_review(self) -> "FactChangesIn":
-        if self.expected_revision is None and (
-            self.confirmed is not None or self.responsibility is not None
-        ):
-            raise ValueError("设置确认状态或职责时必须提供 expected_revision")
-        return self
+    expected_revision: ExpectedRevision
 
 
 class ConfirmCleanIn(BaseModel):
@@ -237,11 +230,20 @@ async def edit_fact(
 
 
 @router.delete("/facts/{lineage_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_fact(lineage_id: UUID, user: CurrentUser, db: DbSession) -> Response:
+async def delete_fact(
+    lineage_id: UUID,
+    expected_revision: QueryRevision,
+    user: CurrentUser,
+    db: DbSession,
+) -> Response:
     try:
-        await drafts.delete_fact(db, user.user_id, lineage_id)
+        await drafts.delete_fact(
+            db, user.user_id, lineage_id, expected_revision=expected_revision
+        )
     except ItemNotFoundError:
         raise _not_found() from None
+    except DraftRevisionConflictError as error:
+        raise _revision_conflict(error) from None
     revision = await _commit_draft(db, user.user_id)
     return Response(
         status_code=status.HTTP_204_NO_CONTENT,

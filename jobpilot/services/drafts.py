@@ -380,9 +380,16 @@ def _apply_changes(item: DraftItem, changes: FactChanges) -> None:
         item.status = ItemStatus.CONFIRMED if changes.confirmed else ItemStatus.PENDING
 
 
-async def delete_fact(db: AsyncSession, user_id: UUID, lineage_id: UUID) -> None:
+async def delete_fact(
+    db: AsyncSession,
+    user_id: UUID,
+    lineage_id: UUID,
+    *,
+    expected_revision: int | None = None,
+) -> None:
     """草稿里的新事实直接去掉；已发布的事实标记为下一版移除。"""
     draft = await lock_draft(db, user_id)
+    _check_revision(draft, expected_revision)
     items = items_of(draft)
     published = await _find_published(db, draft, lineage_id)
     item = _find(items, lineage_id)

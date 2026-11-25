@@ -77,7 +77,8 @@ async def test_resume_replays_original_revision_and_items(
     data = first.json()
     item = data["items"][0]
     edited = await async_client.put(
-        f"/api/facts/{item['lineage_id']}", json={"text": "从这里修改了草稿"}
+        f"/api/facts/{item['lineage_id']}",
+        json={"text": "从这里修改了草稿", "expected_revision": data["revision"]},
     )
     assert edited.json()["revision"] == data["revision"] + 1
     replay = await async_client.post(

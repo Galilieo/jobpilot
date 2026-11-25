@@ -78,7 +78,10 @@ export const facts = {
       method: 'PUT',
       json: { ...changes, expected_revision: expectedRevision },
     }),
-  remove: (lineageId: string) => request<void>(`/api/facts/${lineageId}`, { method: 'DELETE' }),
+  remove: (lineageId: string, expectedRevision: number) =>
+    request<void>(`/api/facts/${lineageId}?expected_revision=${expectedRevision}`, {
+      method: 'DELETE',
+    }),
   confirmClean: (expectedRevision: number) =>
     request<{ changed: number; revision: number }>('/api/facts/batch', {
       json: { action: 'confirm_clean', expected_revision: expectedRevision },

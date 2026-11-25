@@ -87,7 +87,7 @@ export function FactLibrary(): ReactElement {
     onError,
   })
   const remove = useMutation({
-    mutationFn: (lineageId: string) => facts.remove(lineageId),
+    mutationFn: (lineageId: string) => facts.remove(lineageId, revisionOf(library.data)),
     onSuccess: refresh,
     onError,
   })

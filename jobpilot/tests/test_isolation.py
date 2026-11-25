@@ -182,7 +182,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 "/api/facts/{id}",
                 {"text": "A 改的", "confirmed": True, "expected_revision": 0},
             ),
-            Attempt("DELETE", "/api/facts/{id}"),
+            Attempt("DELETE", "/api/facts/{id}?expected_revision=0"),
         ),
         routes=frozenset(
             {
