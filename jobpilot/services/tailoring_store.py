@@ -269,13 +269,14 @@ async def save_outcome(
 
     rows = _rows(user_id, run_id, inputs.fact_set_id, plan, by_key)
     async with session_factory.begin() as session:
+        # 先在同一事务里取得终态：运行已被别人结束（或 finalize 重复执行）时在这里停下，
+        # 什么都还没写。
+        await finish_run(session, user_id, run_id, status)
         session.add_all(rows.bullets)
         await session.flush()  # 两张表之间没有 ORM 关系，先写条目，引用才有外键可指
         session.add_all(rows.refs)
         if status is RunStatus.SUCCEEDED:
             session.add_all(_first_version(user_id, run_id, inputs, rows.blocks))
-        # 运行已被别人结束时这里抛错，上面的写入随事务一起回滚。
-        await finish_run(session, user_id, run_id, status)
         # 停止原因只能写在已结束的运行上（ck_ai_run_stop_reason），所以放在收尾之后。
         await session.execute(
             update(AiRun)
