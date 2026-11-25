@@ -2,6 +2,23 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "jobpilot",
+        "uvicorn",
+        "jobpilot.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "port": 8000,
+      "url": "http://127.0.0.1:8000"
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
