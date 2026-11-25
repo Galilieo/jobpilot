@@ -12,8 +12,8 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import event, func, select, update
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from jobpilot.api import tailoring
 from jobpilot.api.deps import get_model_client
@@ -36,6 +36,7 @@ from jobpilot.services.resume_content import (
     ResumeSection,
     bullet_of,
 )
+from jobpilot.services.resume_versions import load_resume
 from jobpilot.tests.test_call_accounting import fake_upstream
 from jobpilot.tests.test_fact_schema import add_user
 from jobpilot.tests.test_facts_api import new_idempotency_headers
@@ -761,3 +762,71 @@ async def test_old_version_preview_is_read_only(
     current = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
     assert 'id="jobpilot-resume"' not in old.text
     assert 'id="jobpilot-resume"' in current.text
+
+
+async def test_load_resume_does_not_fetch_content_json_for_all_history(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    db_engine: AsyncEngine,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """读简历时历史列表只查元数据，只有选中的那一版才查正文。"""
+    url, v1 = await generated_resume(
+        async_client, session_factory, launcher, model, "history-sql@tailor-api.invalid"
+    )
+    run_id = UUID(url.split("/")[-2])
+    base = v1["version_id"]
+    for idx in range(2, 5):
+        saved = await async_client.put(
+            url,
+            json={
+                "base_version_id": base,
+                "content": renamed(v1["content"], f"·v{idx}"),
+            },
+        )
+        assert saved.status_code == 200
+        base = saved.json()["version_id"]
+
+    user_id = UUID((await async_client.get("/api/me")).json()["user_id"])
+    statements: list[str] = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        async with session_factory() as db:
+            loaded = await load_resume(db, user_id, run_id)
+            assert len(loaded.history) == 4
+            assert loaded.version.version == 4
+
+            statements.clear()
+            no_hist = await load_resume(db, user_id, run_id, include_history=False)
+            assert no_hist.history == []
+            assert no_hist.version.version == 4
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", capture)
+
+    # 先验证 include_history=False 不会发任何没有主键/版本号过滤的 resume_version 查询
+    version_queries = [s for s in statements if "FROM resume_version" in s]
+    assert len(version_queries) == 1
+    assert "resume_version_id =" in version_queries[0]
+
+    # 再测完整 load_resume（含历史列表）
+    statements.clear()
+    event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        async with session_factory() as db:
+            await load_resume(db, user_id, run_id, version=2)
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", capture)
+
+    version_queries = [s for s in statements if "FROM resume_version" in s]
+    assert len(version_queries) == 2
+    content_queries = [s for s in version_queries if "content_json" in s]
+    history_queries = [s for s in version_queries if "content_json" not in s]
+    assert len(content_queries) == 1 and "version =" in content_queries[0]
+    assert len(history_queries) == 1
+    for col in ("resume_version_id", "version", "created_at"):
+        assert col in history_queries[0]

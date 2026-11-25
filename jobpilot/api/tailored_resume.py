@@ -370,7 +370,7 @@ _MEDIA_TYPES = {
 
 async def _load(db: DbSession, user_id: UUID, run_id: UUID, version: int | None):
     try:
-        return await load_resume(db, user_id, run_id, version)
+        return await load_resume(db, user_id, run_id, version, include_history=False)
     except ResumeNotFoundError:
         raise _not_found() from None
 

@@ -17,6 +17,7 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -197,10 +198,19 @@ def _recheck_bullet(
 
 
 @dataclass(frozen=True)
+class VersionMeta:
+    """历史列表只读版本元数据，不搬运旧版本的 content_json 正文。"""
+
+    resume_version_id: UUID
+    version: int
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class LoadedResume:
     resume: TailoredResume
     version: ResumeVersion  # 请求的版本，默认当前版本
-    history: list[ResumeVersion]  # 全部版本，按版本号排
+    history: list[VersionMeta]  # 全部版本元数据，按版本号排
 
     @property
     def content(self) -> ResumeContent:
@@ -208,19 +218,34 @@ class LoadedResume:
 
 
 async def load_resume(
-    db: AsyncSession, user_id: UUID, run_id: UUID, version: int | None = None
+    db: AsyncSession,
+    user_id: UUID,
+    run_id: UUID,
+    version: int | None = None,
+    *,
+    include_history: bool = True,
 ) -> LoadedResume:
     resume = await _resume_of(db, user_id, run_id)
-    history = await _history(db, user_id, resume.resume_id)
     if version is None:
-        wanted = [
-            r for r in history if r.resume_version_id == resume.current_version_id
-        ]
+        selected = await db.scalar(
+            select(ResumeVersion).where(
+                ResumeVersion.resume_version_id == resume.current_version_id,
+                ResumeVersion.resume_id == resume.resume_id,
+                ResumeVersion.user_id == user_id,
+            )
+        )
     else:
-        wanted = [r for r in history if r.version == version]
-    if not wanted:
+        selected = await db.scalar(
+            select(ResumeVersion).where(
+                ResumeVersion.user_id == user_id,
+                ResumeVersion.resume_id == resume.resume_id,
+                ResumeVersion.version == version,
+            )
+        )
+    if selected is None:
         raise ResumeNotFoundError(run_id)
-    return LoadedResume(resume=resume, version=wanted[0], history=history)
+    history = await _history(db, user_id, resume.resume_id) if include_history else []
+    return LoadedResume(resume=resume, version=selected, history=history)
 
 
 async def save_version(
@@ -288,7 +313,8 @@ async def _append_version(
     """用这份内容建立下一版、移动指针，连同简历和历史交回；锁仍由调用方持有。"""
     latest = await db.scalar(
         select(func.max(ResumeVersion.version)).where(
-            ResumeVersion.resume_id == resume.resume_id
+            ResumeVersion.user_id == user_id,
+            ResumeVersion.resume_id == resume.resume_id,
         )
     )
     row = ResumeVersion(
@@ -310,20 +336,23 @@ async def _append_version(
 
 async def _history(
     db: AsyncSession, user_id: UUID, resume_id: UUID
-) -> list[ResumeVersion]:
-    """这份简历的全部版本，按版本号排。"""
-    return list(
-        (
-            await db.scalars(
-                select(ResumeVersion)
-                .where(
-                    ResumeVersion.resume_id == resume_id,
-                    ResumeVersion.user_id == user_id,
-                )
-                .order_by(ResumeVersion.version)
+) -> list[VersionMeta]:
+    """这份简历的全部版本元数据（不载入正文），按版本号排。"""
+    rows = (
+        await db.execute(
+            select(
+                ResumeVersion.resume_version_id,
+                ResumeVersion.version,
+                ResumeVersion.created_at,
             )
-        ).all()
-    )
+            .where(
+                ResumeVersion.user_id == user_id,
+                ResumeVersion.resume_id == resume_id,
+            )
+            .order_by(ResumeVersion.version)
+        )
+    ).all()
+    return [VersionMeta(*row) for row in rows]
 
 
 async def _resume_of(
