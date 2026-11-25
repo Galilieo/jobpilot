@@ -307,6 +307,11 @@ OWNED_RESOURCES: list[OwnedResource] = [
                     "content": {"header": [], "sections": []},
                 },
             ),
+            Attempt(
+                "POST",
+                "/api/tailor-runs/{id}/resume/reset",
+                {"base_version_id": "{id}"},
+            ),
         ),
         routes=frozenset(
             {
@@ -314,6 +319,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("GET", "/api/tailor-runs/{run_id}"),
                 ("GET", "/api/tailor-runs/{run_id}/resume"),
                 ("PUT", "/api/tailor-runs/{run_id}/resume"),
+                ("POST", "/api/tailor-runs/{run_id}/resume/reset"),
                 ("GET", "/api/tailor-runs/{run_id}/preview"),
                 ("GET", "/api/tailor-runs/{run_id}/export"),
             }

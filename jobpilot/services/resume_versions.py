@@ -1,4 +1,6 @@
-"""完整简历的读取与保存编辑：每次保存新增一个版本，旧版本保留（01 F5，06 T2.5）。
+"""完整简历的读取、保存编辑与重置（01 F5，06 T2.5）。
+
+每次保存或重置都新增一个版本，旧版本保留。
 
 保存时客户端发来整份内容，但能决定依据的部分一律以服务端为准：
 - 每条改写条目引用哪些事实、生成时的结果，按 bullet_id 从上一版取，客户端改不了；
@@ -231,14 +233,12 @@ async def save_version(
     available: Mapping[UUID, GroundingFact],
     organizations: Iterable[str],
 ) -> LoadedResume:
-    """新增一个版本并指向它，连同简历和历史一起交回；调用方提交事务。
+    """保存客户端发来的编辑，新增一个版本并指向它；调用方提交事务。
 
-    交回的版本就是这次保存建立的那一版，历史也只到这里：还持着简历行上的锁，
+    交回的版本就是这次建立的那一版，历史也只到这里：还持着简历行上的锁，
     别的保存要等调用方提交之后才能进来。回包必须在提交前用它组装好。
     """
-    resume = await _resume_of(db, user_id, run_id, for_update=True)
-    if resume.current_version_id != base_version_id:
-        raise VersionConflictError(resume.current_version_id)
+    resume = await _locked_resume(db, user_id, run_id, base_version_id)
     current = await db.get_one(ResumeVersion, resume.current_version_id)
     content = recheck(
         ResumeContent.model_validate(current.content_json),
@@ -246,6 +246,46 @@ async def save_version(
         available,
         organizations,
     )
+    return await _append_version(db, user_id, resume, content)
+
+
+async def reset_version(
+    db: AsyncSession, user_id: UUID, run_id: UUID, *, base_version_id: UUID
+) -> LoadedResume:
+    """把系统生成的第一版原样复制成一个新版本并指向它；调用方提交事务。
+
+    当前版本里删掉的条目，第一版里还有：让客户端读出第一版再当普通编辑保存，
+    会因为这些条目「上一版里没有」而被拒绝。所以由服务端复制，不经保存前的核对。
+    """
+    resume = await _locked_resume(db, user_id, run_id, base_version_id)
+    first = await db.scalar(
+        select(ResumeVersion).where(
+            ResumeVersion.resume_id == resume.resume_id,
+            ResumeVersion.user_id == user_id,
+            ResumeVersion.version == 1,
+        )
+    )
+    if first is None:
+        raise ResumeNotFoundError(run_id)
+    return await _append_version(
+        db, user_id, resume, ResumeContent.model_validate(first.content_json)
+    )
+
+
+async def _locked_resume(
+    db: AsyncSession, user_id: UUID, run_id: UUID, base_version_id: UUID
+) -> TailoredResume:
+    """保存、重置这类编辑动作的共同起点：锁住简历行，核对请求依据的还是当前版本。"""
+    resume = await _resume_of(db, user_id, run_id, for_update=True)
+    if resume.current_version_id != base_version_id:
+        raise VersionConflictError(resume.current_version_id)
+    return resume
+
+
+async def _append_version(
+    db: AsyncSession, user_id: UUID, resume: TailoredResume, content: ResumeContent
+) -> LoadedResume:
+    """用这份内容建立下一版、移动指针，连同简历和历史交回；锁仍由调用方持有。"""
     latest = await db.scalar(
         select(func.max(ResumeVersion.version)).where(
             ResumeVersion.resume_id == resume.resume_id

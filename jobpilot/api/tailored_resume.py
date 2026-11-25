@@ -1,9 +1,10 @@
-"""完整简历接口：读取（当前或指定版本）、保存编辑（02 第 6 节，06 T2.5）。
+"""完整简历接口：读取（当前或指定版本）、保存编辑、重置（02 第 6 节，06 T2.5）。
 
 只有成功的改写运行才有完整简历；没有就 404（不区分不存在、不是本人、没成功）。
 读取时带上每条改写引用的事实，供面板的「依据追溯」显示。
 """
 
+from collections.abc import Awaitable
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
@@ -14,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.api.deps import CurrentUser, DbSession
 from jobpilot.db.models import (
@@ -44,6 +46,7 @@ from jobpilot.services.resume_versions import (
     UnknownPartError,
     VersionConflictError,
     load_resume,
+    reset_version,
     save_version,
 )
 
@@ -79,6 +82,12 @@ class ResumeIn(BaseModel):
 
     base_version_id: UUID  # 开始编辑时的版本；已不是当前版本时 409
     content: ResumeContent
+
+
+class ResetIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    base_version_id: UUID  # 开始重置时的版本；已不是当前版本时 409
 
 
 TailoredResumeStatus = Literal["generated", "edited", "needs_attention"]
@@ -210,13 +219,14 @@ async def save_resume(
     """保存编辑，新增一个版本；回包就是这次保存的那一版。
 
     文字改过的条目重新检查第一、二层，只提示不阻止。
-    回包在提交前、还锁着简历行的时候组装：提交之后才去读「当前版本」的话，
-    读到的可能是别的窗口刚存的下一版。
     """
     user_id = user.user_id
     facts = await _run_facts(db, user_id, run_id)
-    try:
-        loaded = await save_version(
+    return await _commit_edit(
+        db,
+        user_id,
+        run_id,
+        save_version(
             db,
             user_id,
             run_id,
@@ -224,8 +234,41 @@ async def save_resume(
             submitted=body.content,
             available=facts,
             organizations=organizations_of(facts.values()),
-        )
-        response = await _resume_out(db, user_id, run_id, loaded)
+        ),
+        conflict_message="简历已在别处保存过，请在最新版本上修改",
+    )
+
+
+@router.post("/tailor-runs/{run_id}/resume/reset")
+async def reset_resume(
+    run_id: UUID, body: ResetIn, user: CurrentUser, db: DbSession
+) -> ResumeOut:
+    """回到系统生成的版本：把第一版复制成一个新版本，之前的版本都留在历史里。"""
+    user_id = user.user_id
+    return await _commit_edit(
+        db,
+        user_id,
+        run_id,
+        reset_version(db, user_id, run_id, base_version_id=body.base_version_id),
+        conflict_message="简历已在别处保存过，请刷新后再重置",
+    )
+
+
+async def _commit_edit(
+    db: AsyncSession,
+    user_id: UUID,
+    run_id: UUID,
+    action: Awaitable[LoadedResume],
+    *,
+    conflict_message: str,
+) -> ResumeOut:
+    """保存、重置这类编辑接口的共同收尾：执行动作，提交，返回这一次建立的版本。
+
+    回包在提交之前、还锁着简历行的时候组装。提交之后才去读「当前版本」的话，
+    读到的可能是别的窗口刚存的下一版，编辑器会拿它当基准，下一次保存就盖掉别人的修改。
+    """
+    try:
+        response = await _resume_out(db, user_id, run_id, await action)
     except ResumeNotFoundError:
         raise _not_found() from None
     except VersionConflictError as error:
@@ -233,7 +276,7 @@ async def save_resume(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
-                "message": "简历已在别处保存过，请在最新版本上修改",
+                "message": conflict_message,
                 "current_version_id": str(error.current_version_id),
             },
         ) from None

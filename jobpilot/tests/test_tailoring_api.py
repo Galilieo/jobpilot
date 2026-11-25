@@ -477,6 +477,45 @@ async def test_moving_a_bullet_to_another_entry_is_rejected(
     assert (await async_client.get(url)).json() == v1
 
 
+async def test_reset_copies_the_generated_version_as_a_new_version(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """删空条目并保存后重置：得到一个和 v1 内容相同的新版本，删空的那一版留在历史里。"""
+    url, v1 = await generated_resume(
+        async_client, session_factory, launcher, model, "reset@tailor-api.invalid"
+    )
+    emptied = copy.deepcopy(v1["content"])
+    for section in emptied["sections"]:
+        for entry in section["entries"]:
+            entry["bullets"] = []
+    saved = await async_client.put(
+        url, json={"base_version_id": v1["version_id"], "content": emptied}
+    )
+    assert saved.status_code == 200, saved.text
+    base = saved.json()["version_id"]
+
+    reset = await async_client.post(f"{url}/reset", json={"base_version_id": base})
+
+    assert reset.status_code == 200, reset.text
+    restored = reset.json()
+    assert (restored["version"], restored["current_version_id"]) == (
+        3,
+        restored["version_id"],
+    )
+    assert restored["content"] == v1["content"]
+    assert restored["facts"] == v1["facts"]
+    assert [v["version"] for v in restored["versions"]] == [1, 2, 3]
+    assert (await async_client.get(url)).json()["content"] == v1["content"]
+    kept = (await async_client.get(url, params={"version": 2})).json()
+    assert kept["content"] == emptied
+    # 版本已经往前走了：再用旧的基准重置，409
+    stale = await async_client.post(f"{url}/reset", json={"base_version_id": base})
+    assert stale.status_code == 409
+
+
 async def test_preview_and_exports_download_from_the_saved_version(
     async_client: httpx.AsyncClient,
     session_factory: Factory,
