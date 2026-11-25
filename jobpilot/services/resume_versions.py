@@ -7,7 +7,8 @@
   没改过的沿用原来的结论。检查只提示，不阻止保存。
 页头、标题行、没改写的正文可以自由修改，不做依据检查。
 并发：锁住简历行，核对 base_version_id 是否仍是当前版本，不是就拒绝（409），
-客户端保留自己的草稿。
+客户端保留自己的草稿。保存交回的是这次建立的那一版，不是「提交之后再读一次当前版本」：
+读的那一瞬间，别的窗口可能已经又存了一版（评审 2026-11-25）。
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -164,18 +165,7 @@ async def load_resume(
     db: AsyncSession, user_id: UUID, run_id: UUID, version: int | None = None
 ) -> LoadedResume:
     resume = await _resume_of(db, user_id, run_id)
-    history = list(
-        (
-            await db.scalars(
-                select(ResumeVersion)
-                .where(
-                    ResumeVersion.resume_id == resume.resume_id,
-                    ResumeVersion.user_id == user_id,
-                )
-                .order_by(ResumeVersion.version)
-            )
-        ).all()
-    )
+    history = await _history(db, user_id, resume.resume_id)
     if version is None:
         wanted = [
             r for r in history if r.resume_version_id == resume.current_version_id
@@ -196,8 +186,12 @@ async def save_version(
     submitted: ResumeContent,
     available: Mapping[UUID, GroundingFact],
     organizations: Iterable[str],
-) -> ResumeVersion:
-    """新增一个版本并指向它；调用方提交事务。"""
+) -> LoadedResume:
+    """新增一个版本并指向它，连同简历和历史一起交回；调用方提交事务。
+
+    交回的版本就是这次保存建立的那一版，历史也只到这里：还持着简历行上的锁，
+    别的保存要等调用方提交之后才能进来。回包必须在提交前用它组装好。
+    """
     resume = await _resume_of(db, user_id, run_id, for_update=True)
     if resume.current_version_id != base_version_id:
         raise VersionConflictError(resume.current_version_id)
@@ -223,7 +217,29 @@ async def save_version(
     db.add(row)
     resume.current_version_id = row.resume_version_id
     await db.flush()
-    return row
+    return LoadedResume(
+        resume=resume,
+        version=row,
+        history=await _history(db, user_id, resume.resume_id),
+    )
+
+
+async def _history(
+    db: AsyncSession, user_id: UUID, resume_id: UUID
+) -> list[ResumeVersion]:
+    """这份简历的全部版本，按版本号排。"""
+    return list(
+        (
+            await db.scalars(
+                select(ResumeVersion)
+                .where(
+                    ResumeVersion.resume_id == resume_id,
+                    ResumeVersion.user_id == user_id,
+                )
+                .order_by(ResumeVersion.version)
+            )
+        ).all()
+    )
 
 
 async def _resume_of(

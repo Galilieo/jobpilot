@@ -207,11 +207,16 @@ async def get_resume(
 async def save_resume(
     run_id: UUID, body: ResumeIn, user: CurrentUser, db: DbSession
 ) -> ResumeOut:
-    """保存编辑，新增一个版本。文字改过的条目重新检查第一、二层，只提示不阻止。"""
+    """保存编辑，新增一个版本；回包就是这次保存的那一版。
+
+    文字改过的条目重新检查第一、二层，只提示不阻止。
+    回包在提交前、还锁着简历行的时候组装：提交之后才去读「当前版本」的话，
+    读到的可能是别的窗口刚存的下一版。
+    """
     user_id = user.user_id
     facts = await _run_facts(db, user_id, run_id)
     try:
-        await save_version(
+        loaded = await save_version(
             db,
             user_id,
             run_id,
@@ -220,6 +225,7 @@ async def save_resume(
             available=facts,
             organizations=organizations_of(facts.values()),
         )
+        response = await _resume_out(db, user_id, run_id, loaded)
     except ResumeNotFoundError:
         raise _not_found() from None
     except VersionConflictError as error:
@@ -238,9 +244,7 @@ async def save_resume(
             detail=list(error.problems),
         ) from None
     await db.commit()
-    return await _resume_out(
-        db, user_id, run_id, await load_resume(db, user_id, run_id)
-    )
+    return response
 
 
 async def _run_facts(

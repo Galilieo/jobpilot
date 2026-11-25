@@ -363,6 +363,88 @@ async def test_resume_edits_add_versions_and_stale_saves_conflict(
     assert current["version"] == 2
 
 
+async def generated_resume(
+    client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+    email: str,
+) -> tuple[str, dict]:
+    """登录并跑完一次改写，返回简历接口的地址和当前版本（v1）。"""
+    user_id = await sign_in(client, email)
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+    run_id = (await start(client, inputs.user_job_id)).json()["run_id"]
+    await launcher.wait_all()
+    url = f"/api/tailor-runs/{run_id}/resume"
+    return url, (await client.get(url)).json()
+
+
+def renamed(content: dict, tag: str) -> dict:
+    """不改 v1 的数据：复制一份，在姓名后面加一个标记，用来分辨是哪一版。"""
+    edited = copy.deepcopy(content)
+    edited["header"][0] += tag
+    return edited
+
+
+async def test_save_response_is_the_version_it_created(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 存成 v2、回包之前 B 又存成 v3：A 收到的一定是 v2。
+    收到 v3 的话，编辑器会把它当成自己的基准，下一次保存就盖掉 B 的修改。"""
+    url, v1 = await generated_resume(
+        async_client, session_factory, launcher, model, "save-race@tailor-api.invalid"
+    )
+    commit = AsyncSession.commit
+    interleaved = False
+
+    async def commit_then_let_another_tab_save(session: AsyncSession) -> None:
+        """A 的事务一提交，简历行上的锁就放开了：这时另一个窗口马上存一版。"""
+        nonlocal interleaved
+        await commit(session)
+        if interleaved:
+            return
+        interleaved = True
+        current = (await async_client.get(url)).json()
+        await async_client.put(
+            url,
+            json={
+                "base_version_id": current["version_id"],
+                "content": renamed(current["content"], "·B"),
+            },
+        )
+
+    monkeypatch.setattr(AsyncSession, "commit", commit_then_let_another_tab_save)
+    saved = await async_client.put(
+        url,
+        json={
+            "base_version_id": v1["version_id"],
+            "content": renamed(v1["content"], "·A"),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+    mine = saved.json()
+    assert (mine["version"], mine["current_version_id"]) == (2, mine["version_id"])
+    assert [v["version"] for v in mine["versions"]] == [1, 2]
+    assert mine["content"]["header"][0].endswith("·A")
+    # A 拿自己收到的版本当基准再存：已经是旧版本，409，B 的修改不会被盖掉
+    again = await async_client.put(
+        url,
+        json={
+            "base_version_id": mine["version_id"],
+            "content": renamed(mine["content"], "·A2"),
+        },
+    )
+    assert again.status_code == 409
+    current = (await async_client.get(url)).json()
+    assert (current["version"], current["content"]["header"][0][-2:]) == (3, "·B")
+
+
 async def test_preview_and_exports_download_from_the_saved_version(
     async_client: httpx.AsyncClient,
     session_factory: Factory,
