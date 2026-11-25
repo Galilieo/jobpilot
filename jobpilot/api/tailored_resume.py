@@ -5,9 +5,13 @@
 """
 
 from datetime import datetime
+from enum import StrEnum
+from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
@@ -16,6 +20,13 @@ from jobpilot.db.models import AiRun, FactSource
 from jobpilot.services import drafts
 from jobpilot.services.grounding import GroundingFact, organizations_of
 from jobpilot.services.resume_content import ResumeContent
+from jobpilot.services.resume_export import (
+    RenderMode,
+    render_html,
+    title_of,
+    to_docx,
+    to_markdown,
+)
 from jobpilot.services.resume_versions import (
     LoadedResume,
     ResumeNotFoundError,
@@ -170,5 +181,71 @@ async def _resume_out(
             )
             for fact in facts
             if fact.fact_id in cited
+        },
+    )
+
+
+# ---------- 预览与导出 ----------
+
+
+class ExportFormat(StrEnum):
+    HTML = "html"
+    MARKDOWN = "md"
+    DOCX = "docx"
+
+
+_MEDIA_TYPES = {
+    ExportFormat.HTML: "text/html; charset=utf-8",
+    ExportFormat.MARKDOWN: "text/markdown; charset=utf-8",
+    ExportFormat.DOCX: (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+}
+
+
+async def _load(db: DbSession, user_id: UUID, run_id: UUID, version: int | None):
+    try:
+        return await load_resume(db, user_id, run_id, version)
+    except ResumeNotFoundError:
+        raise _not_found() from None
+
+
+@router.get("/tailor-runs/{run_id}/preview", response_class=HTMLResponse)
+async def preview_resume(
+    run_id: UUID, user: CurrentUser, db: DbSession, version: int | None = None
+) -> HTMLResponse:
+    """应用内预览：带「待处理」「待检查」标记。"""
+    loaded = await _load(db, user.user_id, run_id, version)
+    return HTMLResponse(
+        render_html(
+            loaded.content, mode=RenderMode.PREVIEW, version=loaded.version.version
+        )
+    )
+
+
+@router.get("/tailor-runs/{run_id}/export")
+async def export_resume(
+    run_id: UUID,
+    user: CurrentUser,
+    db: DbSession,
+    kind: Annotated[ExportFormat, Query(alias="format")] = ExportFormat.HTML,
+    version: int | None = None,
+) -> Response:
+    """导出文件：不带依据标记，待处理的条目略过。PDF 用浏览器打印 HTML。"""
+    loaded = await _load(db, user.user_id, run_id, version)
+    content, number = loaded.content, loaded.version.version
+    if kind is ExportFormat.HTML:
+        body: str | bytes = render_html(content, mode=RenderMode.EXPORT, version=number)
+    elif kind is ExportFormat.MARKDOWN:
+        body = to_markdown(content)
+    else:
+        body = to_docx(content)
+    filename = f"{title_of(content)}-v{number}.{kind.value}"
+    return Response(
+        content=body,
+        media_type=_MEDIA_TYPES[kind],
+        # RFC 6266：中文文件名用 filename* 按 UTF-8 编码
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
         },
     )

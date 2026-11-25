@@ -338,3 +338,37 @@ async def test_resume_edits_add_versions_and_stale_saves_conflict(
     assert old["content"] == v1["content"]
     current = (await async_client.get(f"/api/tailor-runs/{run_id}/resume")).json()
     assert current["version"] == 2
+
+
+async def test_preview_and_exports_download_from_the_saved_version(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    user_id = await sign_in(async_client, "export@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+    run_id = (await start(async_client, inputs.user_job_id)).json()["run_id"]
+    await launcher.wait_all()
+
+    preview = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
+    assert preview.status_code == 200
+    assert preview.headers["content-type"].startswith("text/html")
+    for kind, media in (
+        ("html", "text/html"),
+        ("md", "text/markdown"),
+        ("docx", "application/vnd.openxmlformats"),
+    ):
+        response = await async_client.get(
+            f"/api/tailor-runs/{run_id}/export", params={"format": kind, "version": 1}
+        )
+        assert response.status_code == 200, (kind, response.text)
+        assert response.headers["content-type"].startswith(media)
+        disposition = response.headers["content-disposition"]
+        assert disposition.startswith("attachment; filename*=UTF-8''")
+        assert disposition.endswith(f"-v1.{kind}")
+    missing = await async_client.get(
+        f"/api/tailor-runs/{run_id}/export", params={"version": 9}
+    )
+    assert missing.status_code == 404

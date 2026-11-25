@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+  :root {
+    --ink: #1f2328;
+    --muted: #57606a;
+    --rule: #d0d7de;
+    --warn: #9a6700;
+    --warn-bg: #fff8c5;
+    --pending-bg: #ffebe9;
+    --font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+      "Source Han Sans SC", sans-serif;
+    --size: 10.5pt;
+    --leading: 1.5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #eaeef2; color: var(--ink); font-family: var(--font); }
+  .page {
+    width: 210mm; min-height: 297mm; margin: 16px auto; padding: 14mm 16mm;
+    background: #fff; font-size: var(--size); line-height: var(--leading);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+  }
+  .name { font-size: 1.9em; font-weight: 700; margin: 0 0 2px; }
+  .contact { color: var(--muted); margin: 0; }
+  section { margin-top: 12px; }
+  h2 {
+    font-size: 1.15em; margin: 0 0 6px; padding-bottom: 2px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .entry { margin: 0 0 8px; }
+  .entry-head { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
+  .entry-time { color: var(--muted); font-weight: 400; white-space: nowrap; }
+  .entry p { margin: 2px 0; }
+  ul { margin: 2px 0 0; padding-left: 1.2em; }
+  li { margin: 1px 0; }
+  .mark { font-size: .8em; border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+  .mark-stale, .mark-issue { background: var(--warn-bg); color: var(--warn); }
+  li.pending { background: var(--pending-bg); }
+  @page { size: A4; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    .page { margin: 0; box-shadow: none; }
+    .mark, li.pending, .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="page" data-resume-version="{{ version }}">
+  <header>
+    {% if header %}<h1 class="name" data-part="header" data-index="0">{{ header[0] }}</h1>{% endif %}
+    {% for line in header[1:] %}
+    <p class="contact" data-part="header" data-index="{{ loop.index }}">{{ line }}</p>
+    {% endfor %}
+  </header>
+  {% for section in sections %}
+  <section data-kind="{{ section.kind.value }}">
+    {% if section.title %}<h2>{{ section.title }}</h2>{% endif %}
+    {% for entry in section.entries %}
+    <div class="entry" data-entry-id="{{ entry.entry_id }}">
+      <div class="entry-head">
+        <span class="entry-title">{{ entry.title }}</span>
+        {% if entry.time %}<span class="entry-time">{{ entry.time }}</span>{% endif %}
+      </div>
+      {% for line in entry.lines %}<p data-part="line">{{ line }}</p>{% endfor %}
+      {% set shown = entry.bullets | selectattr("bullet_id", "in", visible) | list %}
+      {% if shown %}
+      <ul>
+        {% for bullet in shown %}
+        <li data-bullet-id="{{ bullet.bullet_id }}"{% if bullet.origin.value == "pending" %} class="pending"{% endif %}>{{ bullet.text }}
+          {%- if marks -%}
+            {%- if bullet.origin.value == "pending" %}<span class="mark mark-issue">待处理</span>
+            {%- elif not bullet.check_current %}<span class="mark mark-stale">待检查</span>
+            {%- elif bullet.check.issues %}<span class="mark mark-issue" title="{{ bullet.check.issues | map(attribute='message') | join('；') }}">请核对</span>
+            {%- endif -%}
+          {%- endif -%}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</main>
+{% if editor_script %}<script>{{ editor_script | safe }}</script>{% endif %}
+</body>
+</html>

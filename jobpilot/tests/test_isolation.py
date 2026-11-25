@@ -243,6 +243,8 @@ OWNED_RESOURCES: list[OwnedResource] = [
         attempts=(
             Attempt("GET", "/api/tailor-runs/{id}"),
             Attempt("GET", "/api/tailor-runs/{id}/resume"),
+            Attempt("GET", "/api/tailor-runs/{id}/preview"),
+            Attempt("GET", "/api/tailor-runs/{id}/export"),
             Attempt(
                 "PUT",
                 "/api/tailor-runs/{id}/resume",
@@ -257,6 +259,8 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("GET", "/api/tailor-runs/{run_id}"),
                 ("GET", "/api/tailor-runs/{run_id}/resume"),
                 ("PUT", "/api/tailor-runs/{run_id}/resume"),
+                ("GET", "/api/tailor-runs/{run_id}/preview"),
+                ("GET", "/api/tailor-runs/{run_id}/export"),
             }
         ),
     ),
