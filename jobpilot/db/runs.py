@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.models import AiRun, RunStatus, StopReason
+from jobpilot.db.models import STOP_REASON_STATUS, AiRun, RunStatus, StopReason
 
 _ACTIVE_STATUSES = (RunStatus.RUNNING, RunStatus.WAITING_CONFIRMATION)
 
@@ -61,7 +61,7 @@ async def fail_abandoned_runs(session: AsyncSession) -> int:
         update(AiRun)
         .where(AiRun.status == RunStatus.RUNNING)
         .values(
-            status=RunStatus.FAILED,
+            status=STOP_REASON_STATUS[StopReason.SERVICE_RESTARTED],
             finished_at=func.now(),
             stop_reason=StopReason.SERVICE_RESTARTED,
         )

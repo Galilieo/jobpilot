@@ -16,6 +16,8 @@ from jobpilot.db.models import (
     BulletFact,
     Fact,
     ResumeVersion,
+    RunStatus,
+    StopReason,
     TailoredBullet,
     TailoredResume,
     User,
@@ -180,33 +182,58 @@ async def test_run_base_doc_must_belong_to_same_user(session_factory: Factory) -
     )
 
 
-async def test_stop_reason_only_on_finished_runs(session_factory: Factory) -> None:
+async def test_stop_reason_and_status_must_match_fixed_pairs(
+    session_factory: Factory,
+) -> None:
     user = await add_user(session_factory, "stop@bullet.invalid")
-    running = AiRun(user_id=user, kind="tailor", stop_reason="budget_exhausted")
-    assert (
-        await violated_constraint(session_factory, running) == "ck_ai_run_stop_reason"
-    )
-    unknown = AiRun(
-        user_id=user,
-        kind="tailor",
-        status="failed",
-        finished_at=func.now(),
-        stop_reason="tired",
-    )
-    assert (
-        await violated_constraint(session_factory, unknown) == "ck_ai_run_stop_reason"
-    )
-    async with session_factory.begin() as session:
-        session.add(
-            AiRun(
-                user_id=user,
-                kind="tailor",
-                status="budget_exhausted",
-                finished_at=func.now(),
-                stop_reason="budget_exhausted",
-                plan_json={"blocks": []},
-            )
+    invalid_cases = [
+        ("running", "budget_exhausted", None),
+        ("waiting_confirmation", "service_restarted", None),
+        ("failed", "tired", func.now()),
+        ("succeeded", "rewrite_failed", func.now()),
+        ("succeeded", "match_failed", func.now()),
+        ("succeeded", "service_restarted", func.now()),
+        ("succeeded", "budget_exhausted", func.now()),
+        ("failed", "budget_exhausted", func.now()),
+        ("budget_exhausted", "rewrite_failed", func.now()),
+        ("cancelled", "service_restarted", func.now()),
+    ]
+    for status, reason, finished_at in invalid_cases:
+        row = AiRun(
+            user_id=user,
+            kind="tailor",
+            status=status,
+            finished_at=finished_at,
+            stop_reason=reason,
         )
+        assert await violated_constraint(session_factory, row) == (
+            "ck_ai_run_stop_reason"
+        ), (status, reason)
+
+    valid_cases = [
+        (RunStatus.RUNNING, None, None),
+        (RunStatus.WAITING_CONFIRMATION, None, None),
+        (RunStatus.SUCCEEDED, None, func.now()),
+        (RunStatus.FAILED, None, func.now()),
+        (RunStatus.CANCELLED, None, func.now()),
+        (RunStatus.BUDGET_EXHAUSTED, None, func.now()),
+        (RunStatus.BUDGET_EXHAUSTED, StopReason.BUDGET_EXHAUSTED, func.now()),
+        (RunStatus.FAILED, StopReason.MATCH_FAILED, func.now()),
+        (RunStatus.FAILED, StopReason.REWRITE_FAILED, func.now()),
+        (RunStatus.FAILED, StopReason.SERVICE_RESTARTED, func.now()),
+    ]
+    async with session_factory.begin() as session:
+        for status, reason, finished_at in valid_cases:
+            session.add(
+                AiRun(
+                    user_id=user,
+                    kind="tailor",
+                    status=status.value,
+                    finished_at=finished_at,
+                    stop_reason=reason.value if reason else None,
+                    plan_json={"blocks": []} if reason else None,
+                )
+            )
 
 
 async def add_resume(session_factory: Factory, user_id: UUID, run_id: UUID) -> UUID:

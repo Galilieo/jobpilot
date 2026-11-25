@@ -91,9 +91,24 @@ class StopReason(StrEnum):
     SERVICE_RESTARTED = "service_restarted"  # 进程重启时运行还没结束
 
 
-STOP_REASONS = (
-    "('budget_exhausted', 'match_failed', 'rewrite_failed', 'service_restarted')"
-)
+# 停止原因和终态的固定配对：代码写运行终态和数据库约束从这一份定义取。
+STOP_REASON_STATUS: dict[StopReason, RunStatus] = {
+    StopReason.BUDGET_EXHAUSTED: RunStatus.BUDGET_EXHAUSTED,
+    StopReason.MATCH_FAILED: RunStatus.FAILED,
+    StopReason.REWRITE_FAILED: RunStatus.FAILED,
+    StopReason.SERVICE_RESTARTED: RunStatus.FAILED,
+}
+
+
+def _stop_reason_check_sql() -> str:
+    pairs = " OR ".join(
+        f"(stop_reason = '{reason.value}' AND status = '{status.value}')"
+        for reason, status in STOP_REASON_STATUS.items()
+    )
+    return (
+        "(stop_reason IS NULL AND status IN ('running', 'waiting_confirmation', "
+        f"'succeeded', 'failed', 'cancelled', 'budget_exhausted')) OR ({pairs})"
+    )
 
 
 class CallOutcome(StrEnum):
@@ -131,12 +146,8 @@ class AiRun(Base):
             "(status IN ('running', 'waiting_confirmation')) = (finished_at IS NULL)",
             name="ck_ai_run_finished_at",
         ),
-        # 停止原因只属于已结束的运行。
-        CheckConstraint(
-            f"stop_reason IS NULL OR (stop_reason IN {STOP_REASONS} "
-            "AND status NOT IN ('running', 'waiting_confirmation'))",
-            name="ck_ai_run_stop_reason",
-        ),
+        # 停止原因和终态按固定配对，不允许「成功 + 改写失败」这类矛盾组合。
+        CheckConstraint(_stop_reason_check_sql(), name="ck_ai_run_stop_reason"),
         Index("ix_ai_run_user_id_started_at", "user_id", "started_at"),
         # 运行使用的事实库版本必须属于同一用户。
         ForeignKeyConstraint(

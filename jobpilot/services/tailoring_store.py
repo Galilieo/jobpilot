@@ -13,6 +13,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import (
+    STOP_REASON_STATUS,
     AiRun,
     BulletFact,
     MatchReport,
@@ -124,13 +125,6 @@ async def reusable_match_items(
     if items is None:
         return None
     return [MatchItem.model_validate(item) for item in items]
-
-
-_STATUS_OF = {
-    StopReason.BUDGET_EXHAUSTED: RunStatus.BUDGET_EXHAUSTED,
-    StopReason.MATCH_FAILED: RunStatus.FAILED,
-    StopReason.REWRITE_FAILED: RunStatus.FAILED,
-}
 
 
 def stop_reason_of(outcomes: Sequence[BlockOutcome]) -> StopReason | None:
@@ -265,7 +259,7 @@ async def save_outcome(
     """
     by_key = {outcome.key: outcome for outcome in outcomes}
     stop_reason = stop_reason or stop_reason_of(outcomes)
-    status = _STATUS_OF[stop_reason] if stop_reason else RunStatus.SUCCEEDED
+    status = STOP_REASON_STATUS[stop_reason] if stop_reason else RunStatus.SUCCEEDED
 
     rows = _rows(user_id, run_id, inputs.fact_set_id, plan, by_key)
     async with session_factory.begin() as session:
