@@ -793,17 +793,25 @@ textarea {
   flex-shrink: 0;
   gap: 4px;
   align-items: center;
+}
+.hover-row-actions,
+.hover-row .ant-typography-edit {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 .hover-row:hover .hover-row-actions,
+.hover-row:focus .hover-row-actions,
 .hover-row:focus-within .hover-row-actions,
 .hover-row-actions-open,
-.hover-row:has(.ant-popover-open) .hover-row-actions {
+.hover-row:has(.ant-popover-open) .hover-row-actions,
+.hover-row:hover .ant-typography-edit,
+.hover-row:focus .ant-typography-edit,
+.hover-row:focus-within .ant-typography-edit {
   opacity: 1;
 }
 .row-pending {
   border-left: 3px solid var(--ant-color-warning);
+  border-radius: 0;
   padding-left: 12px;
 }
 .fact-item {
@@ -820,11 +828,23 @@ textarea {
 /* 窄屏与触屏（与 AppShell lg 断点 992px 同步） */
 @media (max-width: 991px), (hover: none) {
   .hover-row-actions,
+  .hover-row .ant-typography-edit,
   .keyword-chip-remove {
     opacity: 1;
   }
 }
 @media (max-width: 991px) {
+  .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 8px 0;
+  }
+  .ant-card-head-title {
+    flex: 1 0 auto;
+  }
+  .ant-card-extra {
+    margin-inline-start: 0;
+  }
   .workspace-board,
   .job-detail {
     grid-template-columns: minmax(0, 1fr);
