@@ -6,17 +6,8 @@ import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
 import { newIdempotencyKey } from '../api/http'
-import type { JobStage } from '../api/types'
+import { JOB_STAGE } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
-
-const STAGE: Record<JobStage, string> = {
-  saved: '已收藏',
-  applied: '已投递',
-  interviewing: '面试中',
-  offer: '已拿 offer',
-  rejected: '未通过',
-  archived: '已归档',
-}
 
 export function JobsPage(): ReactElement {
   const navigate = useNavigate()
@@ -60,7 +51,7 @@ export function JobsPage(): ReactElement {
                 {job.company ?? '公司未填写'}
               </Typography.Paragraph>
               <div className="job-tags">
-                <Tag color="blue">{STAGE[job.stage]}</Tag>
+                <Tag color="blue">{JOB_STAGE[job.stage]}</Tag>
                 {job.injection_count > 0 && (
                   <Tag color="warning" icon={<WarningOutlined />}>
                     JD 里有可疑指令

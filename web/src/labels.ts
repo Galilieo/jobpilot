@@ -1,5 +1,21 @@
 // 后端枚举值对应的界面文字，集中放一处，各页面共用。
-import type { ItemStatus, MatchVerdict, Responsibility, RunStatus, SectionKind } from './api/types'
+import type {
+  ItemStatus,
+  JobStage,
+  MatchVerdict,
+  Responsibility,
+  RunStatus,
+  SectionKind,
+} from './api/types'
+
+export const JOB_STAGE: Record<JobStage, string> = {
+  saved: '已收藏',
+  applied: '已投递',
+  interviewing: '面试中',
+  offer: '已拿 offer',
+  rejected: '未通过',
+  archived: '已归档',
+}
 
 export const RESPONSIBILITY: Record<Responsibility, string> = {
   lead: '主导',
