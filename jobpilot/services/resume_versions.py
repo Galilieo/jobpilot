@@ -232,7 +232,7 @@ class LoadedResume:
 
     @property
     def content(self) -> ResumeContent:
-        return ResumeContent.model_validate(self.version.content_json)
+        return ResumeContent.from_stored(self.version.content_json)
 
 
 async def load_resume(
@@ -284,7 +284,7 @@ async def save_version(
     resume = await _locked_resume(db, user_id, run_id, base_version_id)
     current = await db.get_one(ResumeVersion, resume.current_version_id)
     content = recheck(
-        ResumeContent.model_validate(current.content_json),
+        ResumeContent.from_stored(current.content_json),
         submitted,
         available,
         organizations,
@@ -311,7 +311,7 @@ async def reset_version(
     if first is None:
         raise ResumeNotFoundError(run_id)
     return await _append_version(
-        db, user_id, resume, ResumeContent.model_validate(first.content_json)
+        db, user_id, resume, ResumeContent.from_stored(first.content_json)
     )
 
 
@@ -375,7 +375,7 @@ async def use_bullet_facts(
         raise BulletNotFoundError(bullet_id)
     current = await db.get_one(ResumeVersion, resume.current_version_id)
     updated = replace_bullet_with_facts(
-        ResumeContent.model_validate(current.content_json), bullet_id, available
+        ResumeContent.from_stored(current.content_json), bullet_id, available
     )
     bullet_row.user_decision = UserDecision.REJECTED.value
     return await _append_version(db, user_id, resume, updated)

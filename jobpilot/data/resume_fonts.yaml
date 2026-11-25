@@ -1,0 +1,25 @@
+# 简历预览与导出的可选字体；服务端把代码映射成固定 CSS 字体串再写进模板。
+# legacy_css 记录旧版本 content_json 里曾保存过的字体串，读取时映射回代码。
+
+default_code: default
+fonts:
+  - code: default
+    label: 默认字体
+    css: ""
+  - code: pingfang
+    label: 苹方
+    css: '"PingFang SC", sans-serif'
+  - code: yahei
+    label: 微软雅黑
+    css: '"Microsoft YaHei", sans-serif'
+  - code: source_han
+    label: 思源黑体
+    css: '"Source Han Sans SC", "Noto Sans CJK SC", sans-serif'
+  - code: songti
+    label: 宋体
+    css: '"Songti SC", SimSun, serif'
+    legacy_css:
+      - '"Songti SC", serif'
+  - code: kaiti
+    label: 楷体
+    css: '"Kaiti SC", KaiTi, serif'

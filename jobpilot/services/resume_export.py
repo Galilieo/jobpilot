@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from jobpilot.config import REPO_ROOT
 from jobpilot.db.models import CheckStatus
 from jobpilot.services.resume_content import BOLD, Bullet, ResumeContent, ResumeStyle
+from jobpilot.services.resume_fonts import default_fonts
 
 TEMPLATES = REPO_ROOT / "jobpilot" / "templates"
 _ENV = Environment(
@@ -151,6 +152,7 @@ def _editor_json(content: ResumeContent, version: int, editor: EditorContext) ->
         "export_url": editor.export_url,
         "reset_url": editor.reset_url,
         "use_facts_url": editor.use_facts_url,
+        "fonts": default_fonts().editor_options(),
     }
     return Markup(json.dumps(data, ensure_ascii=False).replace("<", "\\u003c"))
 
@@ -188,6 +190,7 @@ def render_html(
     mode: RenderMode,
     version: int,
     editor: EditorContext | None = None,
+    csp_nonce: str | None = None,
 ) -> str:
     """单个 HTML 文件：样式内嵌，不依赖网络；给出 editor 时内嵌编辑器和数据。"""
     return _ENV.get_template("resume.html").render(
@@ -196,10 +199,12 @@ def render_html(
         header=content.header,
         sections=content.sections,
         style=content.style,
+        font_css=default_fonts().css_of(content.style.font),
         visible=_visible(content, mode),
         marks=mode is RenderMode.PREVIEW,
         editor_json=_editor_json(content, version, editor) if editor else None,
         editor_script=Markup(EDITOR_SCRIPT) if editor else None,
+        csp_nonce=csp_nonce,
     )
 
 

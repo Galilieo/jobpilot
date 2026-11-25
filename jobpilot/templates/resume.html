@@ -49,7 +49,7 @@
 </style>
 </head>
 <body>
-<main class="page" data-resume-version="{{ version }}" style="--size: {{ style.size_pt }}pt; --leading: {{ style.leading }};{% if style.font %} --font: {{ style.font }};{% endif %}">
+<main class="page" data-resume-version="{{ version }}" data-font-code="{{ style.font }}" style="--size: {{ style.size_pt }}pt; --leading: {{ style.leading }};{% if font_css %} --font: {{ font_css }};{% endif %}">
   <header>
     {% if header %}<h1 class="name" data-part="header" data-index="0">{{ header[0] | rich }}</h1>{% endif %}
     {% for line in header[1:] %}
@@ -86,7 +86,7 @@
   </section>
   {% endfor %}
 </main>
-<script>
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
   // 窗口比 A4 窄时（例如应用里的预览面板）按比例缩小显示整页；
   // 只是缩放显示，排版、「自动一页」的测量和打印都不受影响。
   (() => {
@@ -108,7 +108,7 @@
 </script>
 {% if editor_json %}
 <script type="application/json" id="jobpilot-resume">{{ editor_json }}</script>
-<script>{{ editor_script }}</script>
+<script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>{{ editor_script }}</script>
 {% endif %}
 </body>
 </html>

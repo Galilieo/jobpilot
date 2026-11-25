@@ -16,12 +16,14 @@
 import re
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
+from typing import Any, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from jobpilot.db.models import CheckStatus, SectionKind
 from jobpilot.services.grounding import GroundingIssue
+from jobpilot.services.resume_fonts import default_fonts
 
 SKILLS_TITLE = "专业技能"  # 底稿没有技能栏、却有技能概述时新加的栏目名
 # 编辑器里的加粗按 Markdown 的写法存在文字里：「负责**运单查询**接口」。
@@ -83,17 +85,34 @@ class ResumeSection(BaseModel):
 
 
 class ResumeStyle(BaseModel):
-    """编辑器工具栏调的版式：字体、字号、行距。随版本保存，导出文件也带着。"""
+    """编辑器工具栏调的版式：字体代码、字号、行距。随版本保存，导出文件也带着。"""
 
-    font: str = Field(default="", max_length=60)  # 空表示默认的系统中文字体
+    font: str = Field(
+        default="default", max_length=60
+    )  # 字体代码，映射表见 resume_fonts.yaml
     size_pt: float = Field(default=10.5, ge=7, le=14)
     leading: float = Field(default=1.5, ge=1.1, le=2.0)
+
+    @field_validator("font", mode="before")
+    @classmethod
+    def _validate_font(cls, value: object, info: ValidationInfo) -> str:
+        fonts = default_fonts()
+        if info.context and info.context.get("legacy_font"):
+            return fonts.code_from_stored(value)
+        if not isinstance(value, str) or value not in fonts.by_code:
+            raise ValueError("不支持的字体选项")
+        return value
 
 
 class ResumeContent(BaseModel):
     header: list[str]  # 页头各行，第一行一般是姓名
     sections: list[ResumeSection]
     style: ResumeStyle = Field(default_factory=ResumeStyle)
+
+    @classmethod
+    def from_stored(cls, data: Mapping[str, Any]) -> Self:
+        """读取库里保存的旧版本内容：把旧字体串映射回代码，不认得按默认字体处理。"""
+        return cls.model_validate(data, context={"legacy_font": True})
 
 
 class BaseSection(BaseModel):

@@ -4,6 +4,7 @@
 读取时带上每条改写引用的事实，供面板的「依据追溯」显示。
 """
 
+import secrets
 from collections.abc import Awaitable
 from datetime import datetime
 from enum import StrEnum
@@ -143,7 +144,7 @@ def _build_summary(
     latest_version: int | None,
 ) -> TailoredResumeSummary:
     fields = _job_fields(posting, user_job, run)
-    content = ResumeContent.model_validate(version.content_json)
+    content = ResumeContent.from_stored(version.content_json)
     return TailoredResumeSummary(
         resume_id=resume.resume_id,
         run_id=resume.run_id,
@@ -411,6 +412,21 @@ async def _load(db: DbSession, user_id: UUID, run_id: UUID, version: int | None)
         raise _not_found() from None
 
 
+def preview_csp(nonce: str) -> str:
+    """预览页内容安全策略：脚本只认当次请求的 nonce，连接只允许同源，禁止外链资源。"""
+    return (
+        "default-src 'none'; "
+        f"script-src 'nonce-{nonce}'; "
+        "style-src 'unsafe-inline'; "
+        "connect-src 'self'; "
+        "img-src 'self'; "
+        "font-src 'self'; "
+        "base-uri 'none'; "
+        "object-src 'none'; "
+        "frame-ancestors 'self'"
+    )
+
+
 @router.get("/tailor-runs/{run_id}/preview", response_class=HTMLResponse)
 async def preview_resume(
     run_id: UUID, user: CurrentUser, db: DbSession, version: int | None = None
@@ -431,13 +447,16 @@ async def preview_resume(
         if current
         else None
     )
+    nonce = secrets.token_urlsafe(18)
     return HTMLResponse(
         render_html(
             loaded.content,
             mode=RenderMode.PREVIEW,
             version=loaded.version.version,
             editor=editor,
-        )
+            csp_nonce=nonce,
+        ),
+        headers={"Content-Security-Policy": preview_csp(nonce)},
     )
 
 

@@ -120,7 +120,7 @@ def content_with_private_marks() -> tuple[ResumeContent, UUID]:
         uuid4(), f"{PENDING_MARK} 主导重构", [fact_id], CheckStatus.PENDING, [issue]
     )
     built.style = built.style.model_copy(
-        update={"font": '"Songti SC", serif', "size_pt": 9.5, "leading": 1.35}
+        update={"font": "songti", "size_pt": 9.5, "leading": 1.35}
     )
     return built, fact_id
 
@@ -139,12 +139,14 @@ def test_export_file_embeds_only_visible_text_and_style():
         "save_url",
         "export_url",
         "reset_url",
+        "use_facts_url",
+        "fonts",
     }
     assert data["version"] == 3  # 编辑器按版本号导出：导出的是它看到的这一版
     assert set(content) == {"header", "sections", "style"}
     assert content["header"] == built.header
     assert content["style"] == {
-        "font": '"Songti SC", serif',
+        "font": "songti",
         "size_pt": 9.5,
         "leading": 1.35,
     }
@@ -244,12 +246,58 @@ def test_docx_turns_bold_markers_into_bold_runs():
 def test_saved_style_is_applied_to_the_page():
     built = content()
     built.style = built.style.model_copy(
-        update={"font": '"Songti SC", serif', "size_pt": 9.5, "leading": 1.35}
+        update={"font": "songti", "size_pt": 9.5, "leading": 1.35}
     )
     html = render_html(built, mode=RenderMode.EXPORT, version=1)
     assert "--size: 9.5pt; --leading: 1.35;" in html
-    # 字体名也是用户可改的文字，引号要转义，不能闭合 style 属性
-    assert "--font: &#34;Songti SC&#34;, serif;" in html
+    assert 'data-font-code="songti"' in html
+    # 服务端把字体代码映射成固定 CSS 字体串，不信任任意用户输入
+    assert "--font: &#34;Songti SC&#34;, SimSun, serif;" in html
+
+
+def test_font_validation_legacy_mapping_and_csp_nonce():
+    from pydantic import ValidationError
+
+    from jobpilot.services.resume_fonts import default_fonts
+
+    fonts = default_fonts()
+    assert [f.code for f in fonts.options] == [
+        "default",
+        "pingfang",
+        "yahei",
+        "source_han",
+        "songti",
+        "kaiti",
+    ]
+    with pytest.raises(ValidationError):
+        ResumeContent.model_validate(
+            {"header": [], "sections": [], "style": {"font": '"Comic Sans"; } body{}'}}
+        )
+
+    legacy = ResumeContent.from_stored(
+        {
+            "header": [],
+            "sections": [],
+            "style": {"font": '"Songti SC", serif', "size_pt": 10.5, "leading": 1.5},
+        }
+    )
+    assert legacy.style.font == "songti"
+    unknown = ResumeContent.from_stored(
+        {"header": [], "sections": [], "style": {"font": "MyCustomFont"}}
+    )
+    assert unknown.style.font == "default"
+
+    html = render_html(
+        content(),
+        mode=RenderMode.PREVIEW,
+        version=1,
+        editor=EditorContext(
+            version_id=uuid4(), storage_key="r", save_url="/api/tailor-runs/x/resume"
+        ),
+        csp_nonce="test-nonce-123",
+    )
+    assert html.count('<script nonce="test-nonce-123">') == 2
+    assert 'nonce="test-nonce-123"' not in export_file(content())
 
 
 def test_editor_data_cannot_close_its_script_tag():
@@ -277,6 +325,10 @@ def test_editor_reads_only_keys_that_are_embedded(online: bool):
         version=1,
         editor=editor,
     )
-    script = html.rsplit("<script>", 1)[1]
+    script = (
+        html.rsplit("<script>", 1)[1]
+        if "<script>" in html
+        else html.rsplit("</script>", 2)[1].split(">", 1)[1]
+    )
     read = set(re.findall(r"\bdata\.([a-z_]+)", script))
     assert read and read <= set(embedded(html)), read - set(embedded(html))

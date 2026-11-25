@@ -12,6 +12,7 @@
   const SAVE_DELAY_MS = 1000;
   let versionId = data.version_id;
   let version = data.version; // 页面上这一版是第几版；导出时按它下载
+  let fontCode = page.dataset.fontCode || data.content?.style?.font || "default";
   let editing = false;
   let saveTimer = null;
   let saving = null; // 进行中的保存；它没结束之前不发下一次
@@ -96,7 +97,7 @@
   function currentStyle() {
     const style = getComputedStyle(page);
     return {
-      font: page.style.getPropertyValue("--font").trim(),
+      font: fontCode,
       size_pt: parseFloat(style.getPropertyValue("--size")) || 10.5,
       leading: parseFloat(style.getPropertyValue("--leading")) || 1.5,
     };
@@ -149,6 +150,7 @@
       const ok = storage.set(OFFLINE_KEY, {
         html: withoutEditing(page).innerHTML,
         style: page.getAttribute("style"),
+        fontCode,
       });
       setStatus(ok ? "已保存在本机浏览器" : "浏览器不允许本地保存，请用「保存 HTML」");
       return { ok };
@@ -335,14 +337,8 @@
 
   // ---------- 版式：字体、字号、加粗、撤回、页面模式 ----------
 
-  const FONTS = [
-    ["默认字体", ""],
-    ["苹方", '"PingFang SC", sans-serif'],
-    ["微软雅黑", '"Microsoft YaHei", sans-serif'],
-    ["思源黑体", '"Source Han Sans SC", "Noto Sans CJK SC", sans-serif'],
-    ["宋体", '"Songti SC", SimSun, serif'],
-    ["楷体", '"Kaiti SC", KaiTi, serif'],
-  ];
+  const FONTS = (data.fonts || []).map((item) => [item.label, item.code, item.css]);
+  const FONT_CSS_BY_CODE = new Map(FONTS.map(([, code, css]) => [code, css]));
   const SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 12];
   const VIEW_KEY = "jobpilot-view";
   const selects = {};
@@ -371,7 +367,16 @@
 
   function addFormatting() {
     const style = currentStyle();
-    addSelect("字体", FONTS, style.font, (font) => setStyle("--font", font));
+    selects.font = addSelect(
+      "字体",
+      FONTS.map(([label, code]) => [label, code]),
+      FONT_CSS_BY_CODE.has(style.font) ? style.font : "default",
+      (code) => {
+        fontCode = code;
+        page.dataset.fontCode = code;
+        setStyle("--font", FONT_CSS_BY_CODE.get(code) || "");
+      },
+    );
     const sizes = SIZES.map((size) => [`${size} pt`, String(size)]);
     if (!SIZES.includes(style.size_pt)) sizes.unshift([`${style.size_pt} pt`, String(style.size_pt)]);
     selects.size = addSelect("字号", sizes, String(style.size_pt), (size) =>
@@ -557,6 +562,11 @@
     if (saved?.html) {
       page.innerHTML = saved.html;
       if (saved.style) page.setAttribute("style", saved.style);
+      if (saved.fontCode && FONT_CSS_BY_CODE.has(saved.fontCode)) {
+        fontCode = saved.fontCode;
+        page.dataset.fontCode = saved.fontCode;
+        if (selects.font) selects.font.value = saved.fontCode;
+      }
       setStatus("已恢复本机保存的修改");
     }
   } else if (storage.get(DRAFT_KEY)) {

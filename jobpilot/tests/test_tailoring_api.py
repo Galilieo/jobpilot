@@ -6,6 +6,7 @@
 
 import copy
 import logging
+import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -830,3 +831,251 @@ async def test_load_resume_does_not_fetch_content_json_for_all_history(
     assert len(history_queries) == 1
     for col in ("resume_version_id", "version", "created_at"):
         assert col in history_queries[0]
+
+
+async def test_use_facts_replaces_bullet_records_rejection_and_enforces_guards(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """不用模型改写、改用事实原文：30%→20%、旧版不变、记录 user_decision、校验约束。"""
+    from jobpilot.db.models import Fact, ResumeVersion
+
+    user_id = await sign_in(async_client, "use-facts@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    # 额外加一条「20%」事实，后续通过手改引入 30% 验证替换逻辑
+    async with session_factory.begin() as db:
+        twenty = Fact(
+            user_id=user_id,
+            fact_set_id=inputs.fact_set_id,
+            lineage_id=uuid4(),
+            experience=INTERN,
+            section="internship",
+            kind="result",
+            responsibility="own",
+            text="运单查询 P95 耗时降低 20%",
+            has_number=True,
+            source="user",
+        )
+        db.add(twenty)
+        await db.flush()
+        twenty_id = twenty.fact_id
+
+    model.fact_ids = inputs.fact_ids
+    started = await start(async_client, inputs.user_job_id)
+    assert started.status_code == 202
+    run_id = started.json()["run_id"]
+    await launcher.wait_all()
+
+    url = f"/api/tailor-runs/{run_id}/resume"
+    v1 = (await async_client.get(url)).json()
+    bullet = next(
+        b
+        for s in v1["content"]["sections"]
+        for e in s["entries"]
+        if e["experience"] == INTERN
+        for b in e["bullets"]
+    )
+    # 把 20% 事实加入条目引用，再手改为 30% 后测试改用事实原文
+    async with session_factory.begin() as db:
+        from jobpilot.db.models import BulletFact
+
+        db.add(
+            BulletFact(
+                bullet_id=UUID(bullet["bullet_id"]),
+                fact_id=twenty_id,
+                user_id=user_id,
+                fact_set_id=inputs.fact_set_id,
+            )
+        )
+        ver1 = await db.get_one(ResumeVersion, UUID(v1["version_id"]))
+        ver1_content = copy.deepcopy(ver1.content_json)
+        for s in ver1_content["sections"]:
+            for e in s["entries"]:
+                for b in e["bullets"]:
+                    if b["bullet_id"] == bullet["bullet_id"]:
+                        b["fact_ids"].append(str(twenty_id))
+        ver1.content_json = ver1_content
+
+    v1 = (await async_client.get(url)).json()
+    # 先手改 v1 成包含「30%」的文字作为 v2，再对其点「改用事实原文」
+    v2_content = copy.deepcopy(v1["content"])
+    for s in v2_content["sections"]:
+        for e in s["entries"]:
+            for b in e["bullets"]:
+                if b["bullet_id"] == bullet["bullet_id"]:
+                    b["text"] = "负责运单查询接口，耗时降低 30%"
+    v2 = (
+        await async_client.put(
+            url, json={"base_version_id": v1["version_id"], "content": v2_content}
+        )
+    ).json()
+    assert "30%" in v2["content"]["sections"][0]["entries"][0]["bullets"][0]["text"]
+
+    # 预览页面内嵌的编辑器数据带 use_facts_url
+    preview = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
+    assert embedded(preview.text)["use_facts_url"] == (
+        f"/api/tailor-runs/{run_id}/resume/bullets/{{bullet_id}}/use-facts"
+    )
+
+    # 基准过期返回 409
+    stale = await async_client.post(
+        f"{url}/bullets/{bullet['bullet_id']}/use-facts",
+        json={"base_version_id": v1["version_id"]},
+    )
+    assert stale.status_code == 409
+
+    # 正常改用事实原文：v3 变为 20%，v2 保留 30%，user_decision='rejected'
+    replaced = await async_client.post(
+        f"{url}/bullets/{bullet['bullet_id']}/use-facts",
+        json={"base_version_id": v2["version_id"]},
+    )
+    assert replaced.status_code == 200, replaced.text
+    v3 = replaced.json()
+    assert (v3["version"], v3["current_version_id"]) == (3, v3["version_id"])
+    assert [item["version"] for item in v3["versions"]] == [1, 2, 3]
+    v3_bullet = next(
+        b
+        for s in v3["content"]["sections"]
+        for e in s["entries"]
+        for b in e["bullets"]
+        if b["bullet_id"] == bullet["bullet_id"]
+    )
+    assert "20%" in v3_bullet["text"] and "30%" not in v3_bullet["text"]
+    assert v3_bullet["origin"] == "fallback" and v3_bullet["edited"] is False
+    assert v3_bullet["check"]["text"] == v3_bullet["text"]
+
+    # 导出只有 20%，旧版本 v2 仍是 30%
+    exported_v3 = await async_client.get(f"/api/tailor-runs/{run_id}/export")
+    assert "20%" in exported_v3.text and "30%" not in exported_v3.text
+    old_v2 = (await async_client.get(f"{url}?version=2")).json()
+    assert "30%" in old_v2["content"]["sections"][0]["entries"][0]["bullets"][0]["text"]
+
+    async with session_factory() as db:
+        row = await db.get_one(TailoredBullet, UUID(bullet["bullet_id"]))
+        assert row.user_decision == "rejected"
+
+    # 引用的事实全失效时返回 422
+    pending_id = uuid4()
+    v3_with_pending = copy.deepcopy(v3["content"])
+    v3_with_pending["sections"][0]["entries"][0]["bullets"].append(
+        {
+            "bullet_id": str(pending_id),
+            "text": "待处理条目",
+            "fact_ids": [],
+            "origin": "pending",
+            "edited": False,
+            "check": {"text": "待处理条目", "layers": "full", "issues": []},
+        }
+    )
+    # 往当前版本塞一条无有效事实的条目来测 422（同时需要 tailored_bullet 行）
+    async with session_factory.begin() as db:
+        db.add(
+            TailoredBullet(
+                bullet_id=pending_id,
+                run_id=UUID(run_id),
+                user_id=user_id,
+                fact_set_id=inputs.fact_set_id,
+                section="experience",
+                experience=INTERN,
+                order_no=99,
+                text="待处理条目",
+                check_status="pending",
+                revision_count=0,
+                issues_json=[],
+            )
+        )
+        ver = await db.get_one(ResumeVersion, UUID(v3["version_id"]))
+        ver.content_json = v3_with_pending
+    empty_facts = await async_client.post(
+        f"{url}/bullets/{pending_id}/use-facts",
+        json={"base_version_id": v3["version_id"]},
+    )
+    assert empty_facts.status_code == 422
+
+    # 换另一个用户请求别人的条目 404；别人带着自己的 run + 我的 bullet_id 也 404
+    other_url, other_v1 = await generated_resume(
+        async_client, session_factory, launcher, model, "other-use@tailor-api.invalid"
+    )
+    assert (
+        await async_client.post(
+            f"{url}/bullets/{bullet['bullet_id']}/use-facts",
+            json={"base_version_id": v3["version_id"]},
+        )
+    ).status_code == 404
+    assert (
+        await async_client.post(
+            f"{other_url}/bullets/{bullet['bullet_id']}/use-facts",
+            json={"base_version_id": other_v1["version_id"]},
+        )
+    ).status_code == 404
+
+
+async def test_font_codes_legacy_readback_and_preview_csp(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """字体只接受固定代码；旧字体串读回对应代码但不改历史数据；预览带 CSP、导出不带。"""
+    from jobpilot.db.models import ResumeVersion
+
+    url, v1 = await generated_resume(
+        async_client, session_factory, launcher, model, "font-csp@tailor-api.invalid"
+    )
+    run_id = url.split("/")[-2]
+
+    # 任意字符串（包括 CSS 注入片段）被 422 拒绝
+    bad_content = copy.deepcopy(v1["content"])
+    bad_content["style"]["font"] = '"PingFang SC"; } body { display: none'
+    rejected = await async_client.put(
+        url, json={"base_version_id": v1["version_id"], "content": bad_content}
+    )
+    assert rejected.status_code == 422
+
+    # 合法代码可以保存
+    good_content = copy.deepcopy(v1["content"])
+    good_content["style"]["font"] = "songti"
+    saved = await async_client.put(
+        url, json={"base_version_id": v1["version_id"], "content": good_content}
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["content"]["style"]["font"] == "songti"
+
+    # 历史版本里存的旧字体串读回对应代码（认不出的回默认），数据库原行不变
+    async with session_factory.begin() as db:
+        ver1 = await db.get_one(ResumeVersion, UUID(v1["version_id"]))
+        legacy_json = copy.deepcopy(ver1.content_json)
+        legacy_json["style"]["font"] = '"Kaiti SC", KaiTi, serif'
+        ver1.content_json = legacy_json
+        ver2 = await db.get_one(ResumeVersion, UUID(saved.json()["version_id"]))
+        unknown_json = copy.deepcopy(ver2.content_json)
+        unknown_json["style"]["font"] = "UnknownFontFamily"
+        ver2.content_json = unknown_json
+
+    read_v1 = (await async_client.get(f"{url}?version=1")).json()
+    assert read_v1["content"]["style"]["font"] == "kaiti"
+    read_v2 = (await async_client.get(f"{url}?version=2")).json()
+    assert read_v2["content"]["style"]["font"] == "default"
+    # 数据库历史数据未被修改
+    async with session_factory() as db:
+        row1 = await db.get_one(ResumeVersion, UUID(v1["version_id"]))
+        assert row1.content_json["style"]["font"] == '"Kaiti SC", KaiTi, serif'
+
+    # 预览响应带 Content-Security-Policy 且 nonce 与两个脚本一致；导出不带 CSP
+    preview = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
+    assert preview.status_code == 200
+    csp = preview.headers.get("content-security-policy")
+    assert csp is not None
+    assert "connect-src 'self'" in csp
+    assert "default-src 'none'" in csp
+    match = re.search(r"script-src 'nonce-([^']+)'", csp)
+    assert match is not None
+    nonce = match.group(1)
+    assert preview.text.count(f'<script nonce="{nonce}">') == 2
+    assert "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";", 1)[0]
+
+    exported = await async_client.get(f"/api/tailor-runs/{run_id}/export?format=html")
+    assert exported.status_code == 200
+    assert "content-security-policy" not in exported.headers
