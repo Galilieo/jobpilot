@@ -5,13 +5,8 @@ import { AppShell } from './layouts/AppShell'
 import { ConversationPage } from './pages/ConversationPage'
 import { JobsPage } from './pages/JobsPage'
 import { LoginPage } from './pages/LoginPage'
-import {
-  AccountPage,
-  JobDetailPage,
-  NotFoundPage,
-  ProfilePage,
-  WorkspacePage,
-} from './pages/PlaceholderPages'
+import { ProfilePage } from './pages/ProfilePage'
+import { AccountPage, JobDetailPage, NotFoundPage, WorkspacePage } from './pages/PlaceholderPages'
 
 export default function App(): ReactElement {
   return (

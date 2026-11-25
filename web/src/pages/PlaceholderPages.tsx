@@ -1,5 +1,5 @@
 // 集中存放尚未接业务接口的页面；只建立导航与内容槽位，不展示虚构业务结果。
-import { Card, Empty, Tabs, Typography } from 'antd'
+import { Card, Empty, Typography } from 'antd'
 import type { ReactElement, ReactNode } from 'react'
 import { Link } from 'react-router'
 
@@ -44,35 +44,6 @@ export function JobDetailPage(): ReactElement {
         </>
       }
     />
-  )
-}
-
-export function ProfilePage(): ReactElement {
-  return (
-    <section className="page">
-      <header className="page-heading">
-        <Typography.Title level={1}>我的</Typography.Title>
-      </header>
-      <Tabs
-        items={[
-          {
-            key: 'facts',
-            label: '经历',
-            children: <Empty description="经历事实库准备中，改写将只引用你确认过的事实。" />,
-          },
-          {
-            key: 'resumes',
-            label: '简历',
-            children: <Empty description="定制简历准备中，每份简历将关联岗位与事实库版本。" />,
-          },
-          {
-            key: 'memories',
-            label: '记忆',
-            children: <Empty description="偏好记忆准备中，记忆只保存偏好，不保存经历。" />,
-          },
-        ]}
-      />
-    </section>
   )
 }
 

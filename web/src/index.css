@@ -235,3 +235,79 @@ textarea {
 .login-error {
   margin-bottom: 16px;
 }
+
+/* ---------- 我的：经历 ---------- */
+
+.full-width {
+  width: 100%;
+}
+
+.import-upload {
+  display: block;
+  margin-top: 12px;
+}
+
+.import-hint {
+  margin: 12px 0 8px;
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.fact-group + .fact-group {
+  margin-top: 16px;
+}
+
+.fact-row {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fact-text {
+  margin-bottom: 0 !important; /* antd 的段落自带下边距 */
+}
+
+.fact-quote {
+  font-size: 12px;
+}
+
+.fact-list {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.fact-tag {
+  margin-left: 8px;
+}
+
+.fact-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fact-group-head h5 {
+  margin: 0 !important; /* antd 标题自带上下边距 */
+}
+
+/* 窄屏时操作按钮换到文字下面，不挤占经历文字的宽度。 */
+@media (max-width: 767px) {
+  .fact-group .ant-list-item {
+    flex-wrap: wrap;
+  }
+
+  .fact-group .ant-list-item-action {
+    margin-inline-start: 0;
+    margin-top: 8px;
+  }
+}

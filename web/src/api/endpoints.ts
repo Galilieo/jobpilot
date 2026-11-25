@@ -62,6 +62,19 @@ export const facts = {
     request<{ changed: number; revision: number }>('/api/facts/batch', {
       json: { action: 'confirm_clean', expected_revision: expectedRevision },
     }),
+  setResponsibility: (
+    experience: string,
+    responsibility: Exclude<Responsibility, 'na'>,
+    expectedRevision: number,
+  ) =>
+    request<{ changed: number; revision: number }>('/api/facts/batch', {
+      json: {
+        action: 'set_responsibility',
+        experience,
+        responsibility,
+        expected_revision: expectedRevision,
+      },
+    }),
   commit: (baseFactSetId: string | null, expectedRevision: number) =>
     request<{ fact_set_id: string; version: number; revision: number }>('/api/facts/commit', {
       json: { base_fact_set_id: baseFactSetId, expected_revision: expectedRevision },
