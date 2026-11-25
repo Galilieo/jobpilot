@@ -13,6 +13,8 @@
   let versionId = data.version_id;
   let editing = false;
   let saveTimer = null;
+  let saving = null; // 进行中的保存；它没结束之前不发下一次
+  let dirty = false; // 页面上有还没存到服务器的修改
 
   // ---------- 本机存储（隐私模式等情况下可能不可用） ----------
 
@@ -111,22 +113,44 @@
   }
 
   function scheduleSave() {
+    dirty = true;
     clearTimeout(saveTimer);
     setStatus("有未保存的修改");
     saveTimer = setTimeout(save, SAVE_DELAY_MS);
   }
 
-  async function save() {
+  function save() {
+    return startSave();
+  }
+
+  // 发起一次保存并返回它的结果。上一次还没返回时就等那一次：连着发两次会带着同一个
+  // 旧版本号，后到的那次被服务器当成「在别处保存过」（409）。期间的修改由 dirty 记着，
+  // 上一次存完后接着存。
+  function startSave(content) {
     clearTimeout(saveTimer);
+    if (!saving) saving = write(content ?? collect()).finally(() => { saving = null; });
+    return saving;
+  }
+
+  // 存完手上的修改再返回，导出、重置这类要先落地的动作用它；没有要存的就算成功。
+  async function flush() {
+    clearTimeout(saveTimer);
+    const pending = saving ? await saving : null;
+    if (pending && !pending.ok) return pending; // 上一次没存上，再发一次也是同样的结果
+    return dirty ? save() : { ok: true };
+  }
+
+  // 一次保存，返回 { ok, reason }。存不上的修改留成本机草稿，刷新后可以覆盖回来。
+  async function write(content) {
+    dirty = false; // 页面上的文字已经收进 content，从这一刻起再改的算下一次
     if (!online) {
       const ok = storage.set(OFFLINE_KEY, {
         html: withoutEditing(page).innerHTML,
         style: page.getAttribute("style"),
       });
       setStatus(ok ? "已保存在本机浏览器" : "浏览器不允许本地保存，请用「保存 HTML」");
-      return;
+      return { ok };
     }
-    const content = collect();
     setStatus("保存中…");
     try {
       const response = await fetch(data.save_url, {
@@ -142,18 +166,22 @@
         refreshMarks(saved.content);
         storage.remove(DRAFT_KEY);
         setStatus(`已保存 · 第 ${saved.version} 版`);
-        return;
+        if (dirty) scheduleSave(); // 保存期间又有修改：接着存
+        return { ok: true };
       }
-      storage.set(DRAFT_KEY, content);
-      setStatus(
-        response.status === 409
-          ? "简历已在别处保存过：你的修改已存为本机草稿，请刷新后再改"
-          : "保存失败：修改已存为本机草稿",
-      );
+      return keepDraft(content, response.status === 409
+        ? "简历已在别处保存过：你的修改已存为本机草稿，请刷新后再改"
+        : "保存失败：修改已存为本机草稿");
     } catch {
-      storage.set(DRAFT_KEY, content);
-      setStatus("网络异常：修改已存为本机草稿");
+      return keepDraft(content, "网络异常：修改已存为本机草稿");
     }
+  }
+
+  function keepDraft(content, reason) {
+    // 保存期间又改过的，草稿里留页面上最新的文字。
+    storage.set(DRAFT_KEY, dirty ? collect() : content);
+    setStatus(reason);
+    return { ok: false, reason };
   }
 
   // 保存后服务器重新检查了改过的条目，按新结论更新标记。
@@ -374,6 +402,12 @@
     }
     // 由服务器把系统生成的第一版复制成一个新版本。这一版里删掉的条目，第一版里还有，
     // 读出第一版再当普通编辑保存会被拒绝。
+    // 先把手上的修改存成一个版本（确认框里说了会保留），也等上一次保存返回，带上最新的版本号。
+    const saved = await flush();
+    if (!saved.ok) {
+      setStatus(`没有重置，有修改没能保存。${saved.reason}`);
+      return;
+    }
     const response = await fetch(data.reset_url, {
       method: "POST",
       credentials: "same-origin",
@@ -414,19 +448,13 @@
     setStatus("有一份未保存到服务器的本机草稿");
     addButton("draft", "用本机草稿覆盖", async () => {
       if (!confirm("用本机草稿覆盖服务器上的当前版本？当前版本仍会保留在历史里。")) return;
+      if (saving) await saving; // 和自动保存串行：上一次没返回之前不发这一次
       data.content = storage.get(DRAFT_KEY);
-      const response = await fetch(data.save_url, {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base_version_id: versionId, content: data.content }),
-      });
-      if (response.ok) {
-        storage.remove(DRAFT_KEY);
+      dirty = false; // 要存的就是草稿，页面上的文字不用再存一遍
+      const saved = await startSave(data.content);
+      if (saved.ok) {
         window.location.reload();
-      } else {
-        setStatus("草稿没能保存，请刷新后再试");
-      }
+      } else setStatus("草稿没能保存，请刷新后再试");
     });
   }
 
