@@ -50,13 +50,53 @@ V1 定位为个人学习项目，本人求职时在本地使用；暂不上线�
 
 ## 本地启动
 
-配置好仓库根目录的 `.env`（参照 `.env.example`），按 [前端说明](web/README.md#运行)安装依赖，并启动 Colima。然后从仓库根目录执行：
+以下命令从仓库根目录执行。macOS 需要 Colima、Docker CLI 与 Compose 插件、uv、Node.js 22.22 或更新版本，以及 pnpm 11.7。把仓库放在 Colima 能挂载的目录，例如用户主目录下。用 `docker compose version` 检查 Compose，用 `uv --version`、`node --version` 和 `pnpm --version` 查看其余版本。后端用 Python 3.12，缺少时 `uv sync` 会按项目约束安装。
+
+### 配置并启动
+
+第一次启动时复制配置。已有 `.env` 时保留本地配置，参照示例补齐字段。
 
 ```bash
+cp .env.example .env
+```
+
+- 在 `.env` 给 `POSTGRES_PASSWORD` 填一个本地专用密码。单机运行可使用示例的其他 PostgreSQL 值。
+- `OPENAI_API_KEY` 用于简历拆分、JD 解析、匹配和改写。只验证账号、导出、数据库或运行假模型测试时可以留空。使用非默认模型服务时，同时核对 `OPENAI_BASE_URL` 和对应的 `JOBPILOT_*__MODEL_NAME`。
+
+安装项目依赖并启动开发环境。
+
+```bash
+colima start --cpu 2 --memory 4
+uv sync --project jobpilot --locked
+pnpm --dir web install --frozen-lockfile
 ./scripts/dev.sh
 ```
 
-打开 [JobPilot](http://127.0.0.1:5174)，岗位库会显示服务和数据库状态。按 Ctrl+C 停止前后端，PostgreSQL 容器继续运行。
+`scripts/dev.sh` 检查工具和 Colima，启动 PostgreSQL 并等待健康检查通过，再对开发库执行 `alembic upgrade head`。最后并行启动 FastAPI 和 Vite。打开 [JobPilot](http://127.0.0.1:5174) 注册登录，服务连通性可从 [健康检查](http://127.0.0.1:5174/api/health) 确认。按 Ctrl+C 停止前后端，数据库容器继续运行。
+
+### 测试与检查
+
+```bash
+(cd jobpilot && uv run --locked pytest -q)
+(cd jobpilot && uv run --locked ruff check && uv run --locked ruff format --check)
+pnpm --dir web lint
+pnpm --dir web test
+pnpm --dir web build
+```
+
+后端测试自动迁移独立的本机 `jobpilot_test` 库，并在测试前后清空该库的业务表。模型调用使用假上游。前端 `build` 同时执行 TypeScript 检查。
+
+### 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 提示 Colima 未运行，或 Docker 无法连接 | 执行 `colima start`，再用 `docker --context colima compose ps` 查看数据库。 |
+| 5432、8000 或 5174 端口已被占用 | 用 `lsof -nP -iTCP:5432 -iTCP:8000 -iTCP:5174 -sTCP:LISTEN` 确认进程。可在 `.env` 调整 `POSTGRES_PORT`，再运行 `UVICORN_PORT=8001 JOBPILOT_WEB_PORT=5175 ./scripts/dev.sh`。Vite 会转发到同一后端端口。 |
+| 数据库可连，服务启动却报缺表或列 | 执行 `(cd jobpilot && uv run --locked alembic upgrade head)`，再重启后端。 |
+| 修改 `.env` 后数据库密码不匹配 | Compose 只在数据卷首次初始化时设置账号和密码。连接已有卷时使用创建它的凭据。 |
+| Docker 数据库没有 `jobpilot_test` | 检查 Colima 是否挂载了 `docker/initdb/`。已有卷可用 `docker --context colima compose exec db sh -c 'createdb -U "$POSTGRES_USER" jobpilot_test'` 补建测试库，之后 pytest 会启用扩展并跑迁移。 |
+
+手动清理已过恢复期的账号可运行 `uv run --project jobpilot python -m jobpilot.scripts.purge_accounts`。备份还原步骤见 [05 的本地备份恢复演练](notes/求职助手Agent/05-落地与里程碑.md#本地备份和还原)。
 
 ## 早期机制实验（已归档）
 
