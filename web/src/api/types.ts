@@ -351,6 +351,7 @@ export interface ResumeBullet {
   text: string
   fact_ids: string[]
   origin: CheckStatus
+  user_choice?: 'use_facts' | null
   edited: boolean
   check: BulletCheck
 }

@@ -39,6 +39,7 @@ from jobpilot.services.resume_content import (
     CheckLayers,
     Entry,
     ResumeContent,
+    UserBulletChoice,
     bullet_of,
     plain,
 )
@@ -207,6 +208,7 @@ def _recheck_bullet(
         text=text,
         fact_ids=before.fact_ids,
         origin=before.origin,
+        user_choice=before.user_choice,
         edited=before.edited or plain(text) != plain(before.text),
         check=check,
     )
@@ -342,7 +344,14 @@ def replace_bullet_with_facts(
                     raise NoValidFactsError()
                 text, valid_ids = assembled
                 updated_bullets.append(
-                    bullet_of(bullet_id, text, valid_ids, CheckStatus.FALLBACK, ())
+                    bullet_of(
+                        bullet_id,
+                        text,
+                        valid_ids,
+                        CheckStatus.FALLBACK,
+                        (),
+                        user_choice=UserBulletChoice.USE_FACTS,
+                    )
                 )
             updated_entries.append(
                 entry.model_copy(update={"bullets": updated_bullets})

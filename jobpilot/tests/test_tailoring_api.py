@@ -899,19 +899,23 @@ async def test_use_facts_replaces_bullet_records_rejection_and_enforces_guards(
         ver1.content_json = ver1_content
 
     v1 = (await async_client.get(url)).json()
-    # 先手改 v1 成包含「30%」的文字作为 v2，再对其点「改用事实原文」
+    # 先手改 v1 成包含「30%」的文字作为 v2（尝试伪造 user_choice，服务端应忽略），
+    # 再对其点「改用事实原文」
     v2_content = copy.deepcopy(v1["content"])
     for s in v2_content["sections"]:
         for e in s["entries"]:
             for b in e["bullets"]:
                 if b["bullet_id"] == bullet["bullet_id"]:
                     b["text"] = "负责运单查询接口，耗时降低 30%"
+                    b["user_choice"] = "use_facts"
     v2 = (
         await async_client.put(
             url, json={"base_version_id": v1["version_id"], "content": v2_content}
         )
     ).json()
-    assert "30%" in v2["content"]["sections"][0]["entries"][0]["bullets"][0]["text"]
+    v2_bullet = v2["content"]["sections"][0]["entries"][0]["bullets"][0]
+    assert "30%" in v2_bullet["text"]
+    assert v2_bullet["user_choice"] is None
 
     # 预览页面内嵌的编辑器数据带 use_facts_url
     preview = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
@@ -944,13 +948,16 @@ async def test_use_facts_replaces_bullet_records_rejection_and_enforces_guards(
     )
     assert "20%" in v3_bullet["text"] and "30%" not in v3_bullet["text"]
     assert v3_bullet["origin"] == "fallback" and v3_bullet["edited"] is False
+    assert v3_bullet["user_choice"] == "use_facts"
     assert v3_bullet["check"]["text"] == v3_bullet["text"]
 
-    # 导出只有 20%，旧版本 v2 仍是 30%
+    # 导出只有 20%，旧版本 v2 仍是 30% 且 user_choice 为 None
     exported_v3 = await async_client.get(f"/api/tailor-runs/{run_id}/export")
     assert "20%" in exported_v3.text and "30%" not in exported_v3.text
     old_v2 = (await async_client.get(f"{url}?version=2")).json()
-    assert "30%" in old_v2["content"]["sections"][0]["entries"][0]["bullets"][0]["text"]
+    old_v2_bullet = old_v2["content"]["sections"][0]["entries"][0]["bullets"][0]
+    assert "30%" in old_v2_bullet["text"]
+    assert old_v2_bullet["user_choice"] is None
 
     async with session_factory() as db:
         row = await db.get_one(TailoredBullet, UUID(bullet["bullet_id"]))

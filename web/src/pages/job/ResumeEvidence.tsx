@@ -22,6 +22,9 @@ function collectBullets(resume: TailoredResumeData): BulletEntry[] {
 }
 
 function originTag(bullet: ResumeBullet): ReactElement {
+  if (bullet.origin === 'fallback' && bullet.user_choice === 'use_facts') {
+    return <Tag color="processing">已改用事实原文</Tag>
+  }
   if (bullet.origin === 'fallback') {
     return (
       <Tag color="warning" icon={<WarningOutlined />}>
@@ -53,7 +56,10 @@ function originTag(bullet: ResumeBullet): ReactElement {
 function bulletTriggerClass(bullet: ResumeBullet, isSelected: boolean): string {
   const classes = ['evidence-trigger']
   if (bullet.origin === 'pending') classes.push('evidence-trigger-error')
-  else if (bullet.origin === 'fallback' || bullet.check.issues.length > 0) {
+  else if (
+    (bullet.origin === 'fallback' && bullet.user_choice !== 'use_facts') ||
+    bullet.check.issues.length > 0
+  ) {
     classes.push('evidence-trigger-warn')
   }
   if (isSelected) classes.push('evidence-trigger-active')
@@ -152,6 +158,9 @@ function BulletDetail({
 }
 
 function CheckSummary({ bullet }: { bullet: ResumeBullet }): ReactElement {
+  if (bullet.origin === 'fallback' && bullet.user_choice === 'use_facts') {
+    return <Typography.Text type="secondary">检查结论：你选择了改用事实原文。</Typography.Text>
+  }
   if (bullet.origin === 'fallback') {
     return (
       <Typography.Text type="warning">检查结论：改写没通过检查，用了事实原文。</Typography.Text>

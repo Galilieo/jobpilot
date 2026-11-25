@@ -40,6 +40,12 @@ class CheckLayers(StrEnum):
     PROGRAM = "program"  # 手动修改后只查了第一、二层
 
 
+class UserBulletChoice(StrEnum):
+    """用户在预览里对一条改写做出的明确选择，与自动回退区分。"""
+
+    USE_FACTS = "use_facts"
+
+
 class BulletCheck(BaseModel):
     """一次依据检查的结论，绑定它检查的文字。"""
 
@@ -57,6 +63,7 @@ class Bullet(BaseModel):
     text: str
     fact_ids: list[UUID]
     origin: CheckStatus  # 生成时的结果：通过、回退成事实原文、待处理
+    user_choice: UserBulletChoice | None = None
     edited: bool = False  # 用户手动改过
     check: BulletCheck
 
@@ -330,6 +337,8 @@ def bullet_of(
     fact_ids: Sequence[UUID],
     status: CheckStatus,
     issues: Sequence[GroundingIssue],
+    *,
+    user_choice: UserBulletChoice | None = None,
 ) -> Bullet:
     """生成时定稿的一条，检查结论绑定生成时的文字。
 
@@ -345,5 +354,6 @@ def bullet_of(
         text=text,
         fact_ids=list(fact_ids),
         origin=status,
+        user_choice=user_choice,
         check=check,
     )

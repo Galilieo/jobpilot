@@ -252,4 +252,63 @@ describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', (
     // 说明部分覆盖、未覆盖去哪里看
     expect(screen.getByText(/部分覆盖、未覆盖的要求见匹配报告/)).toBeInTheDocument()
   })
+
+  it('依据追溯区分自动回退与用户主动改用事实原文', async () => {
+    const user = userEvent.setup()
+    const withUserChoice: TailoredResumeData = {
+      ...RESUME_DATA,
+      content: {
+        ...RESUME_DATA.content,
+        sections: [
+          {
+            ...RESUME_DATA.content.sections[0],
+            entries: [
+              {
+                ...RESUME_DATA.content.sections[0].entries[0],
+                bullets: [
+                  RESUME_DATA.content.sections[0].entries[0].bullets[1],
+                  {
+                    bullet_id: 'bul-user-facts',
+                    text: '负责用 FastAPI 实现问答接口',
+                    fact_ids: ['f-1'],
+                    origin: 'fallback',
+                    user_choice: 'use_facts',
+                    edited: false,
+                    check: {
+                      text: '负责用 FastAPI 实现问答接口',
+                      layers: 'program',
+                      issues: [],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/api/jobs/job-1/tailor-runs') {
+        return jsonResponse(200, [{ ...SUMMARY_RUNNING, status: 'succeeded', has_resume: true }])
+      }
+      if (url === '/api/tailor-runs/run-1') return jsonResponse(200, RUN_SUCCEEDED)
+      if (url === '/api/tailor-runs/run-1/resume') return jsonResponse(200, withUserChoice)
+      if (url === '/api/facts') return jsonResponse(200, LIBRARY)
+      throw new Error(`未预期的请求: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderWithProviders(<ResumePanel jobId="job-1" />)
+    await user.click(await screen.findByRole('tab', { name: '依据追溯' }))
+
+    // 第一条为自动回退
+    expect(await screen.findByText(/检查结论：改写没通过检查，用了事实原文/)).toBeInTheDocument()
+    expect(screen.getByText('已回退原文')).toBeInTheDocument()
+
+    // 点开用户主动改用事实原文条目
+    await user.click(screen.getByRole('button', { name: /负责用 FastAPI 实现问答接口/ }))
+    expect(await screen.findByText(/检查结论：你选择了改用事实原文/)).toBeInTheDocument()
+    expect(screen.getByText('已改用事实原文')).toBeInTheDocument()
+  })
 })
