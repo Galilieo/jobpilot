@@ -164,6 +164,7 @@ export const jobs = {
     request<Job>('/api/jobs', { json: { raw_text: rawText }, idempotencyKey }),
   update: (jobId: string, changes: JobChanges) =>
     request<Job>(`/api/jobs/${jobId}`, { method: 'PUT', json: changes }),
+  remove: (jobId: string) => request<void>(`/api/jobs/${jobId}`, { method: 'DELETE' }),
   matches: (jobId: string, signal?: AbortSignal) =>
     request<MatchSummary[]>(`/api/jobs/${jobId}/matches`, { signal }),
   match: (jobId: string, idempotencyKey: string) =>

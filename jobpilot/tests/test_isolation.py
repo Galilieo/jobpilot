@@ -263,6 +263,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
         attempts=(
             Attempt("GET", "/api/jobs/{id}"),
             Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
+            Attempt("DELETE", "/api/jobs/{id}"),
             Attempt("POST", "/api/jobs/{id}/match", headers=new_idempotency_headers()),
             Attempt("GET", "/api/jobs/{id}/matches"),
             Attempt("GET", "/api/jobs/{id}/tailor-runs"),
@@ -276,6 +277,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("GET", "/api/jobs"),
                 ("GET", "/api/jobs/{job_id}"),
                 ("PUT", "/api/jobs/{job_id}"),
+                ("DELETE", "/api/jobs/{job_id}"),
                 ("POST", "/api/jobs/{job_id}/match"),
                 ("GET", "/api/jobs/{job_id}/matches"),
                 ("GET", "/api/jobs/{job_id}/tailor-runs"),

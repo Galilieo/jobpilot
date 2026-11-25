@@ -17,11 +17,20 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import (
     AiRun,
+    BulletFact,
+    CheckStatus,
+    Fact,
+    FactSet,
     JobPosting,
     MatchReport,
+    ModelCall,
+    ResumeVersion,
     RunStatus,
+    TailoredBullet,
+    TailoredResume,
     UserJob,
 )
+from jobpilot.services.resume_content import ResumeContent
 from jobpilot.tests.test_facts_api import new_idempotency_headers
 
 JD = (
@@ -639,3 +648,201 @@ async def test_list_jobs_query_count_is_constant_across_job_counts(
         event.remove(db_engine.sync_engine, "before_cursor_execute", cap5)
 
     assert len(q5) == len(q1)
+
+
+async def test_delete_job_cascades_runs_reports_and_resumes_and_allows_reimport(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """删除岗位级联清理运行、报告和简历，保留匿名模型用量且允许再次导入。"""
+    created = await add_job(signed_in, model_outputs)
+    assert created.status_code == 201
+    job_id = UUID(created.json()["job_id"])
+    me = UUID((await signed_in.get("/api/me")).json()["user_id"])
+
+    async with session_factory.begin() as db:
+        fact_set = FactSet(user_id=me, version=1)
+        db.add(fact_set)
+        await db.flush()
+        fact = Fact(
+            user_id=me,
+            fact_set_id=fact_set.fact_set_id,
+            lineage_id=uuid4(),
+            experience="示例实习",
+            kind="action",
+            responsibility="own",
+            text="负责接口开发",
+            has_number=False,
+            source="user",
+        )
+        db.add(fact)
+        await db.flush()
+
+        match_run = AiRun(
+            user_id=me,
+            kind="match",
+            status=RunStatus.SUCCEEDED,
+            user_job_id=job_id,
+            fact_set_id=fact_set.fact_set_id,
+            job_snapshot_json={"requirements": []},
+            finished_at=datetime(2026, 11, 25, 12, 0, tzinfo=UTC),
+        )
+        tailor_run = AiRun(
+            user_id=me,
+            kind="tailor",
+            status=RunStatus.SUCCEEDED,
+            user_job_id=job_id,
+            fact_set_id=fact_set.fact_set_id,
+            job_snapshot_json={"requirements": []},
+            finished_at=datetime(2026, 11, 25, 12, 1, tzinfo=UTC),
+        )
+        db.add_all([match_run, tailor_run])
+        await db.flush()
+
+        report = MatchReport(
+            user_id=me, run_id=match_run.run_id, items_json=[], main_gaps=[]
+        )
+        bullet = TailoredBullet(
+            run_id=tailor_run.run_id,
+            user_id=me,
+            fact_set_id=fact_set.fact_set_id,
+            section="experience",
+            experience="示例实习",
+            order_no=0,
+            text="负责后端接口开发",
+            check_status=CheckStatus.PASSED,
+        )
+        db.add_all([report, bullet])
+        await db.flush()
+
+        db.add(
+            BulletFact(
+                bullet_id=bullet.bullet_id,
+                fact_id=fact.fact_id,
+                user_id=me,
+                fact_set_id=fact_set.fact_set_id,
+            )
+        )
+        resume_id = uuid4()
+        v1_id, v2_id = uuid4(), uuid4()
+        content = ResumeContent(header=["测试"], sections=[]).model_dump(mode="json")
+        db.add(
+            TailoredResume(
+                resume_id=resume_id,
+                run_id=tailor_run.run_id,
+                user_id=me,
+                current_version_id=v2_id,
+            )
+        )
+        db.add_all(
+            [
+                ResumeVersion(
+                    resume_version_id=v1_id,
+                    resume_id=resume_id,
+                    user_id=me,
+                    version=1,
+                    content_json=content,
+                ),
+                ResumeVersion(
+                    resume_version_id=v2_id,
+                    resume_id=resume_id,
+                    user_id=me,
+                    version=2,
+                    content_json=content,
+                ),
+            ]
+        )
+        db.add(
+            ModelCall(
+                run_id=tailor_run.run_id,
+                user_id=me,
+                purpose="rewrite",
+                model="deepseek-flash",
+                outcome="success",
+            )
+        )
+        report_id = report.report_id
+        tailor_run_id = tailor_run.run_id
+
+    deleted = await signed_in.delete(f"/api/jobs/{job_id}")
+    assert deleted.status_code == 204, deleted.text
+
+    assert (await signed_in.get(f"/api/jobs/{job_id}")).status_code == 404
+    assert (await signed_in.get("/api/jobs")).json() == []
+    assert (await signed_in.get("/api/tailored-resumes")).json() == []
+    assert (await signed_in.get(f"/api/match-reports/{report_id}")).status_code == 404
+    assert (await signed_in.get(f"/api/tailor-runs/{tailor_run_id}")).status_code == 404
+
+    async with session_factory() as db:
+        for table in (
+            UserJob,
+            JobPosting,
+            AiRun,
+            MatchReport,
+            TailoredBullet,
+            BulletFact,
+            TailoredResume,
+            ResumeVersion,
+        ):
+            assert (await db.scalars(select(table))).all() == [], table.__name__
+        calls = (await db.scalars(select(ModelCall))).all()
+        assert calls and all(c.run_id is None and c.user_id is None for c in calls)
+
+    # 同一用户再次导入同一份 JD 仍应成功
+    reimported = await add_job(signed_in, model_outputs)
+    assert reimported.status_code == 201
+
+
+async def test_delete_job_keeps_public_posting_and_other_users_jobs(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """删除岗位不动公共 job_posting，也不影响其他用户的同正文岗位。"""
+    me = UUID((await signed_in.get("/api/me")).json()["user_id"])
+    async with session_factory.begin() as db:
+        posting = JobPosting(
+            owner_id=me,
+            visibility="public",
+            raw_text="公共岗位原文",
+            content_hash=uuid4().hex.ljust(64, "0"),
+            parsed_json={
+                "basic_fields": {"title": "公共岗位"},
+                "requirements": [],
+                "duties": [],
+                "keywords": [],
+            },
+        )
+        db.add(posting)
+        await db.flush()
+        my_job = UserJob(user_id=me, posting_id=posting.posting_id)
+        db.add(my_job)
+        await db.flush()
+        my_job_id = my_job.user_job_id
+        public_posting_id = posting.posting_id
+
+    await signed_in.post("/api/auth/logout")
+    await sign_in(signed_in, "other-keep@example.invalid")
+    other_job = (await add_job(signed_in, model_outputs)).json()
+    await signed_in.post("/api/auth/logout")
+    assert (
+        await signed_in.post(
+            "/api/auth/login",
+            json={"email": "jobs-api@example.invalid", "password": "jobs-api-1"},
+        )
+    ).is_success
+
+    deleted = await signed_in.delete(f"/api/jobs/{my_job_id}")
+    assert deleted.status_code == 204
+    async with session_factory() as db:
+        assert await db.get(JobPosting, public_posting_id) is not None
+        assert len((await db.scalars(select(UserJob))).all()) == 1
+        assert await db.get(UserJob, UUID(other_job["job_id"])) is not None
+
+
+async def test_delete_nonexistent_job_returns_404(
+    signed_in: httpx.AsyncClient,
+) -> None:
+    response = await signed_in.delete(f"/api/jobs/{uuid4()}")
+    assert response.status_code == 404

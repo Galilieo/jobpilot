@@ -24,8 +24,14 @@ from jobpilot.api.deps import (
     finish_product,
 )
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
+from jobpilot.api.tailoring import Launcher
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
-from jobpilot.db.jobs import find_existing_job, get_user_job, list_user_jobs
+from jobpilot.db.jobs import (
+    delete_user_job,
+    find_existing_job,
+    get_user_job,
+    list_user_jobs,
+)
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
 from jobpilot.db.reports import latest_match_reports_by_job
 from jobpilot.db.runs import set_run_status
@@ -359,3 +365,15 @@ async def update_job(
     await db.commit()
     await db.refresh(user_job)
     return _job_out(posting, user_job)
+
+
+@router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_job(
+    job_id: UUID, user: CurrentUser, db: DbSession, launcher: Launcher
+) -> None:
+    """删除当前用户的岗位记录及其匹配报告、改写运行和定制简历；公共或共用岗位原文不动。"""
+    deleted_runs = await delete_user_job(db, user.user_id, job_id)
+    if deleted_runs is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
+    await db.commit()
+    launcher.cancel_runs(deleted_runs)

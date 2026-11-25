@@ -15,13 +15,19 @@ import {
   Typography,
 } from 'antd'
 import { useState, type ReactElement } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { jobs } from '../../api/endpoints'
 import type { JobStage } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
 import { PageHeader } from '../../components/PageHeader'
 import { JOB_STAGE } from '../../labels'
-import { JOBS_QUERY, OVERVIEW_QUERY, jobQuery, matchesQuery } from '../../queryKeys'
+import {
+  JOBS_QUERY,
+  OVERVIEW_QUERY,
+  TAILORED_RESUMES_QUERY,
+  jobQuery,
+  matchesQuery,
+} from '../../queryKeys'
 import { InjectionAlert, JobInfo } from './JobInfo'
 import { MatchPanel } from './MatchPanel'
 import { ResumePanel } from './ResumePanel'
@@ -34,8 +40,9 @@ const STAGE_OPTIONS = (Object.keys(JOB_STAGE) as JobStage[]).map((value) => ({
 }))
 
 export function JobDetailPage(): ReactElement {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { jobId = '' } = useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const screens = Grid.useBreakpoint()
   const isNarrow = screens.lg === false
@@ -65,6 +72,34 @@ export function JobDetailPage(): ReactElement {
       void message.error(error.message)
     },
   })
+
+  const removeJob = useMutation({
+    mutationFn: () => jobs.remove(jobId),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: jobQuery(jobId) })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: JOBS_QUERY }),
+        queryClient.invalidateQueries({ queryKey: OVERVIEW_QUERY }),
+        queryClient.invalidateQueries({ queryKey: TAILORED_RESUMES_QUERY }),
+      ])
+      message.success('已删除岗位')
+      void navigate('/jobs', { replace: true })
+    },
+    onError: (error) => {
+      void message.error(error.message)
+    },
+  })
+
+  function confirmDelete(): void {
+    modal.confirm({
+      title: '删除这个岗位？',
+      content: '会一起删除这个岗位的全部匹配报告、改写记录和定制简历，删除后无法恢复。',
+      okText: '删除岗位',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: () => removeJob.mutateAsync(),
+    })
+  }
 
   const hasReport = Boolean(matches.data && matches.data.length > 0)
   const activeTab: DetailTab = manualTab ?? (hasReport ? 'match' : 'info')
@@ -115,6 +150,12 @@ export function JobDetailPage(): ReactElement {
                         label: '归档岗位',
                         disabled: job.data.stage === 'archived',
                         onClick: () => updateStage.mutate('archived'),
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'delete',
+                        label: '删除岗位',
+                        onClick: confirmDelete,
                       },
                     ],
                   }}
