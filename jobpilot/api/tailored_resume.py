@@ -41,13 +41,16 @@ from jobpilot.services.resume_export import (
     to_markdown,
 )
 from jobpilot.services.resume_versions import (
+    BulletNotFoundError,
     LoadedResume,
+    NoValidFactsError,
     ResumeNotFoundError,
     UnknownPartError,
     VersionConflictError,
     load_resume,
     reset_version,
     save_version,
+    use_bullet_facts,
 )
 
 router = APIRouter(prefix="/api", tags=["tailored-resume"])
@@ -84,10 +87,10 @@ class ResumeIn(BaseModel):
     content: ResumeContent
 
 
-class ResetIn(BaseModel):
+class BaseVersionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    base_version_id: UUID  # 开始重置时的版本；已不是当前版本时 409
+    base_version_id: UUID  # 操作开始时的版本；已不是当前版本时 409
 
 
 TailoredResumeStatus = Literal["generated", "edited", "needs_attention"]
@@ -241,7 +244,7 @@ async def save_resume(
 
 @router.post("/tailor-runs/{run_id}/resume/reset")
 async def reset_resume(
-    run_id: UUID, body: ResetIn, user: CurrentUser, db: DbSession
+    run_id: UUID, body: BaseVersionIn, user: CurrentUser, db: DbSession
 ) -> ResumeOut:
     """回到系统生成的版本：把第一版复制成一个新版本，之前的版本都留在历史里。"""
     user_id = user.user_id
@@ -251,6 +254,33 @@ async def reset_resume(
         run_id,
         reset_version(db, user_id, run_id, base_version_id=body.base_version_id),
         conflict_message="简历已在别处保存过，请刷新后再重置",
+    )
+
+
+@router.post("/tailor-runs/{run_id}/resume/bullets/{bullet_id}/use-facts")
+async def use_facts_for_bullet(
+    run_id: UUID,
+    bullet_id: UUID,
+    body: BaseVersionIn,
+    user: CurrentUser,
+    db: DbSession,
+) -> ResumeOut:
+    """不用这条改写，改用服务端记录的原引用事实拼出新版本。"""
+    user_id = user.user_id
+    facts = await _run_facts(db, user_id, run_id)
+    return await _commit_edit(
+        db,
+        user_id,
+        run_id,
+        use_bullet_facts(
+            db,
+            user_id,
+            run_id,
+            bullet_id=bullet_id,
+            base_version_id=body.base_version_id,
+            available=facts,
+        ),
+        conflict_message="简历已在别处保存过，请刷新后再改用事实原文",
     )
 
 
@@ -269,7 +299,7 @@ async def _commit_edit(
     """
     try:
         response = await _resume_out(db, user_id, run_id, await action)
-    except ResumeNotFoundError:
+    except (ResumeNotFoundError, BulletNotFoundError):
         raise _not_found() from None
     except VersionConflictError as error:
         await db.rollback()
@@ -279,6 +309,12 @@ async def _commit_edit(
                 "message": conflict_message,
                 "current_version_id": str(error.current_version_id),
             },
+        ) from None
+    except NoValidFactsError as error:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
         ) from None
     except UnknownPartError as error:
         await db.rollback()
@@ -390,6 +426,7 @@ async def preview_resume(
             save_url=f"/api/tailor-runs/{run_id}/resume",
             export_url=f"/api/tailor-runs/{run_id}/export?format=html",
             reset_url=f"/api/tailor-runs/{run_id}/resume/reset",
+            use_facts_url=f"/api/tailor-runs/{run_id}/resume/bullets/{{bullet_id}}/use-facts",
         )
         if current
         else None

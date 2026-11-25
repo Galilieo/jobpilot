@@ -124,6 +124,7 @@ class EditorContext:
     save_url: str | None = None
     export_url: str | None = None
     reset_url: str | None = None  # 回到系统生成的版本：服务器把第一版复制成新版本
+    use_facts_url: str | None = None  # 含 {bullet_id} 占位，改用服务端记录的事实原文
 
     @property
     def online(self) -> bool:
@@ -149,6 +150,7 @@ def _editor_json(content: ResumeContent, version: int, editor: EditorContext) ->
         "save_url": editor.save_url,
         "export_url": editor.export_url,
         "reset_url": editor.reset_url,
+        "use_facts_url": editor.use_facts_url,
     }
     return Markup(json.dumps(data, ensure_ascii=False).replace("<", "\\u003c"))
 

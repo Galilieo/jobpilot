@@ -711,6 +711,13 @@ class CheckStatus(StrEnum):
     PENDING = "pending"
 
 
+class UserDecision(StrEnum):
+    """用户对改写条目的处理：采纳或放弃改写。"""
+
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
 class TailoredBullet(Base):
     """一次改写运行产出的一条简历条目。
 

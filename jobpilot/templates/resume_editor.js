@@ -109,6 +109,7 @@
     const copy = node.cloneNode(true);
     copy.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
     copy.querySelector(".toolbar")?.remove();
+    copy.querySelectorAll(".bullet-action").forEach((el) => el.remove());
     copy.querySelector("body")?.classList.remove("editing");
     return copy;
   }
@@ -187,11 +188,31 @@
   }
 
   // 保存后服务器重新检查了改过的条目，按新结论更新标记。
+  function renderRichText(element, text) {
+    element.textContent = "";
+    const pattern = /\*\*(.+?)\*\*/g;
+    let pos = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > pos) {
+        element.append(document.createTextNode(text.slice(pos, match.index)));
+      }
+      const strong = document.createElement("strong");
+      strong.textContent = match[1];
+      element.append(strong);
+      pos = pattern.lastIndex;
+    }
+    if (pos < text.length) {
+      element.append(document.createTextNode(text.slice(pos)));
+    }
+  }
+
   function refreshMarks(content) {
     const bullets = content.sections.flatMap((s) => s.entries.flatMap((e) => e.bullets));
     for (const bullet of bullets) {
       const li = page.querySelector(`li[data-bullet-id="${CSS.escape(bullet.bullet_id)}"]`);
       if (!li) continue;
+      li.classList.toggle("pending", bullet.origin === "pending");
       li.querySelector(".mark")?.remove();
       const issues = bullet.check.issues.map((i) => i.message).join("；");
       const label =
@@ -202,8 +223,27 @@
       mark.textContent = label;
       mark.title = issues;
       mark.contentEditable = "false";
-      li.append(mark);
+      const action = li.querySelector(".bullet-action");
+      if (action) action.before(mark);
+      else li.append(mark);
     }
+  }
+
+  function applyServerVersion(saved, statusMessage) {
+    versionId = saved.version_id;
+    version = saved.version;
+    page.dataset.resumeVersion = String(saved.version);
+    data.content = saved.content;
+    const bullets = saved.content.sections.flatMap((s) => s.entries.flatMap((e) => e.bullets));
+    for (const bullet of bullets) {
+      const li = page.querySelector(`li[data-bullet-id="${CSS.escape(bullet.bullet_id)}"]`);
+      const textSpan = li?.querySelector('[data-part="text"]');
+      if (textSpan) renderRichText(textSpan, bullet.text);
+    }
+    refreshMarks(saved.content);
+    updateFit();
+    storage.remove(DRAFT_KEY);
+    setStatus(statusMessage);
   }
 
   // ---------- 编辑开关 ----------
@@ -285,6 +325,10 @@
       transparent 0, transparent calc(297mm - 1px), #cf222e calc(297mm - 1px), #cf222e 297mm); }
     body.editing [data-part]:hover { outline: 1px dashed var(--rule); }
     body.editing [data-part]:focus { outline: 1px solid #0969da; }
+    .bullet-action { font: inherit; font-size: .78em; color: var(--muted); background: #fff;
+      border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; margin-left: 6px;
+      cursor: pointer; }
+    .bullet-action:hover { color: var(--ink); border-color: var(--ink); }
   `;
   document.head.append(css);
   document.body.prepend(toolbar);
@@ -429,7 +473,65 @@
       setStatus(`没有导出，有修改没能保存。${saved.reason}`);
       return;
     }
-    window.location.href = `${data.export_url}&version=${version}`;
+    const link = document.createElement("a");
+    link.href = `${data.export_url}&version=${version}`;
+    link.download = "";
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
+  async function useFacts(bulletId) {
+    setStatus("保存并改用事实原文…");
+    const saved = await flush();
+    if (!saved.ok) {
+      setStatus(`没有改用事实原文，有修改没能保存。${saved.reason}`);
+      return;
+    }
+    try {
+      const url = data.use_facts_url.replace("{bullet_id}", encodeURIComponent(bulletId));
+      const response = await fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base_version_id: versionId }),
+      });
+      if (response.ok) {
+        const updated = await response.json();
+        applyServerVersion(updated, `已改用事实原文 · 第 ${updated.version} 版`);
+        return;
+      }
+      if (response.status === 409) {
+        setStatus("简历已在别处保存过，请刷新后再改用事实原文");
+        return;
+      }
+      if (response.status === 422) {
+        const err = await response.json().catch(() => null);
+        setStatus(typeof err?.detail === "string" ? err.detail : "引用的事实已失效，无法改用事实原文");
+        return;
+      }
+      setStatus("改用事实原文失败");
+    } catch {
+      setStatus("网络异常：没能改用事实原文");
+    }
+  }
+
+  function addBulletActions() {
+    if (!online || !data.use_facts_url) return;
+    for (const li of page.querySelectorAll("li[data-bullet-id]")) {
+      if (li.querySelector(".bullet-action")) continue;
+      const bulletId = li.dataset.bulletId;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "bullet-action no-print";
+      button.dataset.action = "use-facts";
+      button.textContent = "改用事实原文";
+      button.contentEditable = "false";
+      button.addEventListener("click", () => {
+        void useFacts(bulletId);
+      });
+      li.append(button);
+    }
   }
 
   function buildToolbar() {
@@ -448,6 +550,7 @@
   // ---------- 打开时 ----------
 
   buildToolbar();
+  addBulletActions();
 
   if (!online) {
     const saved = storage.get(OFFLINE_KEY);

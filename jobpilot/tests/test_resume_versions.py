@@ -13,7 +13,13 @@ from jobpilot.services.resume_content import (
     ResumeSection,
     bullet_of,
 )
-from jobpilot.services.resume_versions import UnknownPartError, recheck
+from jobpilot.services.resume_versions import (
+    BulletNotFoundError,
+    NoValidFactsError,
+    UnknownPartError,
+    recheck,
+    replace_bullet_with_facts,
+)
 
 INTERN = "云栈物流科技 后端开发实习"
 OTHER = "星桥数据 数据开发实习"
@@ -236,3 +242,56 @@ def test_style_changes_are_kept():
     content = edit()
     content.style = content.style.model_copy(update={"size_pt": 9.0, "leading": 1.3})
     assert run(content).style == content.style
+
+
+def test_replace_bullet_with_facts_assembles_valid_facts_and_resets_check():
+    """不用模型写法、改用事实原文：按服务端保存的引用和有效事实重拼。"""
+    twenty = fact("运单查询 P95 耗时降低 20%")
+    unverified = GroundingFact(
+        fact_id=uuid4(),
+        experience=INTERN,
+        responsibility=Responsibility.OWN,
+        text="未校验的事实",
+        source=FactSource.RESUME,
+        quote_verified=False,
+        section=SectionKind.INTERNSHIP,
+    )
+    bullet = bullet_of(
+        uuid4(),
+        "负责运单查询接口，P95 耗时降低 30%",
+        [API.fact_id, unverified.fact_id, twenty.fact_id],
+        CheckStatus.PASSED,
+        [],
+    )
+    bullet = bullet.model_copy(update={"edited": True})
+    content = PREVIOUS.model_copy(deep=True)
+    content.sections[0].entries[0].bullets = [bullet]
+
+    updated = replace_bullet_with_facts(
+        content,
+        bullet.bullet_id,
+        {**AVAILABLE, twenty.fact_id: twenty, unverified.fact_id: unverified},
+    )
+    replaced = updated.sections[0].entries[0].bullets[0]
+    assert replaced.text == "负责运单查询接口；运单查询 P95 耗时降低 20%"
+    assert replaced.fact_ids == [API.fact_id, twenty.fact_id]
+    assert replaced.origin is CheckStatus.FALLBACK
+    assert not replaced.edited
+    assert replaced.check.text == replaced.text
+    assert replaced.check.passed
+
+    # 技能概述区允许跨经历引用
+    skill_updated = replace_bullet_with_facts(updated, SKILL.bullet_id, AVAILABLE)
+    assert (
+        skill_updated.sections[1].entries[0].bullets[0].text
+        == "负责运单查询接口；用 Spark 清洗日志"
+    )
+
+
+def test_replace_bullet_with_facts_rejects_missing_bullet_or_no_valid_facts():
+    with pytest.raises(BulletNotFoundError):
+        replace_bullet_with_facts(PREVIOUS, uuid4(), AVAILABLE)
+
+    # 引用的事实都不存在或失效
+    with pytest.raises(NoValidFactsError):
+        replace_bullet_with_facts(PREVIOUS, BULLET.bullet_id, {})

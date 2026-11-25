@@ -25,9 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.models import (
     BulletSection,
+    CheckStatus,
     ResumeVersion,
     SectionKind,
+    TailoredBullet,
     TailoredResume,
+    UserDecision,
 )
 from jobpilot.services.grounding import GroundingFact, check_grounding
 from jobpilot.services.resume_content import (
@@ -36,8 +39,10 @@ from jobpilot.services.resume_content import (
     CheckLayers,
     Entry,
     ResumeContent,
+    bullet_of,
     plain,
 )
+from jobpilot.services.tailoring import fallback_from_facts
 
 
 class ResumeNotFoundError(LookupError):
@@ -58,6 +63,19 @@ class UnknownPartError(ValueError):
     def __init__(self, problems: Sequence[str]) -> None:
         super().__init__("；".join(problems))
         self.problems = tuple(problems)
+
+
+class BulletNotFoundError(LookupError):
+    """条目不存在、不属于该运行，或者当前版本里已经没有这条条目。"""
+
+
+class NoValidFactsError(ValueError):
+    """条目引用的事实都已失效，无法改用事实原文。"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "这条条目引用的事实都已失效，无法改用事实原文，请手动修改或删除"
+        )
 
 
 # ---------- 保存前重新核对 ----------
@@ -295,6 +313,72 @@ async def reset_version(
     return await _append_version(
         db, user_id, resume, ResumeContent.model_validate(first.content_json)
     )
+
+
+def replace_bullet_with_facts(
+    current: ResumeContent,
+    bullet_id: UUID,
+    available: Mapping[UUID, GroundingFact],
+) -> ResumeContent:
+    """按条目服务端保存的原引用组装事实原文，替换该条目；不信任客户端文字或引用。"""
+    found = False
+    sections = []
+    for section in current.sections:
+        updated_entries = []
+        for entry in section.entries:
+            updated_bullets = []
+            for bullet in entry.bullets:
+                if bullet.bullet_id != bullet_id:
+                    updated_bullets.append(bullet)
+                    continue
+                found = True
+                experience = (
+                    None if section.kind is SectionKind.SKILL else entry.experience
+                )
+                assembled = fallback_from_facts(
+                    bullet.fact_ids, available, experience=experience
+                )
+                if assembled is None:
+                    raise NoValidFactsError()
+                text, valid_ids = assembled
+                updated_bullets.append(
+                    bullet_of(bullet_id, text, valid_ids, CheckStatus.FALLBACK, ())
+                )
+            updated_entries.append(
+                entry.model_copy(update={"bullets": updated_bullets})
+            )
+        sections.append(section.model_copy(update={"entries": updated_entries}))
+    if not found:
+        raise BulletNotFoundError(bullet_id)
+    return ResumeContent(header=current.header, sections=sections, style=current.style)
+
+
+async def use_bullet_facts(
+    db: AsyncSession,
+    user_id: UUID,
+    run_id: UUID,
+    *,
+    bullet_id: UUID,
+    base_version_id: UUID,
+    available: Mapping[UUID, GroundingFact],
+) -> LoadedResume:
+    """放弃模型改写、改用服务端记录的事实原文，生成新版本并把条目记为 rejected。"""
+    resume = await _locked_resume(db, user_id, run_id, base_version_id)
+    bullet_row = await db.scalar(
+        select(TailoredBullet).where(
+            TailoredBullet.bullet_id == bullet_id,
+            TailoredBullet.run_id == run_id,
+            TailoredBullet.user_id == user_id,
+        )
+    )
+    if bullet_row is None:
+        raise BulletNotFoundError(bullet_id)
+    current = await db.get_one(ResumeVersion, resume.current_version_id)
+    updated = replace_bullet_with_facts(
+        ResumeContent.model_validate(current.content_json), bullet_id, available
+    )
+    bullet_row.user_decision = UserDecision.REJECTED.value
+    return await _append_version(db, user_id, resume, updated)
 
 
 async def _locked_resume(

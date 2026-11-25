@@ -201,6 +201,26 @@ async def _check(
     return issues + semantic.issues
 
 
+def fallback_from_facts(
+    fact_ids: Sequence[UUID],
+    available: Mapping[UUID, GroundingFact],
+    *,
+    experience: str | None,
+) -> tuple[str, tuple[UUID, ...]] | None:
+    """用本次事实库里仍有效的引用事实拼出回退原文，无有效事实时返回 None。"""
+    valid = [
+        available[fact_id]
+        for fact_id in fact_ids
+        if fact_id in available and _usable_fact(available[fact_id], experience)
+    ]
+    if not valid:
+        return None
+    return (
+        FALLBACK_SEPARATOR.join(fact.text for fact in valid),
+        tuple(fact.fact_id for fact in valid),
+    )
+
+
 def fallback(
     block: PlanBlock,
     available: Mapping[UUID, GroundingFact],
@@ -214,12 +234,10 @@ def fallback(
     经历条目只用同一段经历的。一条都没有时标「待处理」，保留模型的文字给用户看。
     问题清单保留最后一次检查的结果，说明为什么没有用模型的写法。
     """
-    valid = [
-        available[fact_id]
-        for fact_id in draft.fact_ids
-        if fact_id in available and _usable(available[fact_id], block)
-    ]
-    if not valid:
+    assembled = fallback_from_facts(
+        draft.fact_ids, available, experience=block.experience
+    )
+    if assembled is None:
         return FinalBullet(
             text=draft.text,
             fact_ids=draft.fact_ids,
@@ -227,16 +245,17 @@ def fallback(
             revision_count=revisions,
             issues=issues,
         )
+    text, valid_ids = assembled
     return FinalBullet(
-        text=FALLBACK_SEPARATOR.join(fact.text for fact in valid),
-        fact_ids=tuple(fact.fact_id for fact in valid),
+        text=text,
+        fact_ids=valid_ids,
         check_status=CheckStatus.FALLBACK,
         revision_count=revisions,
         issues=issues,
     )
 
 
-def _usable(fact: GroundingFact, block: PlanBlock) -> bool:
+def _usable_fact(fact: GroundingFact, experience: str | None) -> bool:
     if fact.source is FactSource.RESUME and not fact.quote_verified:
         return False
-    return block.experience is None or fact.experience == block.experience
+    return experience is None or fact.experience == experience
