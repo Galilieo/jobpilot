@@ -7,11 +7,16 @@ from fastapi.responses import JSONResponse
 from jobpilot.api.auth import clear_session_cookie
 from jobpilot.api.deps import AuthenticatedSession, DbSession, current_user
 from jobpilot.api.tailoring import Launcher
-from jobpilot.db.accounts import restore_account
+from jobpilot.db.accounts import RestoreResult, restore_account
 from jobpilot.services.account_export import build_account_export
 from jobpilot.services.accounts import request_account_deletion
 
 router = APIRouter(prefix="/api/account", tags=["account"])
+
+_RESTORE_PROBLEMS = {
+    RestoreResult.EXPIRED: "账号已过 7 天恢复期",
+    RestoreResult.STALE: "账号的删除申请已更新，或登录已失效，请刷新后再试",
+}
 
 
 @router.delete(
@@ -30,9 +35,11 @@ async def request_deletion(
 
 @router.post("/restore", status_code=status.HTTP_204_NO_CONTENT)
 async def restore(login: AuthenticatedSession, db: DbSession) -> None:
-    """只在 7 天窗口内恢复账号。"""
-    if not await restore_account(db, login.user.user_id):
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="账号已过 7 天恢复期")
+    """撤销当前的删除申请，只在 7 天窗口内；同一次申请重复恢复也算成功。"""
+    result = await restore_account(db, login)
+    if result is not RestoreResult.RESTORED:
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=_RESTORE_PROBLEMS[result])
     await db.commit()
 
 

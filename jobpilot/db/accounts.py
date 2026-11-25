@@ -4,10 +4,11 @@
 """
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
+from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import delete, exists, func, literal_column, or_, select, update
+from sqlalchemy import delete, exists, func, literal_column, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
@@ -140,22 +141,60 @@ async def revoke_account_sessions(session: AsyncSession, user_id: UUID) -> None:
     await session.execute(delete(UserSession).where(UserSession.user_id == user_id))
 
 
-async def restore_account(session: AsyncSession, user_id: UUID) -> bool:
-    """仅恢复尚未到期的账号；重复恢复已成功的账号也返回成功。"""
+class RestoreResult(StrEnum):
+    RESTORED = "restored"  # 撤销了这次申请；账号已经不在待删除时也是它
+    EXPIRED = "expired"  # 这次申请已经过了 7 天恢复期
+    STALE = "stale"  # 认证之后账号有了新的删除申请，或者这个登录已被注销
+
+
+async def restore_account(session: AsyncSession, login: LoginSession) -> RestoreResult:
+    """撤销认证时看到的那一次删除申请；同一次申请重复恢复也返回成功。
+
+    只按 user_id 更新的话，同一个恢复发了两次、第一个完成后用户又申请了删除，
+    第二个请求这时才执行，会把新的申请也撤销。所以在账号行锁内重新核对登录，
+    并且要求账号上的申请时间就是认证时看到的那个。
+    """
+    user_id = login.user.user_id
+    seen = login.user.deletion_requested_at
+    # NO KEY UPDATE 与业务表外键的 KEY SHARE 兼容，运行收尾仍能先提交。
+    locked = await session.execute(
+        select(User.user_id, User.deletion_requested_at)
+        .where(User.user_id == user_id)
+        .with_for_update(key_share=True)
+    )
+    row = locked.one_or_none()
+    if row is None:
+        return RestoreResult.EXPIRED  # 账号已经被清理
+    if row.deletion_requested_at is None:
+        return RestoreResult.RESTORED  # 没有待删除的申请：已经恢复过，或本来就没申请
+    if row.deletion_requested_at != seen:
+        return RestoreResult.STALE  # 换成了一次新的申请，这是旧请求，不能动它
+    return await _cancel_deletion_request(session, login, seen)
+
+
+async def _cancel_deletion_request(
+    session: AsyncSession, login: LoginSession, seen: datetime
+) -> RestoreResult:
+    """撤销这一次还没到期的申请；调用方已经锁住账号行。
+
+    没更新成时再分清是哪一种：过了恢复期，还是这个登录在进锁之前就被注销了。
+    """
+    user_id = login.user.user_id
     restored = await session.scalar(
         update(User)
         .where(
             User.user_id == user_id,
-            or_(
-                User.deletion_requested_at.is_(None),
-                User.deletion_requested_at
-                > func.clock_timestamp() - _DELETION_INTERVAL,
-            ),
+            User.deletion_requested_at == seen,
+            User.deletion_requested_at > func.clock_timestamp() - _DELETION_INTERVAL,
+            _live_session(login),
         )
         .values(deletion_requested_at=None)
         .returning(User.user_id)
     )
-    return restored is not None
+    if restored is not None:
+        return RestoreResult.RESTORED
+    live = await session.scalar(select(_live_session(login)))
+    return RestoreResult.EXPIRED if live else RestoreResult.STALE
 
 
 def _deletion_due() -> ColumnElement[bool]:
