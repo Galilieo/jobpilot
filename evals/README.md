@@ -107,6 +107,20 @@ E1 评测简历事实拆分，E2 评测 JD 解析。把原文交给待测功能�
 
 中文栏目与经历组合参考[上海纽约大学中文简历范例](https://cdn.shanghai.nyu.edu/sites/default/files/career_guidebook-final.pdf)和[华中师范大学计算机学院求职经验分享](https://cs.ccnu.edu.cn/info/1034/11856.htm)。技术经历、课程项目与校园工作的组织方式参考[UC Davis 技术简历范例（第 27 页）](https://icc.ucdavis.edu/sites/g/files/dgvnsk2236/files/files/page/UCD_CRM_18-19_1.5.pdf)、[Cal Poly 软件工程简历范例](https://content-calpoly-edu.s3.amazonaws.com/careerservices/1/documents/resumes/Software%20Engineering%20PRE-CAREER%20sample.pdf)与[UIC 计算机本科简历范例](https://ecc.uic.edu/wp-content/uploads/sites/78/2026/06/Computer-Science-Updated-Summer-2026.docx.pdf)。
 
+### 求职条件、教育与限定语评测（2026-11-25，`extract_facts@5`）
+
+**标注口径补充：**
+- `criteria.earliest_start.value` 保留包含决定含义的完整原文说法（例如「到岗需交接，预计一个月」「12 月中旬可到岗」），不截去前置条件。
+- `education.status` 不按当前日期推断：只有原文明确写出「在读」「预计」「已毕业」，或依据上下文可确定（同简历有更高一级学历在读、或该学历结束后已有全职工作）时才填，其余填 `null`。
+- `qualifiers` 标注保留在事实 `text` 与 `source_quote` 中的边界限定短语。
+- 测试集 12 份标准答案已在运行任何真实模型前封存提交：`3788fca`，运行后不再修改。
+
+**运行前预测（对照 `extract_facts@4` 基线：开发集召回 98% / 职责 95%，测试集召回 93% / 职责 92%）：**
+- **求职条件各项准确率**：开发集预计 85%～100%，测试集预计 80%～95%。整数项（每周天数、实习月数）预计接近 100%；`earliest_start` 为字符串精确匹配，连写分句（如「寒假起可实习 5 个月」）可能出现轻微边界差异。编造数预计开发集 0、测试集 0～1（关注「全职」「寒假可全勤」是否被误推为 `5` 天）。
+- **教育逐条准确率**：开发集预计 85%～100%，测试集预计 80%～95%，编造数预计 0。风险点在学校名附加标签（如「（双一流）」是否剥离）与多段学历/全职经历上下文的 `completed` 判断。
+- **限定语保留率**：开发集预计 75%～90%，测试集预计 70%～85%。评分使用严格子串（忽略空白）检查，若模型复述时改写限定语措辞可能计为未保留。
+- **对原有指标的影响**：事实召回率、职责准确率与原文片段校验通过率预计与 v4 基本持平（波动 ±2 个百分点内），职责夸大率与数字错误率维持 0%。
+
 ## E2 JD 标注
 
 参考 [合成 JD](datasets/jds/jd-example-001.txt)和 [jd-example-001.json](datasets/annotations/jd-example-001.json)。`hard_requirements` 和 `preferred_requirements` 分别填写硬性要求和加分项，按能够单独判断的条目拆分。`keywords` 使用标准技术名，例如将「检索增强生成」记为 `RAG`。`basic_fields` 中原文缺失的值填 `null`，有范围或下限的值保留语义，例如「至少 4 天」。
