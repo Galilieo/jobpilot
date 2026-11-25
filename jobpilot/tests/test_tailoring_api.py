@@ -5,13 +5,14 @@
 """
 
 import copy
+import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api import tailoring
@@ -24,6 +25,7 @@ from jobpilot.db.models import (
     ResumeDocument,
     RunStatus,
     SectionKind,
+    TailoredBullet,
 )
 from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.main import app
@@ -290,6 +292,83 @@ async def test_program_error_in_background_marks_run_failed(
     await launcher.wait_all()
     result = (await async_client.get(f"/api/tailor-runs/{run_id}")).json()
     assert result["status"] == "failed" and result["finished_at"] is not None
+
+
+RESUME_MARK = "ZZ_RESUME_TEXT_MARK"
+
+
+@pytest.mark.parametrize("failure", ["failing-write", "corrupt-snapshot"])
+async def test_background_error_log_carries_no_resume_text(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failure: str,
+) -> None:
+    """后台改写出错时，日志只留运行 ID、异常类名和错误码。
+
+    数据库异常的说明带着语句参数，约束错误还会由数据库带出整行内容，校验异常的说明
+    带着输入值：简历正文会跟着进日志。
+    两种真实的出错方式各在数据里放一个独特标记，抓取应用发出的全部日志。"""
+    graph = tailoring.run_tailoring
+
+    async def failing_write(deps, user_id, run_id, **kwargs) -> None:
+        """落库时出错：条目引用了不存在的事实库版本，语句参数里带着简历正文。"""
+        async with deps.session_factory() as session:
+            session.add(
+                TailoredBullet(
+                    bullet_id=uuid4(),
+                    run_id=run_id,
+                    user_id=user_id,
+                    fact_set_id=uuid4(),  # 不存在：外键拒绝
+                    section="internship",
+                    experience=RESUME_MARK,
+                    order_no=0,
+                    text=RESUME_MARK,
+                    check_status="passed",
+                    revision_count=0,
+                    issues_json=[],
+                )
+            )
+            await session.flush()
+
+    async def corrupt_snapshot(deps, user_id, run_id, **kwargs) -> None:
+        """岗位快照被写坏：真正的改写流程在读输入时校验失败，输入值里带着简历正文。"""
+        async with deps.session_factory() as session:
+            snapshot = await session.scalar(
+                select(AiRun.job_snapshot_json).where(AiRun.run_id == run_id)
+            )
+        snapshot["requirements"] = RESUME_MARK  # 应该是列表
+        async with deps.session_factory.begin() as session:
+            await session.execute(
+                update(AiRun)
+                .where(AiRun.run_id == run_id)
+                .values(job_snapshot_json=snapshot)
+            )
+        await graph(deps, user_id, run_id, **kwargs)
+
+    broken = failing_write if failure == "failing-write" else corrupt_snapshot
+    monkeypatch.setattr(tailoring, "run_tailoring", broken)
+    caplog.set_level(logging.DEBUG, logger="jobpilot")
+    user_id = await sign_in(async_client, f"log-{failure}@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+
+    run_id = (await start(async_client, inputs.user_job_id)).json()["run_id"]
+    await launcher.wait_all()
+
+    result = (await async_client.get(f"/api/tailor-runs/{run_id}")).json()
+    assert result["status"] == "failed"
+    assert RESUME_MARK not in caplog.text
+    errors = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+    ]
+    expected = "IntegrityError" if failure == "failing-write" else "ValidationError"
+    assert any(run_id in message and expected in message for message in errors), errors
 
 
 async def test_restart_fails_running_runs_but_keeps_waiting_ones(

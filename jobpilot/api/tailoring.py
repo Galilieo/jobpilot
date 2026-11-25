@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from psycopg.errors import CheckViolation
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -230,13 +230,35 @@ async def execute(
             and error.orig.diag.constraint_name == "ck_ai_run_account_active"
         ):
             return
-        await _fail_execution(deps, user_id, run_id)
-    except Exception:  # noqa: BLE001 — 后台任务里的任何错误都不能让运行停在 running
-        await _fail_execution(deps, user_id, run_id)
+        await _fail_execution(deps, user_id, run_id, error)
+    except Exception as error:  # noqa: BLE001 — 后台任务里的任何错误都不能让运行停在 running
+        await _fail_execution(deps, user_id, run_id, error)
 
 
-async def _fail_execution(deps: TailorDeps, user_id: UUID, run_id: UUID) -> None:
-    logger.exception("改写运行 %s 出错", run_id)
+def _describe(error: BaseException) -> str:
+    """日志里能写的异常信息：类名和错误码，不写异常的说明。
+
+    说明里可能带着简历正文：数据库错误带着语句参数和出错的整行，校验错误带着输入值。
+    """
+    parts = [type(error).__name__]
+    original = getattr(error, "orig", None)  # SQLAlchemy 包在里面的数据库异常
+    if original is not None:
+        parts.append(type(original).__name__)
+        constraint = getattr(getattr(original, "diag", None), "constraint_name", None)
+        if constraint:
+            parts.append(constraint)
+        if getattr(original, "sqlstate", None):
+            parts.append(original.sqlstate)
+    if isinstance(error, ValidationError):
+        # 错误类型是固定的一组代码；出问题的位置和输入值不写
+        parts.append(",".join(sorted({item["type"] for item in error.errors()})))
+    return " · ".join(parts)
+
+
+async def _fail_execution(
+    deps: TailorDeps, user_id: UUID, run_id: UUID, error: BaseException
+) -> None:
+    logger.error("改写运行 %s 出错（%s）", run_id, _describe(error))
     await mark_failed(deps.session_factory, user_id, run_id)
 
 
