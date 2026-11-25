@@ -11,7 +11,8 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from jobpilot.db.models import FactKind, FactSource, Responsibility
+from jobpilot.db.models import CriterionField, FactKind, FactSource, Responsibility
+from jobpilot.services.criteria_match import CriterionCandidate
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.jobs import BasicFields, ParsedJob, Requirement, RequirementType
 from jobpilot.services.matching import (
@@ -63,7 +64,7 @@ def test_build_match_report_reclassifies_expression_gap_and_summarizes() -> None
     r1 = _req(RequirementType.HARD, "熟悉 Python")
     r2 = _req(RequirementType.HARD, "熟悉 Redis 缓存")
     r3 = _req(RequirementType.HARD, "熟悉 Go 与 MySQL")
-    r4 = _req(RequirementType.PREFERRED, "每周到岗 4 天以上")
+    r4 = _req(RequirementType.PREFERRED, "有分布式压测经验")
     r5 = _req(RequirementType.PREFERRED, "有 Kafka 经验")
 
     resume_py = _fact(
@@ -78,8 +79,8 @@ def test_build_match_report_reclassifies_expression_gap_and_summarizes() -> None
     resume_go = _fact(
         user_id, fact_set_id, source=FactSource.RESUME, text="用 Go 写服务"
     )
-    user_onsite = _fact(
-        user_id, fact_set_id, source=FactSource.USER, text="每周可到岗 3 天"
+    user_loadtest = _fact(
+        user_id, fact_set_id, source=FactSource.USER, text="做过单机接口压测"
     )
 
     # 故意打乱模型返回顺序，且重复引用同一 fact_id
@@ -95,9 +96,9 @@ def test_build_match_report_reclassifies_expression_gap_and_summarizes() -> None
             {
                 "requirement_id": r4.requirement_id,
                 "verdict": "partial",
-                "fact_ids": [user_onsite.fact_id],
-                "reason": "目前可到岗 3 天",
-                "suggestion": "确认能否协调出 4 天",
+                "fact_ids": [user_loadtest.fact_id],
+                "reason": "仅做过单机压测，尚未涉及分布式压测",
+                "suggestion": "可补充分布式压测实践",
             },
             {
                 "requirement_id": r3.requirement_id,
@@ -132,7 +133,7 @@ def test_build_match_report_reclassifies_expression_gap_and_summarizes() -> None
         user_id=user_id,
         fact_set_id=fact_set_id,
         requirements=[r1, r2, r3, r4, r5],
-        facts=[resume_py, user_redis, user_redis_2, resume_go, user_onsite],
+        facts=[resume_py, user_redis, user_redis_2, resume_go, user_loadtest],
         raw=raw,
     )
 
@@ -384,6 +385,95 @@ def test_format_match_messages_wraps_untrusted_blocks_and_hides_source() -> None
     assert isinstance(user_msg, str)
     assert '<untrusted_data label="job_requirements">' in user_msg
     assert '<untrusted_data label="facts">' in user_msg
+    assert '<untrusted_data label="criteria">' in user_msg
     assert str(req.requirement_id) in user_msg
     assert str(fact.fact_id) in user_msg
     assert '"source"' not in user_msg
+
+
+def test_program_overrides_model_missing_and_criteria_never_expression_gap() -> None:
+    """程序覆盖模型 missing；引用条件不改判表达缺口；拒绝未知条件引用。"""
+    user_id, fact_set_id = uuid4(), uuid4()
+    r_days = _req(RequirementType.HARD, "每周至少到岗 4 天")
+    r_compound = _req(RequirementType.HARD, "每周可到岗 4 天以上，熟悉 Python")
+    crit = CriterionCandidate(
+        ref_id="criteria.onsite_days_per_week",
+        field=CriterionField.ONSITE_DAYS_PER_WEEK,
+        int_value=5,
+        text_value=None,
+        text="每周可到岗 5 天",
+    )
+    user_fact = _fact(
+        user_id, fact_set_id, source=FactSource.USER, text="用 Python 写服务"
+    )
+    raw = _raw(
+        [
+            {
+                "requirement_id": r_days.requirement_id,
+                "verdict": "missing",
+                "fact_ids": [],
+                "criteria_refs": [],
+                "reason": "未看到到岗天数",
+                "suggestion": "请补充",
+            },
+            {
+                "requirement_id": r_compound.requirement_id,
+                "verdict": "covered",
+                "fact_ids": [user_fact.fact_id],
+                "criteria_refs": [crit.ref_id],
+                "reason": "满足天数和 Python",
+                "suggestion": "突出 Python",
+            },
+        ],
+        main_gaps=["缺少每周到岗 4 天说明"],
+    )
+
+    built = build_match_report(
+        user_id=user_id,
+        fact_set_id=fact_set_id,
+        requirements=[r_days, r_compound],
+        facts=[user_fact],
+        criteria=[crit],
+        raw=raw,
+    )
+
+    days_item, compound_item = built.items
+    assert days_item.verdict is MatchVerdict.COVERED
+    assert days_item.decision_source == "program"
+    assert days_item.criteria_refs == [crit.ref_id]
+    assert built.main_gaps == []
+
+    # 引用了求职条件：即使 fact 全部来自用户，也不改判为 expression_gap。
+    assert compound_item.verdict is MatchVerdict.COVERED
+    assert compound_item.decision_source == "model"
+    assert compound_item.review_note is not None and "复合" in compound_item.review_note
+
+    bad_raw = _raw(
+        [
+            {
+                "requirement_id": r_days.requirement_id,
+                "verdict": "covered",
+                "fact_ids": [],
+                "criteria_refs": ["criteria.unknown"],
+                "reason": "x",
+                "suggestion": "y",
+            },
+            {
+                "requirement_id": r_compound.requirement_id,
+                "verdict": "missing",
+                "fact_ids": [],
+                "criteria_refs": [],
+                "reason": "x",
+                "suggestion": "y",
+            },
+        ]
+    )
+    with pytest.raises(MatchValidationError, match="条件 ID"):
+        build_match_report(
+            user_id=user_id,
+            fact_set_id=fact_set_id,
+            requirements=[r_days, r_compound],
+            facts=[user_fact],
+            criteria=[crit],
+            raw=bad_raw,
+        )

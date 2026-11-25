@@ -7,11 +7,12 @@
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 from openai import APIConnectionError, APIStatusError
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import Select, select
 
 from jobpilot.api.deps import (
@@ -49,9 +50,11 @@ from jobpilot.services.llm_gateway import (
 from jobpilot.services.matching import (
     CoverageCounts,
     FactCandidate,
+    MatchInputs,
     MatchItem,
     MatchValidationError,
     MatchVerdict,
+    load_match_inputs,
     match_job,
     summarize_coverage,
 )
@@ -98,12 +101,24 @@ class CitedFactOut(BaseModel):
         )
 
 
+class CitedCriterionOut(BaseModel):
+    """匹配报告里引用的一项求职条件或教育经历。"""
+
+    ref_id: str
+    kind: Literal["criterion", "education"]
+    label: str
+    text: str
+
+
 class MatchItemOut(BaseModel):
     requirement_id: UUID
     requirement_type: RequirementType
     requirement_text: str
     verdict: MatchVerdict
     facts: list[CitedFactOut]
+    criteria: list[CitedCriterionOut] = Field(default_factory=list)
+    decision_source: Literal["model", "program"] = "model"
+    review_note: str | None = None
     reason: str
     suggestion: str
 
@@ -133,6 +148,20 @@ class MatchReportSummaryOut(BaseModel):
     created_at: datetime
 
 
+def _criteria_map(inputs: MatchInputs) -> dict[str, CitedCriterionOut]:
+    items = {
+        c.ref_id: CitedCriterionOut(
+            ref_id=c.ref_id, kind="criterion", label=c.label, text=c.text
+        )
+        for c in inputs.criteria
+    }
+    for e in inputs.education:
+        items[e.ref_id] = CitedCriterionOut(
+            ref_id=e.ref_id, kind="education", label=e.label, text=e.text
+        )
+    return items
+
+
 def _hydrate_report_out(
     *,
     report_id: UUID,
@@ -145,6 +174,7 @@ def _hydrate_report_out(
     items: Sequence[MatchItem],
     main_gaps: Sequence[str],
     cited_by_id: Mapping[UUID, CitedFactOut],
+    criteria_by_id: Mapping[str, CitedCriterionOut],
 ) -> MatchReportOut:
     """用运行当时固定的岗位快照与事实版本填充报告详情。"""
     req_by_id = {req.requirement_id: req for req in snapshot.requirements}
@@ -155,6 +185,13 @@ def _hydrate_report_out(
             requirement_text=req_by_id[item.requirement_id].text,
             verdict=item.verdict,
             facts=[cited_by_id[fid] for fid in item.fact_ids],
+            criteria=[
+                criteria_by_id[ref]
+                for ref in item.criteria_refs
+                if ref in criteria_by_id
+            ],
+            decision_source=item.decision_source,
+            review_note=item.review_note,
             reason=item.reason,
             suggestion=item.suggestion,
         )
@@ -201,19 +238,25 @@ async def create_match_report(
         )
 
     fact_set = await drafts.latest_fact_set(db, user.user_id)
-    facts = await drafts.facts_of(db, fact_set)
-    if fact_set is None or not facts:
+    match_inputs = (
+        await load_match_inputs(db, user.user_id, fact_set.fact_set_id)
+        if fact_set is not None
+        else None
+    )
+    if fact_set is None or match_inputs is None or match_inputs.is_empty:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="尚未发布可用的经历事实，请先确认并发布事实库",
+            detail="尚未发布可用的经历事实、求职条件或教育经历，请先确认并发布事实库",
         )
 
     user_id = user.user_id
     user_job_id = user_job.user_job_id
     fact_set_id = fact_set.fact_set_id
     fact_set_version = fact_set.version
-    candidates = [FactCandidate.from_fact(fact) for fact in facts]
-    cited_by_id = {c.fact_id: CitedFactOut.from_candidate(c) for c in candidates}
+    cited_by_id = {
+        c.fact_id: CitedFactOut.from_candidate(c) for c in match_inputs.facts
+    }
+    criteria_by_id = _criteria_map(match_inputs)
 
     run = AiRun(
         user_id=user_id,
@@ -235,7 +278,9 @@ async def create_match_report(
             client=client,
             budget=ModelBudget(**_MATCH_BUDGET),
             snapshot=snapshot,
-            facts=candidates,
+            facts=match_inputs.facts,
+            criteria=match_inputs.criteria,
+            education=match_inputs.education,
         )
     except _MODEL_ERRORS:
         await set_run_status(db, user_id, run_id, RunStatus.FAILED)
@@ -266,6 +311,7 @@ async def create_match_report(
         items=built.items,
         main_gaps=built.main_gaps,
         cited_by_id=cited_by_id,
+        criteria_by_id=criteria_by_id,
     )
 
 
@@ -344,8 +390,10 @@ async def get_match_report(
     report, run, fact_set = row.MatchReport, row.AiRun, row.FactSet
     assert run.user_job_id is not None and run.job_snapshot_json is not None
     snapshot = ParsedJob.model_validate(run.job_snapshot_json)
-    facts = await drafts.facts_of(db, fact_set)
-    cited_by_id = {fact.fact_id: CitedFactOut.of(fact) for fact in facts}
+    match_inputs = await load_match_inputs(db, user.user_id, fact_set.fact_set_id)
+    cited_by_id = {
+        c.fact_id: CitedFactOut.from_candidate(c) for c in match_inputs.facts
+    }
     items = [MatchItem.model_validate(item) for item in report.items_json]
 
     return _hydrate_report_out(
@@ -359,4 +407,5 @@ async def get_match_report(
         items=items,
         main_gaps=report.main_gaps,
         cited_by_id=cited_by_id,
+        criteria_by_id=_criteria_map(match_inputs),
     )

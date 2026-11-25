@@ -6,8 +6,9 @@
 import json
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from openai import AsyncOpenAI
@@ -17,8 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
 from jobpilot.db.models import Fact, FactKind, FactSource, Responsibility
+from jobpilot.services import drafts
+from jobpilot.services.criteria_match import (
+    CriterionCandidate,
+    EducationCandidate,
+    ProgramDecision,
+    evaluate_requirement,
+    sync_main_gaps,
+)
 from jobpilot.services.facts import TruncatedOutputError
-from jobpilot.services.jobs import ParsedJob, Requirement, RequirementType
+from jobpilot.services.jobs import BasicFields, ParsedJob, Requirement, RequirementType
 from jobpilot.services.llm_gateway import (
     ModelBudget,
     request_completion,
@@ -52,6 +61,7 @@ class RawMatchItem(_ModelOutput):
     requirement_id: UUID
     verdict: ModelMatchVerdict
     fact_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    criteria_refs: list[str] = Field(default_factory=list, max_length=20)
     reason: str = Field(min_length=1, max_length=500)
     suggestion: str = Field(min_length=1, max_length=500)
 
@@ -98,8 +108,38 @@ class MatchItem(BaseModel):
     requirement_id: UUID
     verdict: MatchVerdict
     fact_ids: list[UUID]
+    criteria_refs: list[str] = Field(default_factory=list)
+    decision_source: Literal["model", "program"] = "model"
+    review_note: str | None = None
     reason: str
     suggestion: str
+
+
+@dataclass(frozen=True)
+class MatchInputs:
+    """两个匹配入口共用的按版本加载结果。"""
+
+    facts: tuple[FactCandidate, ...]
+    criteria: tuple[CriterionCandidate, ...]
+    education: tuple[EducationCandidate, ...]
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.facts or self.criteria or self.education)
+
+
+async def load_match_inputs(
+    db: AsyncSession, user_id: UUID, fact_set_id: UUID
+) -> MatchInputs:
+    """按 (user_id, fact_set_id) 一次加载匹配所需的已发布事实、求职条件和教育。"""
+    fact_rows = await drafts.facts_in(db, user_id, fact_set_id)
+    criterion_rows = await drafts.criteria_in(db, user_id, fact_set_id)
+    education_rows = await drafts.educations_in(db, user_id, fact_set_id)
+    return MatchInputs(
+        facts=tuple(FactCandidate.from_fact(row) for row in fact_rows),
+        criteria=tuple(CriterionCandidate.from_row(row) for row in criterion_rows),
+        education=tuple(EducationCandidate.from_row(row) for row in education_rows),
+    )
 
 
 class CoverageCounts(BaseModel):
@@ -160,8 +200,11 @@ def build_match_report(
     requirements: Sequence[Requirement],
     facts: Sequence[FactCandidate],
     raw: RawMatchOutput,
+    criteria: Sequence[CriterionCandidate] = (),
+    education: Sequence[EducationCandidate] = (),
+    basic_fields: BasicFields | None = None,
 ) -> BuiltMatchReport:
-    """校验要求覆盖完整性与事实归属/版本，并将纯用户补充的已覆盖项改判为表达缺口。"""
+    """校验引用归属/版本、改判纯用户事实表达缺口，并按程序规则覆写条件与教育要求。"""
     allowed_facts = {
         fact.fact_id: fact
         for fact in facts
@@ -171,6 +214,7 @@ def build_match_report(
             and fact.confirmed
         )
     }
+    allowed_criteria = {c.ref_id for c in criteria} | {e.ref_id for e in education}
     req_ids = {req.requirement_id for req in requirements}
 
     raw_by_req: dict[UUID, RawMatchItem] = {}
@@ -190,6 +234,7 @@ def build_match_report(
         raise MatchValidationError(f"遗漏了岗位要求：{', '.join(missing)}")
 
     items: list[MatchItem] = []
+    program_decisions: dict[UUID, ProgramDecision] = {}
     for req in requirements:
         raw_item = raw_by_req[req.requirement_id]
         fact_ids = list(dict.fromkeys(raw_item.fact_ids))
@@ -198,37 +243,72 @@ def build_match_report(
                 raise MatchValidationError(
                     f"引用了不可用或不属于当前版本的事实 ID：{fid}"
                 )
+        criteria_refs = list(dict.fromkeys(raw_item.criteria_refs))
+        for ref_id in criteria_refs:
+            if ref_id not in allowed_criteria:
+                raise MatchValidationError(
+                    f"引用了不可用或不属于当前版本的条件 ID：{ref_id}"
+                )
 
         if (
             raw_item.verdict in (ModelMatchVerdict.COVERED, ModelMatchVerdict.PARTIAL)
             and not fact_ids
+            and not criteria_refs
         ):
             raise MatchValidationError(
-                f"结论为 {raw_item.verdict.value} 时必须引用至少一条事实"
+                f"结论为 {raw_item.verdict.value} 时必须引用至少一条事实或求职条件"
             )
-        if raw_item.verdict is ModelMatchVerdict.MISSING and fact_ids:
-            raise MatchValidationError("结论为 missing 时不能引用事实")
+        if raw_item.verdict is ModelMatchVerdict.MISSING and (
+            fact_ids or criteria_refs
+        ):
+            raise MatchValidationError("结论为 missing 时不能引用事实或求职条件")
 
-        if raw_item.verdict is ModelMatchVerdict.COVERED and all(
-            allowed_facts[fid].source is FactSource.USER for fid in fact_ids
+        # 引用了求职条件或教育的结论永远不改判为表达缺口。
+        if (
+            raw_item.verdict is ModelMatchVerdict.COVERED
+            and not criteria_refs
+            and fact_ids
+            and all(allowed_facts[fid].source is FactSource.USER for fid in fact_ids)
         ):
             verdict = MatchVerdict.EXPRESSION_GAP
         else:
             verdict = MatchVerdict(raw_item.verdict.value)
 
-        items.append(
-            MatchItem(
-                requirement_id=req.requirement_id,
-                verdict=verdict,
-                fact_ids=fact_ids,
-                reason=raw_item.reason,
-                suggestion=raw_item.suggestion,
-            )
+        decision, review_note = evaluate_requirement(
+            req, criteria, education, basic_fields=basic_fields
         )
+        if decision is not None:
+            program_decisions[req.requirement_id] = decision
+            items.append(
+                MatchItem(
+                    requirement_id=req.requirement_id,
+                    verdict=MatchVerdict(decision.verdict),
+                    fact_ids=[],
+                    criteria_refs=list(decision.criteria_refs),
+                    decision_source="program",
+                    review_note=None,
+                    reason=decision.reason,
+                    suggestion=decision.suggestion,
+                )
+            )
+        else:
+            items.append(
+                MatchItem(
+                    requirement_id=req.requirement_id,
+                    verdict=verdict,
+                    fact_ids=fact_ids,
+                    criteria_refs=criteria_refs,
+                    decision_source="model",
+                    review_note=review_note,
+                    reason=raw_item.reason,
+                    suggestion=raw_item.suggestion,
+                )
+            )
 
+    synced_gaps = sync_main_gaps(raw.main_gaps, requirements, program_decisions)
     return BuiltMatchReport(
         items=items,
-        main_gaps=list(raw.main_gaps),
+        main_gaps=synced_gaps,
         hard_summary=summarize_coverage(requirements, items, RequirementType.HARD),
         preferred_summary=summarize_coverage(
             requirements, items, RequirementType.PREFERRED
@@ -240,9 +320,11 @@ def format_match_messages(
     snapshot: ParsedJob,
     facts: Sequence[FactCandidate],
     *,
+    criteria: Sequence[CriterionCandidate] = (),
+    education: Sequence[EducationCandidate] = (),
     system_prompt: str | None = None,
 ) -> list[ChatCompletionMessageParam]:
-    """把岗位要求与已发布事实包装成不可信数据区块，供网关统一脱敏后发送。
+    """把岗位要求、已发布事实与求职条件/教育包装成不可信数据区块，供网关脱敏后发送。
 
     不向模型传入事实来源（source），避免干扰判断；表达缺口完全由程序根据来源改判。
     """
@@ -271,12 +353,23 @@ def format_match_messages(
         }
         for fact in facts
     ]
+    criteria_payload = [
+        {"ref_id": c.ref_id, "kind": "criterion", "label": c.label, "text": c.text}
+        for c in criteria
+    ] + [
+        {"ref_id": e.ref_id, "kind": "education", "label": e.label, "text": e.text}
+        for e in education
+    ]
     user_content = (
         wrap_untrusted_text(
             "job_requirements", json.dumps(job_payload, ensure_ascii=False)
         )
         + "\n\n"
         + wrap_untrusted_text("facts", json.dumps(facts_payload, ensure_ascii=False))
+        + "\n\n"
+        + wrap_untrusted_text(
+            "criteria", json.dumps(criteria_payload, ensure_ascii=False)
+        )
     )
     return [
         {"role": "system", "content": prompt_text},
@@ -294,10 +387,18 @@ async def match_job(
     budget: ModelBudget,
     snapshot: ParsedJob,
     facts: Sequence[FactCandidate],
+    criteria: Sequence[CriterionCandidate] = (),
+    education: Sequence[EducationCandidate] = (),
 ) -> BuiltMatchReport:
-    """调用模型逐条对照岗位要求与已发布事实库，校验并返回结构化匹配报告。"""
+    """调用模型逐条对照岗位要求与已发布事实/条件，校验并覆写后返回匹配报告。"""
     prompt = load_prompt("match_job")
-    messages = format_match_messages(snapshot, facts, system_prompt=prompt.text)
+    messages = format_match_messages(
+        snapshot,
+        facts,
+        criteria=criteria,
+        education=education,
+        system_prompt=prompt.text,
+    )
 
     def validate(completion: ChatCompletion) -> None:
         raw = parse_match_output(completion)
@@ -306,6 +407,9 @@ async def match_job(
             fact_set_id=fact_set_id,
             requirements=snapshot.requirements,
             facts=facts,
+            criteria=criteria,
+            education=education,
+            basic_fields=snapshot.basic_fields,
             raw=raw,
         )
 
@@ -326,5 +430,8 @@ async def match_job(
         fact_set_id=fact_set_id,
         requirements=snapshot.requirements,
         facts=facts,
+        criteria=criteria,
+        education=education,
+        basic_fields=snapshot.basic_fields,
         raw=parse_match_output(completion),
     )

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from jobpilot.api.deps import get_model_client
 from jobpilot.db.models import AiRun, CallOutcome, MatchReport, ModelCall, RunStatus
 from jobpilot.main import app
+from jobpilot.services.prompts import load_prompt
 from jobpilot.tests.conftest import EMPTY_JOB
 from jobpilot.tests.test_call_accounting import (
     completion_response,
@@ -795,8 +796,10 @@ async def test_invalid_json_repaired_once_and_double_failure_marks_failed(
             CallOutcome.INVALID_OUTPUT,
             CallOutcome.SUCCESS,
         ]
-        assert calls[0].prompt_version == "match_job@1"
-        assert calls[1].prompt_version == "match_job@1+repair_json@1"
+        match_label = load_prompt("match_job").label
+        repair_label = load_prompt("repair_json").label
+        assert calls[0].prompt_version == match_label
+        assert calls[1].prompt_version == f"{match_label}+{repair_label}"
 
     model_outputs.extend(["还是坏的", "仍然坏的"])
     failed = await signed_in.post(
@@ -906,3 +909,108 @@ async def test_empty_choices_finishes_run_as_failed(
             select(ModelCall).where(ModelCall.run_id == run.run_id)
         )
         assert calls.one().outcome == CallOutcome.INVALID_OUTPUT
+
+
+async def test_criteria_only_allows_match_but_blocks_tailor_and_hydrates_legacy_report(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """只有求职条件没有事实时允许匹配、拒绝改写；旧格式报告缺少新字段也能回读。"""
+    crit = await signed_in.put(
+        "/api/facts/criteria",
+        json={
+            "field": "onsite_days_per_week",
+            "int_value": 5,
+            "confirmed": True,
+            "expected_revision": 0,
+        },
+    )
+    assert crit.status_code == 200
+    committed = await signed_in.post(
+        "/api/facts/commit",
+        json={"base_fact_set_id": None, "expected_revision": crit.json()["revision"]},
+    )
+    assert committed.status_code == 200
+
+    model_outputs.append(
+        json.dumps(
+            {
+                "basic_fields": {"title": "后端实习生"},
+                "requirements": [
+                    {
+                        "type": "hard",
+                        "text": "每周至少到岗 4 天",
+                        "source_quote": "每周至少到岗 4 天",
+                    }
+                ],
+                "duties": [],
+                "keywords": [],
+            },
+            ensure_ascii=False,
+        )
+    )
+    job = (
+        await signed_in.post(
+            "/api/jobs",
+            json={"raw_text": "后端实习生\n每周至少到岗 4 天"},
+            headers=new_idempotency_headers(),
+        )
+    ).json()
+    req_id = job["parsed"]["requirements"][0]["requirement_id"]
+
+    model_outputs.append(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "requirement_id": req_id,
+                        "verdict": "missing",
+                        "fact_ids": [],
+                        "criteria_refs": [],
+                        "reason": "未见事实",
+                        "suggestion": "补充",
+                    }
+                ],
+                "main_gaps": ["未写到岗天数"],
+            },
+            ensure_ascii=False,
+        )
+    )
+    matched = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/match", headers=new_idempotency_headers()
+    )
+    assert matched.status_code == 201, matched.text
+    report = matched.json()
+    item = report["items"][0]
+    assert item["verdict"] == "covered"
+    assert item["decision_source"] == "program"
+    assert item["criteria"][0]["text"] == "每周可到岗 5 天"
+    assert report["main_gaps"] == []
+
+    # 改写仍必须至少一条经历事实 -> 422。
+    tailor_blocked = await signed_in.post(
+        f"/api/jobs/{job['job_id']}/tailor",
+        json={},
+        headers=new_idempotency_headers(),
+    )
+    assert tailor_blocked.status_code == 422
+
+    # 模拟旧版报告（items_json 里没有 criteria_refs / decision_source / review_note）。
+    async with session_factory.begin() as db:
+        row = await db.get_one(MatchReport, report["report_id"])
+        row.items_json = [
+            {
+                "requirement_id": req_id,
+                "verdict": "missing",
+                "fact_ids": [],
+                "reason": "旧格式",
+                "suggestion": "旧建议",
+            }
+        ]
+    legacy = await signed_in.get(f"/api/match-reports/{report['report_id']}")
+    assert legacy.status_code == 200
+    legacy_item = legacy.json()["items"][0]
+    assert legacy_item["criteria"] == []
+    assert legacy_item["decision_source"] == "model"
+    assert legacy_item["review_note"] is None

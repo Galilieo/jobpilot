@@ -7,7 +7,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from jobpilot.db.models import FactKind, FactSource, Responsibility
+from jobpilot.db.models import CriterionField, FactKind, FactSource, Responsibility
+from jobpilot.services.criteria_match import CriterionCandidate
 from jobpilot.services.facts import (
     FactExtraction,
     locate_quote,
@@ -85,6 +86,9 @@ def test_match_job_example_follows_program_rules() -> None:
     [facts_raw] = re.findall(
         r'<untrusted_data label="facts">\n(.*?)\n</untrusted_data>', text, re.S
     )
+    [criteria_raw] = re.findall(
+        r'<untrusted_data label="criteria">\n(.*?)\n</untrusted_data>', text, re.S
+    )
     [output] = _OUTPUT.findall(text)
 
     user_id, fact_set_id = uuid4(), uuid4()
@@ -106,12 +110,23 @@ def test_match_job_example_follows_program_rules() -> None:
         )
         for item in json.loads(facts_raw)
     ]
+    criteria = [
+        CriterionCandidate(
+            ref_id=item["ref_id"],
+            field=CriterionField.ONSITE_DAYS_PER_WEEK,
+            int_value=3,
+            text_value=None,
+            text=item["text"],
+        )
+        for item in json.loads(criteria_raw)
+    ]
 
     built = build_match_report(
         user_id=user_id,
         fact_set_id=fact_set_id,
         requirements=requirements,
         facts=facts,
+        criteria=criteria,
         raw=RawMatchOutput.model_validate_json(output),
     )
 

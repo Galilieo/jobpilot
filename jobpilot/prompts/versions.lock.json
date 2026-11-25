@@ -8,8 +8,8 @@
     "sha256": "12fce143ee86426ab11c274438229b6374cc6ec707d9d525cd3c8b15020c469e"
   },
   "match_job": {
-    "version": 1,
-    "sha256": "5c5d0fdf1e94c637422efd3df4215d6f129b5bf2dde809bb63419e2c8c99271d"
+    "version": 2,
+    "sha256": "211a4621aad63ec1c54e9761db8c1f4bed332b7e94809ff69412de35b2b373b7"
   },
   "parse_jd": {
     "version": 8,

@@ -20,6 +20,7 @@ from jobpilot.db.models import (
     CheckStatus,
     Fact,
     FactSet,
+    FactSetCriterion,
     JobPosting,
     MatchReport,
     ModelCall,
@@ -505,3 +506,63 @@ async def test_run_finished_elsewhere_writes_nothing(
     calls = select(ModelCall).where(ModelCall.run_id == seeded.run_id)
     assert await count(session_factory, calls) == 6
     assert await versions_of(session_factory, seeded.run_id) == []  # 没有完整简历
+
+
+async def test_tailor_match_uses_shared_criteria_inputs(
+    session_factory: Factory,
+) -> None:
+    """改写图内部 run_match 与匹配接口共用加载函数，能读到同版本的求职条件。"""
+    seeded = await seed(session_factory, "criteria-sync@tailor.invalid")
+    days_req_id = "33333333-3333-4333-8333-333333333333"
+    snapshot_with_days = {
+        **SNAPSHOT,
+        "requirements": [
+            *SNAPSHOT["requirements"],
+            {
+                "requirement_id": days_req_id,
+                "type": "hard",
+                "text": "每周至少到岗 4 天",
+            },
+        ],
+    }
+    async with session_factory.begin() as session:
+        run = await session.get_one(AiRun, seeded.run_id)
+        run.job_snapshot_json = snapshot_with_days
+        assert run.fact_set_id is not None
+        session.add(
+            FactSetCriterion(
+                user_id=seeded.user_id,
+                fact_set_id=run.fact_set_id,
+                field="onsite_days_per_week",
+                int_value=5,
+                source="user",
+            )
+        )
+
+    class ModelWithDays(FakeModel):
+        def _match(self) -> dict:
+            base = super()._match()
+            base["items"].append(
+                {
+                    "requirement_id": days_req_id,
+                    "verdict": "missing",
+                    "fact_ids": [],
+                    "criteria_refs": [],
+                    "reason": "未见到岗天数",
+                    "suggestion": "补充",
+                }
+            )
+            return base
+
+    await tailor(session_factory, seeded, ModelWithDays(seeded.fact_ids))
+
+    async with session_factory() as session:
+        [report] = (
+            await session.scalars(
+                select(MatchReport).where(MatchReport.user_id == seeded.user_id)
+            )
+        ).all()
+    by_req = {item["requirement_id"]: item for item in report.items_json}
+    assert by_req[days_req_id]["verdict"] == "covered"
+    assert by_req[days_req_id]["decision_source"] == "program"
+    assert by_req[days_req_id]["criteria_refs"] == ["criteria.onsite_days_per_week"]

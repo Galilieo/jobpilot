@@ -23,7 +23,12 @@ from jobpilot.db.reports import add_match_report
 from jobpilot.db.runs import finish_run
 from jobpilot.services.grounding import organizations_of
 from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelBudget
-from jobpilot.services.matching import MatchItem, MatchValidationError, match_job
+from jobpilot.services.matching import (
+    MatchItem,
+    MatchValidationError,
+    load_match_inputs,
+    match_job,
+)
 from jobpilot.services.tailoring import (
     MODEL_ERRORS,
     BlockOutcome,
@@ -190,6 +195,7 @@ async def run_match(
         session.add(run)
         await session.flush()
         match_run_id = run.run_id
+        match_inputs = await load_match_inputs(session, user_id, inputs.fact_set_id)
     try:
         built = await match_job(
             deps.session_factory,
@@ -199,7 +205,9 @@ async def run_match(
             client=deps.client,
             budget=deps.budget,
             snapshot=inputs.snapshot,
-            facts=inputs.candidates,
+            facts=match_inputs.facts,
+            criteria=match_inputs.criteria,
+            education=match_inputs.education,
         )
     except BudgetExhaustedError:
         await _finish(deps, user_id, match_run_id, RunStatus.BUDGET_EXHAUSTED)
