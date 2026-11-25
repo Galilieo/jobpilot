@@ -91,7 +91,9 @@ function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }):
       await queryClient.invalidateQueries({ queryKey: JOBS_QUERY })
       void navigate(`/jobs/${job.job_id}`)
     },
-    onError: (error) => message.error(error.message), // 保留已输入的内容
+    onError: (error) => {
+      void message.error(error.message) // 保留已输入的内容
+    },
   })
 
   return (

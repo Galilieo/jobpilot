@@ -37,7 +37,9 @@ export function MatchPanel({ jobId }: { jobId: string }): ReactElement {
         queryClient.invalidateQueries({ queryKey: OVERVIEW_QUERY }),
       ])
     },
-    onError: (error) => message.error(error.message),
+    onError: (error) => {
+      void message.error(error.message)
+    },
   })
 
   const action = (

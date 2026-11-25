@@ -56,7 +56,9 @@ export function JobInfo({ job }: { job: Job }): ReactElement {
         queryClient.invalidateQueries({ queryKey: TAILORED_RESUMES_QUERY }),
       ])
     },
-    onError: (error) => message.error(error.message),
+    onError: (error) => {
+      void message.error(error.message)
+    },
   })
 
   return (

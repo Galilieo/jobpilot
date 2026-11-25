@@ -57,7 +57,9 @@ export function ResumeImport(): ReactElement {
       await queryClient.invalidateQueries({ queryKey: LIBRARY_QUERY })
       message.success(`拆出 ${uploaded.items.length} 条经历事实，请在下方逐条核对`)
     },
-    onError: (error) => message.error(error.message),
+    onError: (error) => {
+      void message.error(error.message)
+    },
   })
 
   return (

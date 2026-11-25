@@ -40,7 +40,9 @@ export function JobDetailPage(): ReactElement {
       ])
       message.success('已更新岗位进度')
     },
-    onError: (error) => message.error(error.message),
+    onError: (error) => {
+      void message.error(error.message)
+    },
   })
 
   return (

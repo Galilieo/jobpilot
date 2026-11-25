@@ -42,7 +42,9 @@ export function AddFactModal({ open, experiences, onClose }: AddFactModalProps):
       ])
       message.success('已加入草稿，发布新版本后生效')
     },
-    onError: (error) => message.error(error.message),
+    onError: (error) => {
+      void message.error(error.message)
+    },
   })
 
   return (
