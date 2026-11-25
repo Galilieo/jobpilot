@@ -140,7 +140,7 @@ textarea {
 .workspace-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .workspace-card {
@@ -156,34 +156,34 @@ textarea {
 .workspace-card .ant-card-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   height: 100%;
-  padding: 16px 18px;
+  padding: 16px;
 }
 
 .workspace-card-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .workspace-card-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .workspace-metric {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   align-items: baseline;
-  margin-top: 2px;
+  margin-top: 4px;
   font-size: 24px;
   font-weight: 600;
   line-height: 1.25;
@@ -218,11 +218,15 @@ textarea {
   margin: 0;
 }
 
+.board-head-sub {
+  font-size: 13px;
+}
+
 .workspace-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .board-column {
@@ -230,7 +234,7 @@ textarea {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  min-height: 140px;
+  min-height: 160px;
   padding: 12px;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 12px;
@@ -240,13 +244,13 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 2px 4px;
+  padding: 0 4px 4px;
 }
 
 .board-column-title {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 13px;
 }
 
@@ -259,7 +263,7 @@ textarea {
 
 .board-count {
   min-width: 22px;
-  padding: 0 7px;
+  padding: 0 8px;
   border-radius: 999px;
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
@@ -269,18 +273,18 @@ textarea {
 }
 
 .board-column-empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
   padding: 16px 4px;
-  font-size: 12px;
-  text-align: center;
+  font-size: 13px;
 }
 
 .board-card {
   border-color: var(--ant-color-border-secondary);
   border-radius: 10px;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.15s ease;
+  transition: border-color 0.2s ease;
 }
 
 .board-card:hover {
@@ -301,10 +305,11 @@ textarea {
 
 .board-card-footer {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
-  justify-content: space-between;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 @media (max-width: 1199px) {

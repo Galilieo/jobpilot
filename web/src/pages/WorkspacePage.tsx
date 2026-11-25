@@ -1,12 +1,14 @@
-// 工作台（首页）：问候语、三张核心状态卡（事实库 / 不编造记录 / 偏好记忆）和四列岗位进度看板。
+// 工作台（首页）：问候语、三张核心状态卡（事实库 / 不编造记录 / 偏好记忆）和四列等高岗位进度看板。
 import { BookOutlined, BulbOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Empty, Skeleton, Space, Tag, Typography, theme } from 'antd'
+import { Button, Card, Skeleton, Space, Tag, Typography, theme } from 'antd'
 import type { ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { overview } from '../api/endpoints'
 import type { BoardJobCard, FactsOverview, GroundingOverview, JobBoard } from '../api/types'
 import { useCurrentUser } from '../auth'
+import { EmptyHint } from '../components/EmptyHint'
+import { PageHeader } from '../components/PageHeader'
 import { JOB_STAGE } from '../labels'
 import { OVERVIEW_QUERY } from '../queryKeys'
 
@@ -28,28 +30,24 @@ export function WorkspacePage(): ReactElement {
 
   return (
     <section className="page workspace-page">
-      <header className="page-heading page-heading-actions">
-        <div>
-          <Typography.Title level={1}>{greeting}</Typography.Title>
-          <Typography.Text type="secondary">
-            先确认经历事实，再匹配岗位并生成可追溯的定制简历。
-          </Typography.Text>
-        </div>
-        <Space wrap>
-          <Button onClick={() => void navigate('/me')}>查看经历事实库</Button>
+      <PageHeader
+        title={greeting}
+        subtitle="先确认经历事实，再匹配岗位并生成可追溯的定制简历。"
+        extra={
           <Button type="primary" onClick={() => void navigate('/jobs')}>
             打开岗位库
           </Button>
-        </Space>
-      </header>
+        }
+      />
 
       {query.isPending ? (
         <Skeleton active />
       ) : query.isError ? (
         <Card>
-          <Empty description={query.error.message}>
-            <Button onClick={() => void query.refetch()}>重试</Button>
-          </Empty>
+          <EmptyHint
+            description={query.error.message}
+            action={<Button onClick={() => void query.refetch()}>重试</Button>}
+          />
         </Card>
       ) : (
         <Space orientation="vertical" size={24} className="full-width">
@@ -174,14 +172,17 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
   return (
     <section aria-label="岗位进度">
       <div className="workspace-board-head">
-        <Typography.Title level={4}>岗位进度</Typography.Title>
-        <Typography.Text type="secondary">点击卡片进入岗位详情继续处理</Typography.Text>
+        <Typography.Title level={3}>岗位进度</Typography.Title>
+        <Typography.Text type="secondary" className="board-head-sub">
+          点击卡片进入岗位详情继续处理
+        </Typography.Text>
       </div>
       {total === 0 ? (
         <Card>
-          <Empty description="还没有添加岗位。去岗位库贴入一份 JD 开始。">
-            <Button onClick={() => void navigate('/jobs')}>打开岗位库</Button>
-          </Empty>
+          <EmptyHint
+            description="还没有添加岗位。去岗位库贴入一份 JD 开始。"
+            action={<Button onClick={() => void navigate('/jobs')}>打开岗位库</Button>}
+          />
         </Card>
       ) : (
         <div className="workspace-board">
@@ -211,7 +212,7 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
                     <BoardCard
                       key={card.job_id}
                       card={card}
-                      showStage={key === 'applied'}
+                      columnKey={key}
                       onOpen={() => void navigate(`/jobs/${card.job_id}`)}
                     />
                   ))
@@ -227,14 +228,13 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
 
 function BoardCard({
   card,
-  showStage,
+  columnKey,
   onOpen,
 }: {
   card: BoardJobCard
-  showStage: boolean
+  columnKey: keyof JobBoard
   onOpen: () => void
 }): ReactElement {
-  const { token } = theme.useToken()
   const subtitle = [card.company, card.location].filter(Boolean).join(' · ') || '公司未填写'
   return (
     <Card size="small" hoverable className="board-card" onClick={onOpen}>
@@ -243,13 +243,13 @@ function BoardCard({
         {subtitle}
       </Typography.Paragraph>
       <div className="board-card-footer">
-        <Space size={4} wrap>
-          {showStage && <Tag color="processing">{JOB_STAGE[card.stage]}</Tag>}
-          {card.resume_stale && <Tag color="warning">事实库已更新</Tag>}
-        </Space>
-        <Typography.Text style={{ color: token.colorPrimary, fontSize: 12 }}>
-          查看 →
-        </Typography.Text>
+        {columnKey === 'unmatched' && <Typography.Text type="secondary">还没匹配</Typography.Text>}
+        {columnKey === 'matched' && <Typography.Text type="secondary">已做匹配</Typography.Text>}
+        {columnKey === 'tailored' && !card.resume_stale && (
+          <Typography.Text type="secondary">简历已生成</Typography.Text>
+        )}
+        {card.resume_stale && <Tag color="warning">事实库已更新</Tag>}
+        {columnKey === 'applied' && <Tag color="processing">{JOB_STAGE[card.stage]}</Tag>}
       </div>
     </Card>
   )
