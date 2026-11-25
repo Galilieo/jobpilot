@@ -445,6 +445,38 @@ async def test_save_response_is_the_version_it_created(
     assert (current["version"], current["content"]["header"][0][-2:]) == (3, "·B")
 
 
+async def test_moving_a_bullet_to_another_entry_is_rejected(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """条目换了所属经历、文字没变：不能带着原来的通过结论存进去，422，也不新增版本。"""
+    url, v1 = await generated_resume(
+        async_client, session_factory, launcher, model, "moved@tailor-api.invalid"
+    )
+    content = copy.deepcopy(v1["content"])
+    with_bullets = [
+        e
+        for s in content["sections"]
+        for e in s["entries"]
+        if e["bullets"] and e["experience"]
+    ]
+    source = next(
+        e for e in with_bullets if any(b["origin"] == "passed" for b in e["bullets"])
+    )
+    target = next(e for e in with_bullets if e["experience"] != source["experience"])
+    target["bullets"].append(source["bullets"].pop())
+
+    rejected = await async_client.put(
+        url, json={"base_version_id": v1["version_id"], "content": content}
+    )
+
+    assert rejected.status_code == 422, rejected.text
+    assert any("条目换了所属经历" in p for p in rejected.json()["detail"])
+    assert (await async_client.get(url)).json() == v1
+
+
 async def test_preview_and_exports_download_from_the_saved_version(
     async_client: httpx.AsyncClient,
     session_factory: Factory,

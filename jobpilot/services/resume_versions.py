@@ -5,6 +5,8 @@
 - 不认识的条目或经历（客户端编出来的 ID）、重复的条目都拒绝；
 - 文字改过的条目在保存时重新做依据检查第一、二层，结论绑定新文字；
   没改过的沿用原来的结论。检查只提示，不阻止保存。
+- 沿用的结论是在原来的经历、原来的栏目下得出的，所以条目不能换所属经历，经历不能
+  重复出现、不能换栏目，换了就拒绝；检查用的栏目类型和经历名也一律取上一版的。
 页头、标题行、没改写的正文可以自由修改，不做依据检查。
 并发：锁住简历行，核对 base_version_id 是否仍是当前版本，不是就拒绝（409），
 客户端保留自己的草稿。保存交回的是这次建立的那一版，不是「提交之后再读一次当前版本」：
@@ -48,7 +50,7 @@ class VersionConflictError(RuntimeError):
 
 
 class UnknownPartError(ValueError):
-    """提交的内容里有上一版没有的条目或经历，或条目重复。"""
+    """提交的内容里有上一版没有的条目或经历、重复的条目，或者条目和经历换了位置。"""
 
     def __init__(self, problems: Sequence[str]) -> None:
         super().__init__("；".join(problems))
@@ -67,7 +69,16 @@ def recheck(
     """以上一版为准补回依据字段，文字改过的条目重新检查第一、二层。"""
     entries = {e.entry_id: e for s in previous.sections for e in s.entries}
     before = {b.bullet_id: b for e in entries.values() for b in e.bullets}
+    # 上一版里每段经历所在的栏目、每条条目所属的经历：检查结论和它们绑在一起
+    kinds = {e.entry_id: s.kind for s in previous.sections for e in s.entries}
+    owners = {
+        b.bullet_id: e.entry_id
+        for s in previous.sections
+        for e in s.entries
+        for b in e.bullets
+    }
     _reject_unknown(submitted, entries, before)
+    _reject_moved(submitted, kinds, owners)
     organizations = frozenset(organizations)
 
     sections = []
@@ -75,11 +86,12 @@ def recheck(
         checked = []
         for entry in section.entries:
             experience = entries[entry.entry_id].experience
+            kind = kinds[entry.entry_id]  # 检查按原来的栏目做，不看请求里的
             bullets = [
                 _recheck_bullet(
                     sent,
                     before[sent.bullet_id],
-                    section.kind,
+                    kind,
                     experience,
                     available,
                     organizations,
@@ -111,6 +123,38 @@ def _reject_unknown(
         problems.append("不认识的条目：" + "、".join(unknown_bullets))
     if len(set(sent_bullets)) != len(sent_bullets):
         problems.append("同一条目出现了不止一次")
+    if problems:
+        raise UnknownPartError(problems)
+
+
+def _reject_moved(
+    submitted: ResumeContent,
+    kinds: Mapping[str, SectionKind],
+    owners: Mapping[UUID, str],
+) -> None:
+    """换了位置的条目和经历拒绝保存。
+
+    文字没变的条目沿用上一版的检查结论，而那个结论是在原来的经历、原来的栏目下得出的：
+    实习里通过的条目挪到项目名下，就成了项目里「已通过」的成果。编辑器只能原位改字，
+    所以换了所属经历、同一经历出现两次、经历换了栏目，都按不认识的内容处理。
+    """
+    problems = []
+    seen: set[str] = set()
+    for section in submitted.sections:
+        for entry in section.entries:
+            if entry.entry_id in seen:
+                problems.append(f"同一经历出现了不止一次：{entry.entry_id}")
+            seen.add(entry.entry_id)
+            # 不认识的条目和经历由 _reject_unknown 报告，这里不算换了位置。
+            if kinds.get(entry.entry_id, section.kind) is not section.kind:
+                problems.append(f"经历换了栏目：{entry.entry_id}")
+            moved = [
+                str(b.bullet_id)
+                for b in entry.bullets
+                if owners.get(b.bullet_id, entry.entry_id) != entry.entry_id
+            ]
+            if moved:
+                problems.append("条目换了所属经历：" + "、".join(moved))
     if problems:
         raise UnknownPartError(problems)
 

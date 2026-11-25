@@ -38,6 +38,9 @@ BULLET = bullet_of(uuid4(), "负责运单查询接口", [API.fact_id], CheckStat
 SKILL = bullet_of(  # 技能概述跨经历引用
     uuid4(), "运单查询、日志清洗", [API.fact_id, SPARK.fact_id], CheckStatus.PASSED, []
 )
+PROJECT = bullet_of(
+    uuid4(), "搭建日志采集管道", [SPARK.fact_id], CheckStatus.PASSED, []
+)
 PREVIOUS = ResumeContent(
     header=["张三"],
     sections=[
@@ -64,6 +67,19 @@ PREVIOUS = ResumeContent(
                     heading="技能",
                     title="技能",
                     bullets=[SKILL],
+                )
+            ],
+        ),
+        ResumeSection(
+            title="项目经历",
+            kind=SectionKind.PROJECT,
+            entries=[
+                Entry(
+                    entry_id="e3",
+                    experience=OTHER,
+                    heading=OTHER,
+                    title=OTHER,
+                    bullets=[PROJECT],
                 )
             ],
         ),
@@ -134,16 +150,51 @@ def test_skills_bullets_may_cite_any_experience():
     assert result.check.layers is CheckLayers.PROGRAM and result.check.passed
 
 
-def test_deleting_and_moving_bullets_is_allowed():
+def test_deleting_bullets_is_allowed():
     content = PREVIOUS.model_copy(deep=True)
-    moved = content.sections[0].entries[0].bullets.pop()
-    content.sections[1].entries[0].bullets.append(moved)
+    content.sections[0].entries[0].bullets.clear()
     result = run(content)
     assert result.sections[0].entries[0].bullets == []
     assert [b.bullet_id for b in result.sections[1].entries[0].bullets] == [
-        SKILL.bullet_id,
-        BULLET.bullet_id,
+        SKILL.bullet_id
     ]
+
+
+def move_bullet_to_the_project(content):
+    """实习的条目挂到项目名下：ID 和文字都没变。"""
+    content.sections[2].entries[0].bullets.append(
+        content.sections[0].entries[0].bullets.pop()
+    )
+
+
+def duplicate_the_internship_entry(content):
+    """同一段经历在技能栏里再出现一次，不带条目。"""
+    content.sections[1].entries.append(
+        content.sections[0].entries[0].model_copy(update={"bullets": []})
+    )
+
+
+def move_the_internship_entry_to_the_project_section(content):
+    """整段经历连同条目挪进另一个栏目。"""
+    content.sections[2].entries.insert(0, content.sections[0].entries.pop())
+
+
+@pytest.mark.parametrize(
+    ("change", "problem"),
+    [
+        # 文字没变就会沿用原来的通过结论：实习的成果会挂在项目名下
+        (move_bullet_to_the_project, "条目换了所属经历"),
+        (duplicate_the_internship_entry, "同一经历出现了不止一次"),
+        (move_the_internship_entry_to_the_project_section, "经历换了栏目"),
+    ],
+)
+def test_parts_cannot_leave_their_place(change, problem):
+    """检查结论只对条目在上一版里的位置有效；编辑器只能原位改字，换了位置就拒绝。"""
+    content = PREVIOUS.model_copy(deep=True)
+    change(content)
+    with pytest.raises(UnknownPartError) as error:
+        run(content)
+    assert any(problem in p for p in error.value.problems)
 
 
 @pytest.mark.parametrize(
