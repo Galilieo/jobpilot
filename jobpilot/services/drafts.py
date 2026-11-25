@@ -39,6 +39,8 @@ from jobpilot.db.models import (
 from jobpilot.services.facts import (
     RESPONSIBILITY_SECTIONS,
     DraftFact,
+    ExtractedCriterionDraft,
+    ExtractedEducationDraft,
     ReviewReason,
     contains_number,
 )
@@ -161,6 +163,14 @@ class DraftCriterion(BaseModel):
         return self.source is FactSource.RESUME and not self.quote_verified
 
     @classmethod
+    def from_extracted(cls, item: ExtractedCriterionDraft) -> "DraftCriterion":
+        return cls(
+            status=ItemStatus.PENDING,
+            source=FactSource.RESUME,
+            **item.model_dump(),
+        )
+
+    @classmethod
     def from_published(
         cls, row: FactSetCriterion, status: ItemStatus
     ) -> "DraftCriterion":
@@ -218,6 +228,15 @@ class DraftEducation(BaseModel):
         return (
             self.source is FactSource.RESUME and not self.quote_verified
         ) or self.status is None
+
+    @classmethod
+    def from_extracted(cls, item: ExtractedEducationDraft) -> "DraftEducation":
+        return cls(
+            education_id=uuid4(),
+            draft_status=ItemStatus.PENDING,
+            source=FactSource.RESUME,
+            **item.model_dump(),
+        )
 
     @classmethod
     def from_published(
@@ -649,24 +668,34 @@ async def add_extracted(
     db: AsyncSession,
     user_id: UUID,
     facts: list[DraftFact],
-    criteria: Sequence[DraftCriterion] = (),
-    educations: Sequence[DraftEducation] = (),
+    criteria: Sequence[DraftCriterion | ExtractedCriterionDraft] = (),
+    educations: Sequence[DraftEducation | ExtractedEducationDraft] = (),
 ) -> list[DraftItem]:
     """把拆分结果加进草稿；求职条件和教育按合并规则保留已确认项。"""
     draft = await lock_draft(db, user_id)
     new_items = [DraftItem.from_extracted(fact) for fact in facts]
+    criterion_items = [
+        c if isinstance(c, DraftCriterion) else DraftCriterion.from_extracted(c)
+        for c in criteria
+    ]
+    education_items = [
+        e if isinstance(e, DraftEducation) else DraftEducation.from_extracted(e)
+        for e in educations
+    ]
     next_criteria = (
-        _merge_criteria(draft_criteria_of(draft), criteria) if criteria else None
+        _merge_criteria(draft_criteria_of(draft), criterion_items)
+        if criterion_items
+        else None
     )
     next_educations = None
-    if educations:
+    if education_items:
         published_edus = (
             await educations_in(db, user_id, draft.base_fact_set_id)
             if draft.base_fact_set_id is not None
             else []
         )
         next_educations = _merge_educations(
-            draft_educations_of(draft), educations, published_edus
+            draft_educations_of(draft), education_items, published_edus
         )
     save_draft(
         draft,

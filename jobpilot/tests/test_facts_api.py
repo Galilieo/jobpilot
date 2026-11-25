@@ -643,3 +643,38 @@ async def test_criteria_and_education_routes_and_revision_conflicts(
     lib2 = (await signed_in.get("/api/facts")).json()
     assert lib2["education"] == []
     assert len(lib2["criteria"]) == 1
+
+
+async def test_two_resumes_same_criteria_quote_point_to_each_doc(
+    signed_in: httpx.AsyncClient, model_outputs: list[str]
+) -> None:
+    """两份简历有相同到岗片段时，各自指向对应的 source_doc_id。"""
+    resume1 = "每周可到岗 4 天\n" + RESUME
+    resume2 = "补充说明\n每周可到岗 4 天\n" + RESUME
+    payload = {
+        **EXTRACTION,
+        "criteria": {
+            "onsite_days_per_week": {"value": 4, "source_quote": "每周可到岗 4 天"},
+            "internship_months": None,
+            "earliest_start": None,
+        },
+        "education": [],
+    }
+    encoded = json.dumps(payload, ensure_ascii=False)
+    model_outputs.extend([encoded, encoded])
+
+    up1 = await signed_in.post(
+        "/api/resumes", json={"raw_text": resume1}, headers=new_idempotency_headers()
+    )
+    assert up1.status_code == 201
+    c1 = up1.json()["criteria"][0]
+    assert c1["source_doc_id"] == up1.json()["doc_id"]
+    assert c1["span_start"] == 0
+
+    up2 = await signed_in.post(
+        "/api/resumes", json={"raw_text": resume2}, headers=new_idempotency_headers()
+    )
+    assert up2.status_code == 201
+    c2 = up2.json()["criteria"][0]
+    assert c2["source_doc_id"] == up2.json()["doc_id"]
+    assert c2["span_start"] > 0

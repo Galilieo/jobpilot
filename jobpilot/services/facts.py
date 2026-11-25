@@ -14,11 +14,22 @@ from uuid import UUID
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
-from jobpilot.db.models import FactKind, Responsibility, SectionKind
+from jobpilot.db.models import (
+    INTERNSHIP_MONTHS_MAX,
+    INTERNSHIP_MONTHS_MIN,
+    ONSITE_DAYS_MAX,
+    ONSITE_DAYS_MIN,
+    CriterionField,
+    DegreeLevel,
+    EducationStatus,
+    FactKind,
+    Responsibility,
+    SectionKind,
+)
 from jobpilot.services.grounding_rules import RESPONSIBILITY_RANK, default_rules
 from jobpilot.services.llm_gateway import (
     ModelBudget,
@@ -89,8 +100,50 @@ class ExtractedExperience(_ModelOutput):
     facts: list[ExtractedFact] = Field(max_length=60)
 
 
+class ExtractedIntCriterion(_ModelOutput):
+    value: int
+    source_quote: str = Field(min_length=1, max_length=300)
+
+
+class ExtractedTextCriterion(_ModelOutput):
+    value: str = Field(min_length=1, max_length=200)
+    source_quote: str = Field(min_length=1, max_length=300)
+
+
+class ExtractedCriteria(_ModelOutput):
+    onsite_days_per_week: ExtractedIntCriterion | None = None
+    internship_months: ExtractedIntCriterion | None = None
+    earliest_start: ExtractedTextCriterion | None = None
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> "ExtractedCriteria":
+        if self.onsite_days_per_week is not None and not (
+            ONSITE_DAYS_MIN <= self.onsite_days_per_week.value <= ONSITE_DAYS_MAX
+        ):
+            raise ValueError("onsite_days_per_week 超出 1~7 范围")
+        if self.internship_months is not None and not (
+            INTERNSHIP_MONTHS_MIN
+            <= self.internship_months.value
+            <= INTERNSHIP_MONTHS_MAX
+        ):
+            raise ValueError("internship_months 超出 1~24 范围")
+        return self
+
+
+class ExtractedEducation(_ModelOutput):
+    school: str = Field(min_length=1, max_length=200)
+    major: str | None = Field(default=None, max_length=200)
+    degree: DegreeLevel
+    status: EducationStatus | None = None
+    start_text: str | None = Field(default=None, max_length=60)
+    end_text: str | None = Field(default=None, max_length=60)
+    source_quote: str = Field(min_length=1, max_length=1000)
+
+
 class FactExtraction(_ModelOutput):
     experiences: list[ExtractedExperience] = Field(max_length=40)
+    criteria: ExtractedCriteria = Field(default_factory=ExtractedCriteria)
+    education: list[ExtractedEducation] = Field(default_factory=list, max_length=10)
 
 
 class TruncatedOutputError(RuntimeError):
@@ -150,9 +203,42 @@ class DraftFact(BaseModel):
     review_reasons: list[ReviewReason] = Field(default_factory=list)
 
 
+class ExtractedCriterionDraft(BaseModel):
+    """抽取出的单项求职条件及原文定位结果，转入草稿。"""
+
+    field: CriterionField
+    int_value: int | None = None
+    text_value: str | None = None
+    source_doc_id: UUID
+    source_quote: str
+    span_start: int | None = None
+    span_end: int | None = None
+    quote_verified: bool
+    review_reasons: list[ReviewReason] = Field(default_factory=list)
+
+
+class ExtractedEducationDraft(BaseModel):
+    """抽取出的一段教育经历及原文定位结果，转入草稿。"""
+
+    school: str
+    major: str | None = None
+    degree: DegreeLevel
+    status: EducationStatus | None = None
+    start_text: str | None = None
+    end_text: str | None = None
+    source_doc_id: UUID
+    source_quote: str
+    span_start: int | None = None
+    span_end: int | None = None
+    quote_verified: bool
+    review_reasons: list[ReviewReason] = Field(default_factory=list)
+
+
 class ExtractionResult(BaseModel):
     sections: list[Section]
     facts: list[DraftFact]
+    criteria: list[ExtractedCriterionDraft] = Field(default_factory=list)
+    education: list[ExtractedEducationDraft] = Field(default_factory=list)
 
 
 # ---------- 转述检查：text 与标签是否有片段支撑 ----------
@@ -256,8 +342,121 @@ async def extract_facts(
         for experience, section in zip(extraction.experiences, sections, strict=True)
         for fact in experience.facts
     ]
+    criteria = _extract_criteria(extraction.criteria, raw_text, doc_id)
+    education = [
+        _extract_education(edu, raw_text, doc_id) for edu in extraction.education
+    ]
     located = sorted((s for s in sections if s is not None), key=lambda s: s.start)
-    return ExtractionResult(sections=located, facts=facts)
+    return ExtractionResult(
+        sections=located, facts=facts, criteria=criteria, education=education
+    )
+
+
+_CHINESE_NUMBER_ALIASES: dict[int, tuple[str, ...]] = {
+    1: ("一", "一年"),
+    2: ("二", "两"),
+    3: ("三",),
+    4: ("四",),
+    5: ("五",),
+    6: ("六", "半年"),
+    7: ("七",),
+    8: ("八",),
+    9: ("九",),
+    10: ("十",),
+    12: ("十二", "一年"),
+    18: ("十八",),
+    24: ("二十四", "两年"),
+}
+
+
+def _int_supported_by_quote(value: int, quote: str) -> bool:
+    if str(value) in _numbers(quote):
+        return True
+    return any(alias in quote for alias in _CHINESE_NUMBER_ALIASES.get(value, ()))
+
+
+def _locate_provenance(
+    raw_text: str, raw_quote: str
+) -> tuple[str, int | None, int | None, bool, list[ReviewReason]]:
+    spans = locate_quote(raw_text, raw_quote)
+    if spans:
+        span_start, span_end = spans[0]
+        reasons = [ReviewReason.QUOTE_AMBIGUOUS] if len(spans) > 1 else []
+        return raw_text[span_start:span_end], span_start, span_end, True, reasons
+    return raw_quote, None, None, False, [ReviewReason.QUOTE_NOT_FOUND]
+
+
+def _extract_criteria(
+    criteria: ExtractedCriteria, raw_text: str, doc_id: UUID
+) -> list[ExtractedCriterionDraft]:
+    results: list[ExtractedCriterionDraft] = []
+    int_fields = (
+        (CriterionField.ONSITE_DAYS_PER_WEEK, criteria.onsite_days_per_week),
+        (CriterionField.INTERNSHIP_MONTHS, criteria.internship_months),
+    )
+    for field, entry in int_fields:
+        if entry is None:
+            continue
+        quote, start, end, verified, reasons = _locate_provenance(
+            raw_text, entry.source_quote
+        )
+        if verified and not _int_supported_by_quote(entry.value, quote):
+            reasons.append(ReviewReason.NUMBER_NOT_IN_QUOTE)
+        results.append(
+            ExtractedCriterionDraft(
+                field=field,
+                int_value=entry.value,
+                source_doc_id=doc_id,
+                source_quote=quote,
+                span_start=start,
+                span_end=end,
+                quote_verified=verified,
+                review_reasons=reasons,
+            )
+        )
+    if criteria.earliest_start is not None:
+        cleaned = criteria.earliest_start.value.strip()
+        if cleaned:
+            quote, start, end, verified, reasons = _locate_provenance(
+                raw_text, criteria.earliest_start.source_quote
+            )
+            results.append(
+                ExtractedCriterionDraft(
+                    field=CriterionField.EARLIEST_START,
+                    text_value=cleaned,
+                    source_doc_id=doc_id,
+                    source_quote=quote,
+                    span_start=start,
+                    span_end=end,
+                    quote_verified=verified,
+                    review_reasons=reasons,
+                )
+            )
+    return results
+
+
+def _extract_education(
+    edu: ExtractedEducation, raw_text: str, doc_id: UUID
+) -> ExtractedEducationDraft:
+    quote, start, end, verified, reasons = _locate_provenance(
+        raw_text, edu.source_quote
+    )
+    if edu.status is None:
+        reasons.append(ReviewReason.EDUCATION_STATUS_UNCERTAIN)
+    return ExtractedEducationDraft(
+        school=edu.school.strip(),
+        major=edu.major.strip() or None if edu.major else None,
+        degree=edu.degree,
+        status=edu.status,
+        start_text=edu.start_text.strip() or None if edu.start_text else None,
+        end_text=edu.end_text.strip() or None if edu.end_text else None,
+        source_doc_id=doc_id,
+        source_quote=quote,
+        span_start=start,
+        span_end=end,
+        quote_verified=verified,
+        review_reasons=reasons,
+    )
 
 
 def locate_sections(

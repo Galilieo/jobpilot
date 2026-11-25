@@ -28,7 +28,7 @@ from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.models import AiRun, ResumeDocument, RunStatus
 from jobpilot.db.runs import set_run_status
 from jobpilot.services import drafts
-from jobpilot.services.drafts import DraftItem
+from jobpilot.services.drafts import DraftCriterion, DraftEducation, DraftItem
 from jobpilot.services.facts import Section, TruncatedOutputError, extract_facts
 from jobpilot.services.llm_gateway import (
     BudgetExhaustedError,
@@ -76,6 +76,8 @@ class ResumeOut(BaseModel):
     doc_id: UUID
     run_id: UUID
     items: list[DraftItem]  # 这次拆出的事实，都在草稿里等确认
+    criteria: list[DraftCriterion]
+    education: list[DraftEducation]
     revision: int
 
 
@@ -179,11 +181,18 @@ async def upload(
         ) from None
 
     doc.sections_json = [section.model_dump(mode="json") for section in result.sections]
-    items = await drafts.add_extracted(db, user_id, result.facts)
+    items = await drafts.add_extracted(
+        db, user_id, result.facts, result.criteria, result.education
+    )
     await finish_product(db, user_id, run.run_id)
-    revision = await drafts.read_revision(db, user_id)
+    draft = await drafts.read_draft(db, user_id)
     output = ResumeOut(
-        doc_id=doc.doc_id, run_id=run.run_id, items=items, revision=revision
+        doc_id=doc.doc_id,
+        run_id=run.run_id,
+        items=items,
+        criteria=drafts.draft_criteria_of(draft),
+        education=drafts.draft_educations_of(draft),
+        revision=drafts.revision_of(draft),
     )
     await save_snapshot(db, attempt, doc.doc_id, output, status.HTTP_201_CREATED)
     await db.commit()

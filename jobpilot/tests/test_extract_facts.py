@@ -11,7 +11,15 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.db.models import AiRun, CallOutcome, Responsibility, User
+from jobpilot.db.models import (
+    AiRun,
+    CallOutcome,
+    CriterionField,
+    DegreeLevel,
+    EducationStatus,
+    Responsibility,
+    User,
+)
 from jobpilot.services.facts import (
     ExtractionResult,
     ReviewReason,
@@ -321,3 +329,80 @@ async def test_truncated_output_fails_without_repair(
     assert len(sent) == 1  # 没有触发 JSON 修复重发
     [call] = await calls_of(session_factory, run)
     assert call.outcome == CallOutcome.INVALID_OUTPUT
+
+
+async def test_extracts_criteria_and_education_with_quote_verification(
+    session_factory: Factory, run: AiRun
+) -> None:
+    """求职条件与教育按原文定位；找不到原文或未写就读状态、数字不符时标待核对。"""
+    resume_text = (
+        "林予初 ｜ 12 月中旬可到岗，每周 4 天，可实习三个月\n"
+        "教育经历\n"
+        "澄湖大学 ｜ 计算机 ｜ 本科 2022.09-2026.06（预计）\n"
+        "东钧学院 ｜ 自动化 ｜ 专科 2019.09-2022.06\n"
+    )
+    payload = {
+        "experiences": [],
+        "criteria": {
+            "onsite_days_per_week": {"value": 4, "source_quote": "每周 4 天"},
+            "internship_months": {"value": 6, "source_quote": "可实习三个月"},
+            "earliest_start": {"value": "12 月中旬", "source_quote": "原文里没有"},
+        },
+        "education": [
+            {
+                "school": "澄湖大学",
+                "major": "计算机",
+                "degree": "bachelor",
+                "status": "enrolled",
+                "start_text": "2022.09",
+                "end_text": "2026.06（预计）",
+                "source_quote": "澄湖大学 ｜ 计算机 ｜ 本科 2022.09-2026.06（预计）",
+            },
+            {
+                "school": "东钧学院",
+                "major": "自动化",
+                "degree": "associate",
+                "status": None,
+                "start_text": "2019.09",
+                "end_text": "2022.06",
+                "source_quote": "东钧学院 ｜ 自动化 ｜ 专科 2019.09-2022.06",
+            },
+        ],
+    }
+
+    async with fake_upstream(
+        lambda _: completion_response(json.dumps(payload, ensure_ascii=False))
+    ) as client:
+        result = await extract_facts(
+            session_factory,
+            run.user_id,
+            run.run_id,
+            client=client,
+            budget=ModelBudget(remaining_calls=5, remaining_tokens=50_000),
+            doc_id=DOC_ID,
+            raw_text=resume_text,
+        )
+
+    by_field = {c.field: c for c in result.criteria}
+    days = by_field[CriterionField.ONSITE_DAYS_PER_WEEK]
+    assert days.quote_verified and days.review_reasons == []
+    assert days.source_doc_id == DOC_ID
+    assert resume_text[days.span_start : days.span_end] == "每周 4 天"
+
+    months = by_field[CriterionField.INTERNSHIP_MONTHS]
+    assert months.quote_verified
+    assert months.review_reasons == [ReviewReason.NUMBER_NOT_IN_QUOTE]
+
+    start = by_field[CriterionField.EARLIEST_START]
+    assert not start.quote_verified
+    assert start.review_reasons == [ReviewReason.QUOTE_NOT_FOUND]
+
+    undergrad, assoc = result.education
+    assert (undergrad.degree, undergrad.status, undergrad.quote_verified) == (
+        DegreeLevel.BACHELOR,
+        EducationStatus.ENROLLED,
+        True,
+    )
+    assert undergrad.review_reasons == []
+    assert assoc.status is None
+    assert assoc.review_reasons == [ReviewReason.EDUCATION_STATUS_UNCERTAIN]

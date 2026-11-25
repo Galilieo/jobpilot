@@ -53,6 +53,11 @@ def test_example_output_follows_program_rules(
             assert not numbers_missing_from_quote(fact["text"], quote), quote
             if not fact["responsibility_stated"]:
                 assert responsibility is Responsibility.PARTICIPATE, quote
+    for item in output["criteria"].values():
+        if item is not None:
+            assert len(locate_quote(raw_text, item["source_quote"])) == 1
+    for edu in output["education"]:
+        assert len(locate_quote(raw_text, edu["source_quote"])) == 1
 
 
 def test_parse_jd_example_follows_program_rules() -> None:
