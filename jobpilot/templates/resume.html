@@ -43,7 +43,7 @@
   @page { size: A4; margin: 0; }
   @media print {
     body { background: #fff; }
-    .page { margin: 0; box-shadow: none; }
+    .page { margin: 0 !important; box-shadow: none; transform: none !important; }
     .mark, li.pending, .no-print { display: none !important; }
   }
 </style>
@@ -86,6 +86,26 @@
   </section>
   {% endfor %}
 </main>
+<script>
+  // 窗口比 A4 窄时（例如应用里的预览面板）按比例缩小显示整页；
+  // 只是缩放显示，排版、「自动一页」的测量和打印都不受影响。
+  (() => {
+    const page = document.querySelector("main.page");
+    function fit() {
+      page.style.transform = "";
+      page.style.margin = "";
+      const available = document.documentElement.clientWidth - 16;
+      if (page.offsetWidth <= available) return;
+      const scale = available / page.offsetWidth;
+      page.style.transformOrigin = "top left";
+      page.style.transform = `scale(${scale})`;
+      // 缩小后原来的高度还占着位置，用负边距收回，页面下面不留大片空白。
+      page.style.margin = `8px 8px ${-page.offsetHeight * (1 - scale)}px`;
+    }
+    new ResizeObserver(fit).observe(document.documentElement);
+    fit();
+  })();
+</script>
 {% if editor_json %}
 <script type="application/json" id="jobpilot-resume">{{ editor_json }}</script>
 <script>{{ editor_script }}</script>
