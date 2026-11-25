@@ -472,6 +472,84 @@ textarea {
   white-space: pre-wrap;
 }
 
+.job-injection-list {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+
+.job-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.job-field-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-right: 1px solid var(--ant-color-border-secondary);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.job-field-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.job-field-value {
+  display: block;
+  width: 100%;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.job-field-value:hover {
+  background: var(--ant-color-fill-tertiary);
+}
+
+.job-fields-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.job-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.job-add-row > .ant-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.keyword-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 2px;
+}
+
+.match-history h5 {
+  margin-bottom: 4px;
+}
+
 .coverage-stat .ant-statistic-content {
   font-variant-numeric: tabular-nums;
 }
