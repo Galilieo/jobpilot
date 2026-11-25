@@ -29,6 +29,7 @@ PUBLIC_ROUTES: set[Route] = {
 SELF_ROUTES: set[Route] = {
     ("POST", "/api/auth/logout"),
     ("GET", "/api/me"),
+    ("GET", "/api/overview"),
     ("POST", "/api/ocr"),  # 识别结果直接返回，不读写任何已保存的数据
 }
 
