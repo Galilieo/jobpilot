@@ -210,6 +210,60 @@ def test_base_without_located_sections_keeps_everything_as_header():
     assert (content.header, content.sections) == (["张三", "电话 123"], [])
 
 
+# ---------- 最后一段的末行 ----------
+
+SCHOOL_LINE = "澄湖大学 | 本科 | 2022.09–2026.06"
+CLUB_LINE = "摄影社 | 2023.09–2024.06"
+
+
+def test_last_section_keeps_its_final_line():
+    """最后一段是教育，末行单独一行专业名：短、含「教育」、没有标点，不能当成栏目名拿走。"""
+    headings = [
+        ("同川数服 Java 实习", SectionKind.INTERNSHIP, INTERN),
+        ("澄湖大学", SectionKind.EDUCATION, SCHOOL_LINE),
+    ]
+    raw = (
+        f"周芷\n\n实习经历\n{INTERN}\n维护巡检单导出\n"
+        f"\n教育经历\n{SCHOOL_LINE}\n教育技术学\n"
+    )
+
+    content = assemble(raw, base_sections(raw, headings), [])
+
+    [intern, school] = content.sections
+    assert (intern.title, intern.entries[0].lines) == (
+        "实习经历",
+        ["维护巡检单导出"],
+    )
+    assert (school.title, school.entries[0].lines) == ("教育经历", ["教育技术学"])
+
+
+def test_draft_without_located_sections_keeps_a_title_like_final_line():
+    """整份没分出经历时全是页头，末行即使是「兼职」这样的词也留着。"""
+    content = assemble("张三\n电话 123\n兼职\n", [], [])
+    assert (content.header, content.sections) == (["张三", "电话 123", "兼职"], [])
+
+
+def test_section_title_before_another_section_is_still_taken():
+    """真的还有下一段时，末尾的栏目名照常拿给下一段；最后一段的末行不拿。"""
+    headings = [
+        ("同川数服 Java 实习", SectionKind.INTERNSHIP, INTERN),
+        ("摄影社", SectionKind.OTHER, CLUB_LINE),
+        ("澄湖大学", SectionKind.EDUCATION, SCHOOL_LINE),
+    ]
+    raw = (
+        f"周芷\n实习经历\n{INTERN}\n维护巡检单导出\n校园经历\n{CLUB_LINE}\n"
+        f"组织迎新\n教育经历\n{SCHOOL_LINE}\n教育技术学\n"
+    )
+
+    content = assemble(raw, base_sections(raw, headings), [])
+
+    assert [(s.title, [e.lines for e in s.entries]) for s in content.sections] == [
+        ("实习经历", [["维护巡检单导出"]]),
+        ("校园经历", [["组织迎新"]]),
+        ("教育经历", [["教育技术学"]]),
+    ]
+
+
 # ---------- 检查结论绑定文字 ----------
 
 

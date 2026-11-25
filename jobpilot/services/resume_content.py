@@ -4,7 +4,8 @@
 这里按这些位置切段（与 OpenResume 按标题切段的做法相同）：
 - 第一段之前是页头（姓名、联系方式、求职意向、到岗信息），原样保留；
 - 每段经历的第一行是标题行，按规则拆出名称和时间，拆不出时间就整行当名称；
-- 段末形如「教育经历」「技术栈」的短行是下一组的栏目名；
+- 段末形如「教育经历」「技术栈」的短行是下一组的栏目名；只有后面确实还有一段时才拿，
+  最后一段的末行一定是这一段自己的正文；
 - 改写过的经历用改写条目替换正文；没改写的（教育、获奖等）正文原样保留。
 所以成品里改写以外的文字都出自底稿，不会多出底稿没有的内容。
 
@@ -161,12 +162,19 @@ def is_section_title(line: str) -> bool:
     )
 
 
-def _split_tail_title(lines: list[str]) -> tuple[list[str], str | None]:
-    """去掉末尾的空行；最后一行是栏目名时拿出来，它属于下一组。"""
+def _split_tail_title(
+    lines: list[str], *, followed: bool
+) -> tuple[list[str], str | None]:
+    """去掉末尾的空行；最后一行是栏目名时拿出来，它属于下一组。
+
+    只有 followed（后面确实还有一段）时才拿：最后一段的末行后面没有栏目承接，
+    拿走就丢了。单独一行「教育技术学」很短、含「教育」、没有标点，
+    和栏目名没有区别（评审 2026-11-25）。
+    """
     body = list(lines)
     while body and not body[-1].strip():
         body.pop()
-    if body and is_section_title(body[-1]):
+    if followed and body and is_section_title(body[-1]):
         title = body.pop().strip()
         while body and not body[-1].strip():
             body.pop()
@@ -183,13 +191,16 @@ def _base_entries(
     """切出页头和每段经历：(位置, 这段之前的栏目名, 这段的原文各行)。"""
     ordered = sorted(sections, key=lambda s: s.start)
     if not ordered:
-        header, _ = _split_tail_title(raw_text.splitlines())
+        header, _ = _split_tail_title(raw_text.splitlines(), followed=False)
         return header, []
-    header, title = _split_tail_title(raw_text[: ordered[0].start].splitlines())
+    header, title = _split_tail_title(
+        raw_text[: ordered[0].start].splitlines(), followed=True
+    )
     pieces = []
-    for section in ordered:
+    for index, section in enumerate(ordered):
         lines, next_title = _split_tail_title(
-            raw_text[section.start : section.end].splitlines()
+            raw_text[section.start : section.end].splitlines(),
+            followed=index < len(ordered) - 1,  # 最后一段后面没有栏目承接
         )
         pieces.append((section, title, lines))
         title = next_title
