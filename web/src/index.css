@@ -619,20 +619,9 @@ textarea {
 
 /* ---------- 岗位库 ---------- */
 
-.page-heading-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-  justify-content: space-between;
-}
-
 .job-card {
   border-color: var(--ant-color-border-secondary);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.15s ease;
+  transition: border-color 0.2s ease;
 }
 
 .job-card:hover {
@@ -642,23 +631,33 @@ textarea {
 .job-card .ant-card-body {
   display: flex;
   flex-direction: column;
+  gap: 8px;
   height: 100%;
+  padding: 16px;
 }
 
-.job-card .job-company {
-  margin: 3px 0 10px;
+.job-card-title {
+  font-size: 14px;
+}
+
+.ant-typography.job-company {
+  margin: 0;
   font-size: 13px;
 }
 
 .job-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 0;
+  gap: 4px;
 }
 
-.job-card-go {
+.job-tags .ant-tag {
+  margin-inline-end: 0;
+}
+
+.job-card-foot {
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: 8px;
   font-size: 13px;
 }
 
@@ -1039,8 +1038,20 @@ textarea {
 
 .job-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 992px) {
+  .job-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  .job-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* 窄屏时操作按钮换到文字下面，不挤占经历文字的宽度。 */

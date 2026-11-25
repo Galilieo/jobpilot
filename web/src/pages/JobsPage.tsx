@@ -1,11 +1,13 @@
 // 岗位库：岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Empty, Modal, Skeleton, Tag, Typography, theme } from 'antd'
+import { App, Button, Card, Modal, Skeleton, Tag, Typography } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
 import { newIdempotencyKey } from '../api/http'
+import { EmptyHint } from '../components/EmptyHint'
+import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
 import { JOB_STAGE } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
@@ -18,67 +20,80 @@ const JD_COPY = {
 }
 
 export function JobsPage(): ReactElement {
-  const { token } = theme.useToken()
   const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
   const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
+  const hasJobs = Boolean(list.data && list.data.length > 0)
 
   return (
     <section className="page">
-      <header className="page-heading page-heading-actions">
-        <div>
-          <Typography.Title level={1}>岗位库</Typography.Title>
-          <Typography.Text type="secondary">
-            贴入 JD 整理岗位要求，再用确认过的经历做匹配、生成定制简历。
-          </Typography.Text>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
-          添加岗位
-        </Button>
-      </header>
+      <PageHeader
+        title="岗位库"
+        subtitle="贴入 JD 整理岗位要求，再用确认过的经历做匹配、生成定制简历。"
+        extra={
+          hasJobs && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+              添加岗位
+            </Button>
+          )
+        }
+      />
       {list.isPending ? (
         <Skeleton active />
       ) : list.isError ? (
         <Card>
-          <Empty description={list.error.message}>
-            <Button onClick={() => void list.refetch()}>重试</Button>
-          </Empty>
+          <EmptyHint
+            description={list.error.message}
+            action={<Button onClick={() => void list.refetch()}>重试</Button>}
+          />
         </Card>
       ) : list.data.length === 0 ? (
         <Card>
-          <Empty description="还没有岗位。贴入一份 JD 开始。">
-            <Button onClick={() => setAdding(true)}>添加岗位</Button>
-          </Empty>
+          <EmptyHint
+            description="还没有岗位。贴入一份 JD 开始。"
+            action={
+              <Button type="primary" onClick={() => setAdding(true)}>
+                添加岗位
+              </Button>
+            }
+          />
         </Card>
       ) : (
         <div className="job-grid">
-          {list.data.map((job) => (
-            <Card
-              key={job.job_id}
-              hoverable
-              className="job-card"
-              onClick={() => void navigate(`/jobs/${job.job_id}`)}
-            >
-              <Typography.Text strong>{job.title ?? '未命名岗位'}</Typography.Text>
-              <Typography.Paragraph type="secondary" className="job-company">
-                {job.company ?? '公司未填写'}
-              </Typography.Paragraph>
-              <div className="job-tags">
-                <Tag color="processing">{JOB_STAGE[job.stage]}</Tag>
-                {job.injection_count > 0 && (
-                  <Tag color="warning" icon={<WarningOutlined />}>
-                    JD 里有可疑指令
-                  </Tag>
+          {list.data.map((job) => {
+            const extraKeywords = Math.max(0, job.keywords.length - 3)
+            return (
+              <Card
+                key={job.job_id}
+                hoverable
+                className="job-card"
+                onClick={() => void navigate(`/jobs/${job.job_id}`)}
+              >
+                <Typography.Text strong className="job-card-title">
+                  {job.title ?? '未命名岗位'}
+                </Typography.Text>
+                <Typography.Paragraph type="secondary" className="job-company">
+                  {job.company ?? '公司未填写'}
+                </Typography.Paragraph>
+                {(job.keywords.length > 0 || job.injection_count > 0) && (
+                  <div className="job-tags">
+                    {job.keywords.slice(0, 3).map((keyword) => (
+                      <Tag key={keyword}>{keyword}</Tag>
+                    ))}
+                    {extraKeywords > 0 && <Tag>+{extraKeywords}</Tag>}
+                    {job.injection_count > 0 && (
+                      <Tag color="warning" icon={<WarningOutlined />}>
+                        JD 里有可疑指令
+                      </Tag>
+                    )}
+                  </div>
                 )}
-                {job.keywords.slice(0, 4).map((keyword) => (
-                  <Tag key={keyword}>{keyword}</Tag>
-                ))}
-              </div>
-              <Typography.Text className="job-card-go" style={{ color: token.colorPrimary }}>
-                查看详情 →
-              </Typography.Text>
-            </Card>
-          ))}
+                <div className="job-card-foot">
+                  <Typography.Text type="secondary">{JOB_STAGE[job.stage]}</Typography.Text>
+                </div>
+              </Card>
+            )
+          })}
         </div>
       )}
       <AddJobModal open={adding} onClose={() => setAdding(false)} />
@@ -92,6 +107,7 @@ function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }):
   const queryClient = useQueryClient()
   const [text, setText] = useState('')
   const [reading, setReading] = useState(false)
+  const [segmentedKey, setSegmentedKey] = useState(0)
   // 同一次添加的重试用同一个键；同样的正文再贴一次，服务端直接返回已有的岗位。
   const key = useRef(newIdempotencyKey())
 
@@ -114,19 +130,25 @@ function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }):
       title="添加岗位"
       open={open}
       onCancel={onClose}
+      afterOpenChange={(visible) => {
+        if (visible) setSegmentedKey((prev) => prev + 1)
+      }}
       width={720}
       okText="解析岗位"
       cancelText="取消"
       okButtonProps={{ disabled: !text.trim() || reading }}
       confirmLoading={create.isPending}
       onOk={() => create.mutate()}
-      destroyOnHidden={false}
+      styles={{ body: { maxHeight: '65vh', overflowY: 'auto' } }}
+      destroyOnHidden
     >
       <TextSourceInput
         value={text}
         onChange={setText}
         onReadingChange={setReading}
         copy={JD_COPY}
+        maxRows={10}
+        segmentedKey={segmentedKey}
       />
     </Modal>
   )

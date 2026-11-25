@@ -22,6 +22,8 @@ interface TextSourceInputProps {
   value: string
   onChange: (value: string) => void
   copy: TextSourceCopy
+  maxRows?: number
+  segmentedKey?: number
   onFilenameChange?: (filename: string | null) => void
   onReadingChange?: (reading: boolean) => void
 }
@@ -30,6 +32,8 @@ export function TextSourceInput({
   value,
   onChange,
   copy,
+  maxRows = 10,
+  segmentedKey = 0,
   onFilenameChange,
   onReadingChange,
 }: TextSourceInputProps): ReactElement {
@@ -75,6 +79,7 @@ export function TextSourceInput({
   return (
     <>
       <Segmented<Source>
+        key={segmentedKey}
         value={source}
         onChange={setSource}
         options={[
@@ -131,7 +136,7 @@ export function TextSourceInput({
       <Input.TextArea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        autoSize={{ minRows: 6, maxRows: 18 }}
+        autoSize={{ minRows: 6, maxRows }}
         placeholder={reading ? '正在读取…' : copy.placeholder}
         disabled={reading}
       />
