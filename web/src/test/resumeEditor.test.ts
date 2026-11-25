@@ -354,4 +354,25 @@ describe('resume_editor.js 编辑器行为', () => {
     )
     await saving
   })
+
+  it('「改用事实原文」默认隐藏，仅悬停或聚焦到条目时显示，保留 no-print 且编辑态可用', () => {
+    mountEditor('条目', true)
+    const btn = document.querySelector(
+      `li[data-bullet-id="${BULLET_ID}"] button[data-action="use-facts"]`,
+    ) as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    expect(btn.classList.contains('no-print')).toBe(true)
+
+    const styleText = [...document.head.querySelectorAll('style')]
+      .map((s) => s.textContent ?? '')
+      .join('\n')
+    expect(styleText).toMatch(/\.bullet-action\s*\{[^}]*opacity:\s*0/)
+    expect(styleText).toContain('li[data-bullet-id]:hover .bullet-action')
+    expect(styleText).toContain('li[data-bullet-id]:focus-within .bullet-action')
+
+    const api = (window as unknown as { jobpilotEditor: { setEditing: (on: boolean) => void } })
+      .jobpilotEditor
+    api.setEditing(true)
+    expect(btn.contentEditable).toBe('false')
+  })
 })

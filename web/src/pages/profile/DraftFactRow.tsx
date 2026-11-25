@@ -89,52 +89,54 @@ export function DraftFactRow({ item, busy, onChange, onRemove }: DraftFactRowPro
   const rowReasons = item.review_reasons.filter((r) => r !== 'responsibility_unstated')
   const showQuote = Boolean(item.source_quote && item.source_quote !== item.text)
 
-  const actions = (
-    <>
-      {item.status === 'pending' && (
-        <Tooltip title={blocked ? '原文里找不到，请先修改文字或删除' : undefined}>
-          <Button
-            size="small"
-            icon={<CheckOutlined />}
-            disabled={busy || blocked}
-            onClick={() => onChange({ confirmed: true })}
-          >
-            确认
-          </Button>
-        </Tooltip>
-      )}
-      {item.status === 'deleted' && (
+  const primaryAction =
+    item.status === 'pending' ? (
+      <Tooltip title={blocked ? '原文里找不到，请先修改文字或删除' : undefined}>
         <Button
           size="small"
-          icon={<UndoOutlined />}
-          disabled={busy}
-          onClick={() => onChange({ confirmed: false })}
+          icon={<CheckOutlined />}
+          disabled={busy || blocked}
+          onClick={() => onChange({ confirmed: true })}
         >
-          撤销删除
+          确认
         </Button>
-      )}
-      {item.status !== 'deleted' && (
-        <Popconfirm
-          title="删除这条经历？"
-          okText="删除"
-          cancelText="保留"
-          okButtonProps={{ danger: true }}
-          onConfirm={onRemove}
-        >
-          <Button
-            size="small"
-            type="text"
-            icon={<DeleteOutlined />}
-            disabled={busy}
-            aria-label="删除"
-          />
-        </Popconfirm>
-      )}
-    </>
-  )
+      </Tooltip>
+    ) : item.status === 'deleted' ? (
+      <Button
+        size="small"
+        icon={<UndoOutlined />}
+        disabled={busy}
+        onClick={() => onChange({ confirmed: false })}
+      >
+        撤销删除
+      </Button>
+    ) : undefined
+
+  const actions =
+    item.status !== 'deleted' ? (
+      <Popconfirm
+        title="删除这条经历？"
+        okText="删除"
+        cancelText="保留"
+        okButtonProps={{ danger: true }}
+        onConfirm={onRemove}
+      >
+        <Button
+          size="small"
+          type="text"
+          icon={<DeleteOutlined />}
+          disabled={busy}
+          aria-label="删除"
+        />
+      </Popconfirm>
+    ) : undefined
 
   return (
-    <HoverRow highlight={item.status === 'pending' ? 'warning' : 'none'} actions={actions}>
+    <HoverRow
+      highlight={item.status === 'pending' ? 'warning' : 'none'}
+      primaryAction={primaryAction}
+      actions={actions}
+    >
       <div className="fact-row">
         <Typography.Paragraph
           className="fact-text"

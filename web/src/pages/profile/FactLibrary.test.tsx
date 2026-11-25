@@ -259,4 +259,72 @@ describe('FactLibrary 409 冲突刷新、手动补充与编辑已发布事实', 
       ).toBe(true),
     )
   })
+
+  it('待确认行的确认按钮常驻在主操作区，删除保留在悬停区，且色条左侧保留 12px 间距', async () => {
+    const libraryWithPending: Library = {
+      ...INITIAL_LIBRARY,
+      draft: {
+        ...INITIAL_LIBRARY.draft,
+        criteria: [
+          {
+            field: 'onsite_days_per_week',
+            status: 'pending',
+            int_value: 4,
+            text_value: null,
+            source: 'resume',
+            source_doc_id: 'doc-1',
+            source_quote: '每周 4 天',
+            span_start: 0,
+            span_end: 5,
+            quote_verified: true,
+            review_reasons: [],
+          },
+        ],
+        education: [
+          {
+            education_id: 'edu-1',
+            draft_status: 'pending',
+            school: '东澜理工学院',
+            major: '软件工程',
+            degree: 'bachelor',
+            status: 'enrolled',
+            start_text: '2023.09',
+            end_text: '2027.06',
+            source: 'resume',
+            source_doc_id: 'doc-1',
+            source_quote: '东澜理工学院',
+            span_start: 0,
+            span_end: 6,
+            quote_verified: true,
+            review_reasons: [],
+          },
+        ],
+      },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, libraryWithPending)),
+    )
+
+    renderWithProviders(<FactLibrary />)
+    expect(await screen.findByText('使用 pgvector 存储文档向量')).toBeInTheDocument()
+    expect(screen.getByText('东澜理工学院 · 软件工程 · 本科 · 2023.09–2027.06')).toBeInTheDocument()
+
+    const confirmButtons = screen.getAllByRole('button', { name: /确认$/ })
+    expect(confirmButtons).toHaveLength(3)
+    for (const btn of confirmButtons) {
+      expect(btn.closest('.hover-row')).toHaveClass('row-pending')
+      expect(btn.closest('.hover-row-primary')).not.toBeNull()
+      expect(btn.closest('.hover-row-actions')).toBeNull()
+    }
+
+    const deleteButtons = [
+      screen.getByRole('button', { name: '删除' }),
+      screen.getByRole('button', { name: '删除每周可到岗天数' }),
+      screen.getByRole('button', { name: '删除东澜理工学院' }),
+    ]
+    for (const btn of deleteButtons) {
+      expect(btn.closest('.hover-row-actions')).not.toBeNull()
+    }
+  })
 })

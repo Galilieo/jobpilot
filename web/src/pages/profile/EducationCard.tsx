@@ -184,25 +184,40 @@ export function EducationCard({
             const period = [cur.start_text, cur.end_text].filter(Boolean).join('–')
             const summary = `${cur.school}${cur.major ? ` · ${cur.major}` : ''} · ${DEGREE_LABEL[cur.degree]}`
 
+            const primaryAction = isPending ? (
+              <Tooltip title={blocked ? '请先核对就读状态或修改后确认' : undefined}>
+                <Button
+                  size="small"
+                  icon={<CheckOutlined />}
+                  disabled={busy || blocked}
+                  onClick={() =>
+                    update.mutate({
+                      id,
+                      body: { confirmed: true, expected_revision: revision },
+                    })
+                  }
+                >
+                  确认
+                </Button>
+              </Tooltip>
+            ) : isDeleted ? (
+              <Button
+                size="small"
+                icon={<UndoOutlined />}
+                disabled={busy}
+                onClick={() =>
+                  update.mutate({
+                    id,
+                    body: { confirmed: false, expected_revision: revision },
+                  })
+                }
+              >
+                撤销删除
+              </Button>
+            ) : undefined
+
             const actions = (
               <>
-                {isPending && (
-                  <Tooltip title={blocked ? '请先核对就读状态或修改后确认' : undefined}>
-                    <Button
-                      size="small"
-                      icon={<CheckOutlined />}
-                      disabled={busy || blocked}
-                      onClick={() =>
-                        update.mutate({
-                          id,
-                          body: { confirmed: true, expected_revision: revision },
-                        })
-                      }
-                    >
-                      确认
-                    </Button>
-                  </Tooltip>
-                )}
                 <Button
                   size="small"
                   type="text"
@@ -211,21 +226,7 @@ export function EducationCard({
                   aria-label={`编辑${cur.school}`}
                   onClick={() => openEdit(cur)}
                 />
-                {isDeleted ? (
-                  <Button
-                    size="small"
-                    icon={<UndoOutlined />}
-                    disabled={busy}
-                    onClick={() =>
-                      update.mutate({
-                        id,
-                        body: { confirmed: false, expected_revision: revision },
-                      })
-                    }
-                  >
-                    撤销删除
-                  </Button>
-                ) : (
+                {!isDeleted && (
                   <Popconfirm
                     title={`删除「${cur.school}」这段教育经历？`}
                     okText="删除"
@@ -246,7 +247,12 @@ export function EducationCard({
             )
 
             return (
-              <HoverRow key={id} highlight={isPending ? 'warning' : 'none'} actions={actions}>
+              <HoverRow
+                key={id}
+                highlight={isPending ? 'warning' : 'none'}
+                primaryAction={primaryAction}
+                actions={actions}
+              >
                 <div className="fact-row">
                   <Typography.Paragraph className="fact-text" delete={isDeleted}>
                     {summary}

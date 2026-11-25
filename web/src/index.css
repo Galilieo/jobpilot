@@ -766,14 +766,14 @@ textarea {
   list-style: none;
 }
 .row-list > li {
-  padding: 12px 0;
+  padding-block: 12px;
   border-bottom: 1px solid var(--ant-color-border-secondary);
 }
 .row-list > li:last-child {
   border-bottom: none;
 }
 .requirement-list > li {
-  padding: 8px 0;
+  padding-block: 8px;
 }
 .hover-row {
   position: relative;
@@ -791,6 +791,8 @@ textarea {
   flex: 1;
   min-width: 0;
 }
+.hover-row-controls,
+.hover-row-primary,
 .hover-row-actions {
   display: flex;
   flex-shrink: 0;

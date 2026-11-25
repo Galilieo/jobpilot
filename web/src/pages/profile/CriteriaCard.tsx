@@ -86,22 +86,30 @@ export function CriteriaCard({
             ? formatValue(field, current.int_value, current.text_value)
             : '未填写'
 
+          const primaryAction = isPending ? (
+            <Tooltip title={blocked ? '原文里找不到，请修改后保存' : undefined}>
+              <Button
+                size="small"
+                icon={<CheckOutlined />}
+                disabled={save.isPending || blocked}
+                onClick={() => save.mutate({ field, confirmed: true, expected_revision: revision })}
+              >
+                确认
+              </Button>
+            </Tooltip>
+          ) : isDeleted ? (
+            <Button
+              size="small"
+              icon={<UndoOutlined />}
+              disabled={save.isPending}
+              onClick={() => save.mutate({ field, confirmed: false, expected_revision: revision })}
+            >
+              撤销删除
+            </Button>
+          ) : undefined
+
           const actions = (
             <>
-              {isPending && (
-                <Tooltip title={blocked ? '原文里找不到，请修改后保存' : undefined}>
-                  <Button
-                    size="small"
-                    icon={<CheckOutlined />}
-                    disabled={save.isPending || blocked}
-                    onClick={() =>
-                      save.mutate({ field, confirmed: true, expected_revision: revision })
-                    }
-                  >
-                    确认
-                  </Button>
-                </Tooltip>
-              )}
               {!isEditing && (
                 <Button
                   size="small"
@@ -112,43 +120,35 @@ export function CriteriaCard({
                   onClick={() => beginEdit(field)}
                 />
               )}
-              {isDeleted ? (
-                <Button
-                  size="small"
-                  icon={<UndoOutlined />}
-                  disabled={save.isPending}
-                  onClick={() =>
-                    save.mutate({ field, confirmed: false, expected_revision: revision })
+              {!isDeleted && hasAny && (
+                <Popconfirm
+                  title={`删除「${CRITERION_LABEL[field]}」？`}
+                  okText="删除"
+                  cancelText="保留"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={() =>
+                    save.mutate({ field, delete: true, expected_revision: revision })
                   }
                 >
-                  撤销删除
-                </Button>
-              ) : (
-                hasAny && (
-                  <Popconfirm
-                    title={`删除「${CRITERION_LABEL[field]}」？`}
-                    okText="删除"
-                    cancelText="保留"
-                    okButtonProps={{ danger: true }}
-                    onConfirm={() =>
-                      save.mutate({ field, delete: true, expected_revision: revision })
-                    }
-                  >
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<DeleteOutlined />}
-                      disabled={save.isPending}
-                      aria-label={`删除${CRITERION_LABEL[field]}`}
-                    />
-                  </Popconfirm>
-                )
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<DeleteOutlined />}
+                    disabled={save.isPending}
+                    aria-label={`删除${CRITERION_LABEL[field]}`}
+                  />
+                </Popconfirm>
               )}
             </>
           )
 
           return (
-            <HoverRow key={field} highlight={isPending ? 'warning' : 'none'} actions={actions}>
+            <HoverRow
+              key={field}
+              highlight={isPending ? 'warning' : 'none'}
+              primaryAction={primaryAction}
+              actions={actions}
+            >
               <div className="fact-row">
                 <Space size={8} wrap>
                   <Typography.Text type="secondary">{CRITERION_LABEL[field]}</Typography.Text>

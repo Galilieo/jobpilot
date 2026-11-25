@@ -386,10 +386,18 @@
       transparent 0, transparent calc(297mm - 1px), #cf222e calc(297mm - 1px), #cf222e 297mm); }
     body.editing [data-part]:hover { outline: 1px dashed var(--tb-border); }
     body.editing [data-part]:focus { outline: 1px solid var(--tb-focus); }
+    li[data-bullet-id] { position: relative; }
     .bullet-action {
+      position: absolute; right: 0; top: 0; z-index: 1;
       font: inherit; font-size: .78em; color: var(--tb-muted); background: var(--tb-bg);
       border: 1px solid var(--tb-border); border-radius: var(--tb-radius); padding: 1px 6px;
-      margin-left: 6px; cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .08); cursor: pointer;
+      opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+    }
+    li[data-bullet-id]:hover .bullet-action,
+    li[data-bullet-id]:focus-within .bullet-action,
+    .bullet-action:focus-visible {
+      opacity: 1; pointer-events: auto;
     }
     .bullet-action:hover { color: var(--tb-ink); background: var(--tb-hover); }
   `;

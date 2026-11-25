@@ -5,6 +5,7 @@ import { useState, type ReactElement, type ReactNode } from 'react'
 
 interface HoverRowProps {
   children: ReactNode
+  primaryAction?: ReactNode
   actions?: ReactNode
   menuItems?: MenuProps['items']
   menuLabel?: string
@@ -14,6 +15,7 @@ interface HoverRowProps {
 
 export function HoverRow({
   children,
+  primaryAction,
   actions,
   menuItems,
   menuLabel = '更多操作',
@@ -22,6 +24,7 @@ export function HoverRow({
 }: HoverRowProps): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false)
   const hasMenu = Boolean(menuItems && menuItems.length > 0)
+  const hasHoverActions = Boolean(actions || hasMenu)
   const rowClass = ['hover-row', highlight === 'warning' ? 'row-pending' : '', className ?? '']
     .filter(Boolean)
     .join(' ')
@@ -29,20 +32,32 @@ export function HoverRow({
   return (
     <li tabIndex={0} className={rowClass}>
       <div className="hover-row-body">{children}</div>
-      {(actions || hasMenu) && (
-        <div
-          className={menuOpen ? 'hover-row-actions hover-row-actions-open' : 'hover-row-actions'}
-        >
-          {actions}
-          {hasMenu && (
-            <Dropdown
-              trigger={['click']}
-              open={menuOpen}
-              onOpenChange={setMenuOpen}
-              menu={{ items: menuItems }}
+      {(primaryAction || hasHoverActions) && (
+        <div className="hover-row-controls">
+          {primaryAction && <div className="hover-row-primary">{primaryAction}</div>}
+          {hasHoverActions && (
+            <div
+              className={
+                menuOpen ? 'hover-row-actions hover-row-actions-open' : 'hover-row-actions'
+              }
             >
-              <Button size="small" type="text" icon={<EllipsisOutlined />} aria-label={menuLabel} />
-            </Dropdown>
+              {actions}
+              {hasMenu && (
+                <Dropdown
+                  trigger={['click']}
+                  open={menuOpen}
+                  onOpenChange={setMenuOpen}
+                  menu={{ items: menuItems }}
+                >
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<EllipsisOutlined />}
+                    aria-label={menuLabel}
+                  />
+                </Dropdown>
+              )}
+            </div>
           )}
         </div>
       )}
