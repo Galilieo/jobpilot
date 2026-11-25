@@ -123,6 +123,7 @@ class EditorContext:
     storage_key: str  # 本地保存和草稿用的键，区分不同简历和版本
     save_url: str | None = None
     export_url: str | None = None
+    reset_url: str | None = None  # 回到系统生成的版本：服务器把第一版复制成新版本
 
     @property
     def online(self) -> bool:
@@ -146,6 +147,7 @@ def _editor_json(content: ResumeContent, editor: EditorContext) -> Markup:
         "storage_key": editor.storage_key,
         "save_url": editor.save_url,
         "export_url": editor.export_url,
+        "reset_url": editor.reset_url,
     }
     return Markup(json.dumps(data, ensure_ascii=False).replace("<", "\\u003c"))
 

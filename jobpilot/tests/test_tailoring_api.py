@@ -533,6 +533,12 @@ async def test_preview_and_exports_download_from_the_saved_version(
     assert preview.headers["content-type"].startswith("text/html")
     # 当前版本的预览可以编辑、保存到服务器；导出文件离线编辑
     assert f'"save_url": "/api/tailor-runs/{run_id}/resume"' in preview.text
+    editor = embedded(preview.text)
+    assert (editor["save_url"], editor["reset_url"]) == (
+        f"/api/tailor-runs/{run_id}/resume",
+        f"/api/tailor-runs/{run_id}/resume/reset",
+    )
+    assert editor["export_url"] == f"/api/tailor-runs/{run_id}/export?format=html"
     exported = await async_client.get(f"/api/tailor-runs/{run_id}/export")
     assert (
         'id="jobpilot-resume"' in exported.text and '"save_url": null' in exported.text

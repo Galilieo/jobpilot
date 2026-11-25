@@ -372,19 +372,13 @@
       window.location.reload();
       return;
     }
-    const generated = await fetch(`${data.save_url}?version=1`, { credentials: "same-origin" });
-    if (!generated.ok) {
-      setStatus("没能读取系统生成的版本");
-      return;
-    }
-    const response = await fetch(data.save_url, {
-      method: "PUT",
+    // 由服务器把系统生成的第一版复制成一个新版本。这一版里删掉的条目，第一版里还有，
+    // 读出第一版再当普通编辑保存会被拒绝。
+    const response = await fetch(data.reset_url, {
+      method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        base_version_id: versionId,
-        content: (await generated.json()).content,
-      }),
+      body: JSON.stringify({ base_version_id: versionId }),
     });
     if (response.ok) window.location.reload();
     else setStatus(response.status === 409 ? "简历已在别处保存过，请刷新后再重置" : "重置失败");

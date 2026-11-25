@@ -389,6 +389,7 @@ async def preview_resume(
             storage_key=f"{loaded.resume.resume_id}",
             save_url=f"/api/tailor-runs/{run_id}/resume",
             export_url=f"/api/tailor-runs/{run_id}/export?format=html",
+            reset_url=f"/api/tailor-runs/{run_id}/resume/reset",
         )
         if current
         else None

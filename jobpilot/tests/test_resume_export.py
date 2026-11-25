@@ -5,6 +5,7 @@
 
 import io
 import json
+import re
 from uuid import UUID, uuid4
 
 import pytest
@@ -136,6 +137,7 @@ def test_export_file_embeds_only_visible_text_and_style():
         "storage_key",
         "save_url",
         "export_url",
+        "reset_url",
     }
     assert set(content) == {"header", "sections", "style"}
     assert content["header"] == built.header
@@ -257,3 +259,22 @@ def test_editor_data_cannot_close_its_script_tag():
     data = data.split("</script>", 1)[0]
     assert "<" not in data and "\\u003c/script>" in data
     assert '"save_url": null' in data  # 离线文件存本地，不连服务器
+
+
+@pytest.mark.parametrize("online", [True, False], ids=["preview", "export"])
+def test_editor_reads_only_keys_that_are_embedded(online: bool):
+    """编辑器脚本读的字段，两种文件的内嵌数据都要给，缺了就是 undefined。"""
+    editor = EditorContext(
+        version_id=uuid4(),
+        storage_key="r",
+        save_url="/api/tailor-runs/x/resume" if online else None,
+    )
+    html = render_html(
+        content(),
+        mode=RenderMode.PREVIEW if online else RenderMode.EXPORT,
+        version=1,
+        editor=editor,
+    )
+    script = html.rsplit("<script>", 1)[1]
+    read = set(re.findall(r"\bdata\.([a-z_]+)", script))
+    assert read and read <= set(embedded(html)), read - set(embedded(html))
