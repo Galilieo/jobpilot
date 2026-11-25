@@ -19,13 +19,14 @@ from jobpilot.db.models import (
     CheckStatus,
     Fact,
     JobStage,
-    MatchReport,
     TailoredBullet,
     TailoredResume,
 )
+from jobpilot.db.reports import latest_match_reports_by_job
 from jobpilot.services import drafts
 from jobpilot.services.drafts import ItemStatus
 from jobpilot.services.jobs import effective_parsed_job
+from jobpilot.services.matching import JobMatchSummary, summarize_stored_match
 
 router = APIRouter(prefix="/api", tags=["overview"])
 
@@ -52,8 +53,12 @@ class BoardJobCard(BaseModel):
     job_id: UUID
     title: str | None
     company: str | None
+    salary: str | None
     location: str | None
+    onsite_days_per_week: str | None
+    education: str | None
     stage: JobStage
+    match_summary: JobMatchSummary | None
     updated_at: datetime
     resume_stale: bool
 
@@ -136,20 +141,6 @@ async def _grounding_overview(db: AsyncSession, user_id: UUID) -> GroundingOverv
     )
 
 
-async def _matched_job_ids(db: AsyncSession, user_id: UUID) -> set[UUID]:
-    rows = await db.scalars(
-        select(AiRun.user_job_id)
-        .join(
-            MatchReport,
-            (MatchReport.run_id == AiRun.run_id)
-            & (MatchReport.user_id == AiRun.user_id),
-        )
-        .where(MatchReport.user_id == user_id, AiRun.user_job_id.is_not(None))
-        .distinct()
-    )
-    return {job_id for job_id in rows.all() if job_id is not None}
-
-
 async def _tailored_fact_sets(
     db: AsyncSession, user_id: UUID
 ) -> dict[UUID, UUID | None]:
@@ -179,7 +170,7 @@ async def _job_board(
     db: AsyncSession, user_id: UUID, latest_fact_set_id: UUID | None
 ) -> JobBoard:
     jobs = await list_user_jobs(db, user_id)
-    matched_ids = await _matched_job_ids(db, user_id)
+    latest_reports = await latest_match_reports_by_job(db, user_id)
     tailored_sets = await _tailored_fact_sets(db, user_id)
 
     unmatched: list[BoardJobCard] = []
@@ -194,12 +185,17 @@ async def _job_board(
         fields = effective_parsed_job(posting, user_job).basic_fields
         job_id = user_job.user_job_id
         has_resume = job_id in tailored_sets
+        report = latest_reports.get(job_id)
         card = BoardJobCard(
             job_id=job_id,
             title=fields.title,
             company=fields.company,
+            salary=fields.salary,
             location=fields.location,
+            onsite_days_per_week=fields.onsite_days_per_week,
+            education=fields.education,
             stage=stage,
+            match_summary=summarize_stored_match(*report) if report else None,
             updated_at=user_job.updated_at,
             resume_stale=(
                 has_resume
@@ -211,7 +207,7 @@ async def _job_board(
             applied.append(card)
         elif has_resume:
             tailored.append(card)
-        elif job_id in matched_ids:
+        elif report is not None:
             matched.append(card)
         else:
             unmatched.append(card)

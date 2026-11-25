@@ -27,6 +27,7 @@ from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snaps
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import find_existing_job, get_user_job, list_user_jobs
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
+from jobpilot.db.reports import latest_match_reports_by_job
 from jobpilot.db.runs import set_run_status
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.injection import detect_injection
@@ -44,6 +45,7 @@ from jobpilot.services.llm_gateway import (
     EmptyModelResponseError,
     ModelBudget,
 )
+from jobpilot.services.matching import JobMatchSummary, summarize_stored_match
 from jobpilot.services.parsing import normalize_text
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -109,9 +111,14 @@ class JobSummary(BaseModel):
     job_id: UUID
     title: str | None
     company: str | None
+    salary: str | None
+    location: str | None
+    onsite_days_per_week: str | None
+    education: str | None
     stage: JobStage
     keywords: list[str]
     injection_count: int
+    match_summary: JobMatchSummary | None
     updated_at: datetime
 
 
@@ -284,17 +291,25 @@ async def _reuse_job(
 @router.get("/jobs")
 async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
     rows = await list_user_jobs(db, user.user_id)
+    latest_reports = await latest_match_reports_by_job(db, user.user_id)
     summaries = []
     for posting, user_job in rows:
         parsed = effective_parsed_job(posting, user_job)
+        fields = parsed.basic_fields
+        report = latest_reports.get(user_job.user_job_id)
         summaries.append(
             JobSummary(
                 job_id=user_job.user_job_id,
-                title=parsed.basic_fields.title,
-                company=parsed.basic_fields.company,
+                title=fields.title,
+                company=fields.company,
+                salary=fields.salary,
+                location=fields.location,
+                onsite_days_per_week=fields.onsite_days_per_week,
+                education=fields.education,
                 stage=JobStage(user_job.stage),
                 keywords=parsed.keywords,
                 injection_count=len(posting.injection_flags),
+                match_summary=summarize_stored_match(*report) if report else None,
                 updated_at=user_job.updated_at,
             )
         )

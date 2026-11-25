@@ -8,7 +8,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from openai import AsyncOpenAI
@@ -152,6 +152,14 @@ class CoverageCounts(BaseModel):
     missing: int
 
 
+class JobMatchSummary(BaseModel):
+    """岗位列表与工作台卡片共用的最新匹配报告摘要；不输出笼统分数。"""
+
+    hard_covered: int
+    hard_total: int
+    expression_gap: int
+
+
 class BuiltMatchReport(BaseModel):
     items: list[MatchItem]
     main_gaps: list[str]
@@ -191,6 +199,40 @@ def summarize_coverage(
         partial=counts[MatchVerdict.PARTIAL],
         missing=counts[MatchVerdict.MISSING],
     )
+
+
+def summarize_report_counts(
+    requirements: Sequence[Requirement], items: Sequence[MatchItem]
+) -> tuple[CoverageCounts, CoverageCounts]:
+    """报告详情、历史和卡片摘要共用的汇总入口：返回 (硬性要求统计, 加分项统计)。"""
+    return (
+        summarize_coverage(requirements, items, RequirementType.HARD),
+        summarize_coverage(requirements, items, RequirementType.PREFERRED),
+    )
+
+
+def summarize_job_match(
+    requirements: Sequence[Requirement], items: Sequence[MatchItem]
+) -> JobMatchSummary:
+    """由同一份覆盖统计算出岗位卡片摘要：硬性已覆盖（含表达缺口）与总表达缺口数。"""
+    hard, preferred = summarize_report_counts(requirements, items)
+    return JobMatchSummary(
+        hard_covered=hard.covered + hard.expression_gap,
+        hard_total=hard.total,
+        expression_gap=hard.expression_gap + preferred.expression_gap,
+    )
+
+
+def summarize_stored_match(
+    snapshot_json: dict[str, Any] | None, items_json: Sequence[dict[str, Any]]
+) -> JobMatchSummary:
+    """从数据库快照与结果还原出要求与条目，再走同一汇总函数。"""
+    requirements = [
+        Requirement.model_validate(req)
+        for req in (snapshot_json or {}).get("requirements", [])
+    ]
+    items = [MatchItem.model_validate(item) for item in items_json]
+    return summarize_job_match(requirements, items)
 
 
 def build_match_report(
@@ -306,13 +348,12 @@ def build_match_report(
             )
 
     synced_gaps = sync_main_gaps(raw.main_gaps, requirements, program_decisions)
+    hard_summary, preferred_summary = summarize_report_counts(requirements, items)
     return BuiltMatchReport(
         items=items,
         main_gaps=synced_gaps,
-        hard_summary=summarize_coverage(requirements, items, RequirementType.HARD),
-        preferred_summary=summarize_coverage(
-            requirements, items, RequirementType.PREFERRED
-        ),
+        hard_summary=hard_summary,
+        preferred_summary=preferred_summary,
     )
 
 

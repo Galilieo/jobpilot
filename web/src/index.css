@@ -36,6 +36,7 @@ textarea {
 .board-column-title,
 .board-column-empty,
 .ant-typography.board-card-sub,
+.board-card-salary,
 .board-card-footer,
 .ant-typography.login-subtitle,
 .import-hint,
@@ -43,6 +44,8 @@ textarea {
 .fact-group-note,
 .fact-quote,
 .ant-typography.job-company,
+.job-card-salary,
+.job-card-match,
 .job-card-foot,
 .job-raw,
 .job-field-label,
@@ -503,7 +506,7 @@ textarea {
 }
 .job-card-foot {
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 4px;
 }
 
 /* 岗位详情 */

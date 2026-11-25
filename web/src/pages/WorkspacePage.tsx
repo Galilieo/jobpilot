@@ -9,7 +9,7 @@ import type { BoardJobCard, FactsOverview, GroundingOverview, JobBoard } from '.
 import { useCurrentUser } from '../auth'
 import { EmptyHint } from '../components/EmptyHint'
 import { PageHeader } from '../components/PageHeader'
-import { JOB_STAGE } from '../labels'
+import { JOB_STAGE, formatJobMeta, formatMatchSummary } from '../labels'
 import { OVERVIEW_QUERY } from '../queryKeys'
 
 function greetingPrefix(hour: number): string {
@@ -235,19 +235,23 @@ function BoardCard({
   columnKey: keyof JobBoard
   onOpen: () => void
 }): ReactElement {
-  const subtitle = [card.company, card.location].filter(Boolean).join(' · ') || '公司未填写'
+  const { token } = theme.useToken()
+  const subtitle = formatJobMeta(card)
   return (
     <Card size="small" hoverable className="board-card" onClick={onOpen}>
       <Typography.Text strong>{card.title ?? '未命名岗位'}</Typography.Text>
+      {card.salary && (
+        <Typography.Text strong className="board-card-salary" style={{ color: token.colorPrimary }}>
+          {card.salary}
+        </Typography.Text>
+      )}
       <Typography.Paragraph type="secondary" className="board-card-sub">
         {subtitle}
       </Typography.Paragraph>
       <div className="board-card-footer">
-        {columnKey === 'unmatched' && <Typography.Text type="secondary">还没匹配</Typography.Text>}
-        {columnKey === 'matched' && <Typography.Text type="secondary">已做匹配</Typography.Text>}
-        {columnKey === 'tailored' && !card.resume_stale && (
-          <Typography.Text type="secondary">简历已生成</Typography.Text>
-        )}
+        <Typography.Text type="secondary" className="tabular-num">
+          {formatMatchSummary(card.match_summary)}
+        </Typography.Text>
         {card.resume_stale && <Tag color="warning">事实库已更新</Tag>}
         {columnKey === 'applied' && <Tag color="processing">{JOB_STAGE[card.stage]}</Tag>}
       </div>

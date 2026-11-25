@@ -6,14 +6,22 @@
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import event, select, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from jobpilot.db.models import AiRun, JobPosting, RunStatus, UserJob
+from jobpilot.db.models import (
+    AiRun,
+    JobPosting,
+    MatchReport,
+    RunStatus,
+    UserJob,
+)
 from jobpilot.tests.test_facts_api import new_idempotency_headers
 
 JD = (
@@ -372,3 +380,262 @@ async def test_concurrent_keyword_and_requirement_edits_both_survive(
     parsed = (await signed_in.get(url)).json()["parsed"]
     assert parsed["requirements"] == []
     assert parsed["keywords"] == ["Redis"]
+
+
+async def _seed_matched_job(
+    db: AsyncSession,
+    user_id: UUID,
+    *,
+    title: str,
+    reports: list[tuple[UUID, datetime, list[dict[str, Any]]]],
+    requirements: list[dict[str, Any]],
+) -> UserJob:
+    snapshot = {
+        "basic_fields": {
+            "company": "星桥数据",
+            "title": title,
+            "location": "上海",
+            "salary": "250 元/天",
+            "onsite_days_per_week": "4 天/周",
+            "education": "本科",
+        },
+        "requirements": requirements,
+        "duties": [],
+        "keywords": ["Python"],
+    }
+    posting = JobPosting(
+        owner_id=user_id,
+        raw_text=f"{title} 原文",
+        content_hash=uuid4().hex.ljust(64, "0"),
+        parsed_json=snapshot,
+    )
+    db.add(posting)
+    await db.flush()
+    user_job = UserJob(user_id=user_id, posting_id=posting.posting_id)
+    db.add(user_job)
+    await db.flush()
+    for report_id, ts, items in reports:
+        run = AiRun(
+            user_id=user_id,
+            kind="match",
+            status=RunStatus.SUCCEEDED,
+            user_job_id=user_job.user_job_id,
+            job_snapshot_json=snapshot,
+            started_at=ts,
+            finished_at=ts,
+        )
+        db.add(run)
+        await db.flush()
+        db.add(
+            MatchReport(
+                report_id=report_id,
+                user_id=user_id,
+                run_id=run.run_id,
+                items_json=items,
+                main_gaps=[],
+                created_at=ts,
+            )
+        )
+        await db.flush()
+    return user_job
+
+
+async def test_list_jobs_includes_overridden_basic_fields_and_latest_match_summary(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """岗位列表返回合并个人修改后的基本字段和最新匹配报告摘要，未匹配为 None。"""
+    unmatched = (await add_job(signed_in, model_outputs)).json()
+    put_resp = await signed_in.put(
+        f"/api/jobs/{unmatched['job_id']}",
+        json={
+            "basic_fields": {
+                "salary": "300 元/天",
+                "location": "杭州",
+                "onsite_days_per_week": "5 天/周",
+                "education": "硕士",
+            }
+        },
+    )
+    assert put_resp.status_code == 200
+
+    me = UUID((await signed_in.get("/api/me")).json()["user_id"])
+    r1, r2, r3, r4 = uuid4(), uuid4(), uuid4(), uuid4()
+    reqs = [
+        {"requirement_id": str(r1), "type": "hard", "text": "熟悉 Python"},
+        {"requirement_id": str(r2), "type": "hard", "text": "熟悉 SQL"},
+        {"requirement_id": str(r3), "type": "hard", "text": "每周 4 天"},
+        {"requirement_id": str(r4), "type": "preferred", "text": "了解 Redis"},
+    ]
+    same_time = datetime(2026, 11, 25, 12, 0, 0, tzinfo=UTC)
+    older_items = [
+        {
+            "requirement_id": str(r1),
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+        {
+            "requirement_id": str(r2),
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+        {
+            "requirement_id": str(r3),
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+        {
+            "requirement_id": str(r4),
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+    ]
+    newer_items = [
+        {
+            "requirement_id": str(r1),
+            "verdict": "covered",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+        {
+            "requirement_id": str(r2),
+            "verdict": "expression_gap",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+        {
+            "requirement_id": str(r3),
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+        {
+            "requirement_id": str(r4),
+            "verdict": "expression_gap",
+            "fact_ids": [],
+            "reason": "r",
+            "suggestion": "s",
+        },
+    ]
+    async with session_factory.begin() as db:
+        matched = await _seed_matched_job(
+            db,
+            me,
+            title="已匹配岗位",
+            requirements=reqs,
+            reports=[
+                (UUID("ffffffff-ffff-4fff-8fff-ffffffffffff"), same_time, older_items),
+                (UUID("00000000-0000-4000-8000-000000000000"), same_time, newer_items),
+            ],
+        )
+
+    listed = {
+        item["job_id"]: item for item in (await signed_in.get("/api/jobs")).json()
+    }
+    u_item = listed[unmatched["job_id"]]
+    assert u_item["salary"] == "300 元/天"
+    assert u_item["location"] == "杭州"
+    assert u_item["onsite_days_per_week"] == "5 天/周"
+    assert u_item["education"] == "硕士"
+    assert u_item["match_summary"] is None
+
+    m_item = listed[str(matched.user_job_id)]
+    assert m_item["salary"] == "250 元/天"
+    assert m_item["location"] == "上海"
+    assert m_item["onsite_days_per_week"] == "4 天/周"
+    assert m_item["education"] == "本科"
+    assert m_item["match_summary"] == {
+        "hard_covered": 2,
+        "hard_total": 3,
+        "expression_gap": 2,
+    }
+
+
+async def test_list_jobs_query_count_is_constant_across_job_counts(
+    signed_in: httpx.AsyncClient,
+    db_engine: AsyncEngine,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """岗位列表一次批量查询，SQL 次数不随岗位数增长。"""
+    me = UUID((await signed_in.get("/api/me")).json()["user_id"])
+
+    async def seed_n(n: int) -> None:
+        ts = datetime(2026, 11, 25, 12, 0, 0, tzinfo=UTC)
+        async with session_factory.begin() as db:
+            for idx in range(n):
+                req_id = str(uuid4())
+                await _seed_matched_job(
+                    db,
+                    me,
+                    title=f"岗位 {uuid4().hex[:6]}-{idx}",
+                    requirements=[
+                        {"requirement_id": req_id, "type": "hard", "text": "Python"}
+                    ],
+                    reports=[
+                        (
+                            uuid4(),
+                            ts,
+                            [
+                                {
+                                    "requirement_id": req_id,
+                                    "verdict": "covered",
+                                    "fact_ids": [],
+                                    "reason": "r",
+                                    "suggestion": "s",
+                                }
+                            ],
+                        ),
+                        (
+                            uuid4(),
+                            ts,
+                            [
+                                {
+                                    "requirement_id": req_id,
+                                    "verdict": "missing",
+                                    "fact_ids": [],
+                                    "reason": "r",
+                                    "suggestion": "s",
+                                }
+                            ],
+                        ),
+                    ],
+                )
+
+    def count_queries() -> tuple[list[str], Any]:
+        statements: list[str] = []
+
+        def capture(_conn, _cursor, statement, _params, _ctx, _many) -> None:
+            statements.append(statement)
+
+        event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+        return statements, capture
+
+    await seed_n(1)
+    q1, cap1 = count_queries()
+    try:
+        assert (await signed_in.get("/api/jobs")).status_code == 200
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", cap1)
+
+    await seed_n(4)
+    q5, cap5 = count_queries()
+    try:
+        resp = await signed_in.get("/api/jobs")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 5
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", cap5)
+
+    assert len(q5) == len(q1)

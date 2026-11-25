@@ -18,7 +18,7 @@ import { newIdempotencyKey } from '../../api/http'
 import type { Coverage, MatchReport, MatchSummary } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
 import { VERDICT, formatDateTime } from '../../labels'
-import { OVERVIEW_QUERY, matchReportQuery, matchesQuery } from '../../queryKeys'
+import { JOBS_QUERY, OVERVIEW_QUERY, matchReportQuery, matchesQuery } from '../../queryKeys'
 
 export function MatchPanel({
   jobId,
@@ -52,6 +52,7 @@ export function MatchPanel({
       setSelectedReportId(null)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: matchesQuery(jobId) }),
+        queryClient.invalidateQueries({ queryKey: JOBS_QUERY }),
         queryClient.invalidateQueries({ queryKey: OVERVIEW_QUERY }),
       ])
     },

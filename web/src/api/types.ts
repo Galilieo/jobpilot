@@ -23,12 +23,22 @@ export interface GroundingOverview {
   resume_count: number
 }
 
+export interface JobMatchSummary {
+  hard_covered: number
+  hard_total: number
+  expression_gap: number
+}
+
 export interface BoardJobCard {
   job_id: string
   title: string | null
   company: string | null
+  salary: string | null
   location: string | null
+  onsite_days_per_week: string | null
+  education: string | null
   stage: JobStage
+  match_summary: JobMatchSummary | null
   updated_at: string
   resume_stale: boolean
 }
@@ -233,9 +243,14 @@ export interface JobSummary {
   job_id: string
   title: string | null
   company: string | null
+  salary: string | null
+  location: string | null
+  onsite_days_per_week: string | null
+  education: string | null
   stage: JobStage
   keywords: string[]
   injection_count: number
+  match_summary: JobMatchSummary | null
   updated_at: string
 }
 

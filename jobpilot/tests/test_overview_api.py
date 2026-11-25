@@ -1,9 +1,12 @@
 """工作台汇总接口测试：事实库、不编造记录、岗位看板归类与跨用户隔离。"""
 
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import (
     AiRun,
@@ -40,13 +43,22 @@ async def _add_job(
     title: str,
     stage: str = JobStage.SAVED,
     override_title: str | None = None,
+    override_salary: str | None = None,
 ) -> UserJob:
+    basic_fields = {
+        "title": title,
+        "company": "示例科技",
+        "location": "上海",
+        "salary": "200 元/天",
+        "onsite_days_per_week": "4 天/周",
+        "education": "本科",
+    }
     posting = JobPosting(
         owner_id=user_id,
         raw_text=f"岗位 {title}",
         content_hash=uuid4().hex.ljust(64, "0"),
         parsed_json={
-            "basic_fields": {"title": title, "company": "示例科技", "location": "上海"},
+            "basic_fields": basic_fields,
             "requirements": [],
             "duties": [],
             "keywords": [],
@@ -54,7 +66,14 @@ async def _add_job(
     )
     db.add(posting)
     await db.flush()
-    overrides = {"basic_fields": {"title": override_title}} if override_title else {}
+    overrides: dict[str, Any] = {}
+    if override_title or override_salary:
+        merged = dict(basic_fields)
+        if override_title:
+            merged["title"] = override_title
+        if override_salary:
+            merged["salary"] = override_salary
+        overrides["basic_fields"] = merged
     user_job = UserJob(
         user_id=user_id,
         posting_id=posting.posting_id,
@@ -147,7 +166,9 @@ async def test_overview_aggregates_facts_grounding_and_board_and_isolates_users(
             )
         )
 
-        unmatched_job = await _add_job(db, user_id, title="未匹配岗位")
+        unmatched_job = await _add_job(
+            db, user_id, title="未匹配岗位", override_salary="350 元/天"
+        )
         matched_job = await _add_job(db, user_id, title="已匹配岗位")
         tailored_job = await _add_job(
             db, user_id, title="原标题", override_title="改过标题的简历岗"
@@ -158,20 +179,52 @@ async def test_overview_aggregates_facts_grounding_and_board_and_isolates_users(
         await _add_job(db, user_id, title="归档岗位", stage=JobStage.ARCHIVED)
 
         # 已匹配岗位（有匹配报告，无定制简历）
+        r1, r2, r3 = str(uuid4()), str(uuid4()), str(uuid4())
         match_run = AiRun(
             user_id=user_id,
             kind="match",
             status=RunStatus.SUCCEEDED,
             user_job_id=matched_job.user_job_id,
             fact_set_id=v2.fact_set_id,
-            job_snapshot_json={},
+            job_snapshot_json={
+                "requirements": [
+                    {"requirement_id": r1, "type": "hard", "text": "Python"},
+                    {"requirement_id": r2, "type": "hard", "text": "SQL"},
+                    {"requirement_id": r3, "type": "preferred", "text": "Redis"},
+                ]
+            },
             finished_at=doc.created_at,
         )
         db.add(match_run)
         await db.flush()
         db.add(
             MatchReport(
-                user_id=user_id, run_id=match_run.run_id, items_json=[], main_gaps=[]
+                user_id=user_id,
+                run_id=match_run.run_id,
+                items_json=[
+                    {
+                        "requirement_id": r1,
+                        "verdict": "covered",
+                        "fact_ids": [],
+                        "reason": "r",
+                        "suggestion": "s",
+                    },
+                    {
+                        "requirement_id": r2,
+                        "verdict": "missing",
+                        "fact_ids": [],
+                        "reason": "r",
+                        "suggestion": "s",
+                    },
+                    {
+                        "requirement_id": r3,
+                        "verdict": "expression_gap",
+                        "fact_ids": [],
+                        "reason": "r",
+                        "suggestion": "s",
+                    },
+                ],
+                main_gaps=[],
             )
         )
 
@@ -238,11 +291,26 @@ async def test_overview_aggregates_facts_grounding_and_board_and_isolates_users(
         "resume_count": 1,
     }
     board = data["board"]
-    assert [c["job_id"] for c in board["unmatched"]] == [str(unmatched_job.user_job_id)]
-    assert [c["job_id"] for c in board["matched"]] == [str(matched_job.user_job_id)]
     assert [
-        (c["job_id"], c["title"], c["resume_stale"]) for c in board["tailored"]
-    ] == [(str(tailored_job.user_job_id), "改过标题的简历岗", True)]
+        (
+            c["job_id"],
+            c["salary"],
+            c["onsite_days_per_week"],
+            c["education"],
+            c["match_summary"],
+        )
+        for c in board["unmatched"]
+    ] == [(str(unmatched_job.user_job_id), "350 元/天", "4 天/周", "本科", None)]
+    assert [(c["job_id"], c["match_summary"]) for c in board["matched"]] == [
+        (
+            str(matched_job.user_job_id),
+            {"hard_covered": 1, "hard_total": 2, "expression_gap": 1},
+        )
+    ]
+    assert [
+        (c["job_id"], c["title"], c["resume_stale"], c["match_summary"])
+        for c in board["tailored"]
+    ] == [(str(tailored_job.user_job_id), "改过标题的简历岗", True, None)]
     assert [(c["job_id"], c["stage"]) for c in board["applied"]] == [
         (str(applied_job.user_job_id), "interviewing")
     ]
@@ -262,3 +330,82 @@ async def test_overview_aggregates_facts_grounding_and_board_and_isolates_users(
         },
         "board": {"unmatched": [], "matched": [], "tailored": [], "applied": []},
     }
+
+
+async def test_overview_query_count_does_not_grow_with_job_count(
+    async_client: httpx.AsyncClient,
+    db_engine: AsyncEngine,
+    session_factory: Factory,
+) -> None:
+    """工作台汇总一次批量查询匹配摘要，SQL 次数不随岗位数增长。"""
+    user_id = await _sign_in(async_client, "queries@overview.invalid")
+    ts = datetime(2026, 11, 25, 12, 0, 0, tzinfo=UTC)
+
+    async def add_matched_jobs(n: int) -> None:
+        async with session_factory.begin() as db:
+            for idx in range(n):
+                job = await _add_job(
+                    db, user_id, title=f"看板岗位 {uuid4().hex[:6]}-{idx}"
+                )
+                req_id = str(uuid4())
+                for verdict in ("missing", "covered"):
+                    run = AiRun(
+                        user_id=user_id,
+                        kind="match",
+                        status=RunStatus.SUCCEEDED,
+                        user_job_id=job.user_job_id,
+                        job_snapshot_json={
+                            "requirements": [
+                                {"requirement_id": req_id, "type": "hard", "text": "Go"}
+                            ]
+                        },
+                        started_at=ts,
+                        finished_at=ts,
+                    )
+                    db.add(run)
+                    await db.flush()
+                    db.add(
+                        MatchReport(
+                            user_id=user_id,
+                            run_id=run.run_id,
+                            items_json=[
+                                {
+                                    "requirement_id": req_id,
+                                    "verdict": verdict,
+                                    "fact_ids": [],
+                                    "reason": "r",
+                                    "suggestion": "s",
+                                }
+                            ],
+                            main_gaps=[],
+                            created_at=ts,
+                        )
+                    )
+                    await db.flush()
+
+    def listen_queries() -> tuple[list[str], object]:
+        statements: list[str] = []
+
+        def capture(_conn, _cursor, statement, _params, _ctx, _many) -> None:
+            statements.append(statement)
+
+        event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+        return statements, capture
+
+    await add_matched_jobs(1)
+    q1, cap1 = listen_queries()
+    try:
+        assert (await async_client.get("/api/overview")).status_code == 200
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", cap1)
+
+    await add_matched_jobs(4)
+    q5, cap5 = listen_queries()
+    try:
+        resp = await async_client.get("/api/overview")
+        assert resp.status_code == 200
+        assert len(resp.json()["board"]["matched"]) == 5
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", cap5)
+
+    assert len(q5) == len(q1)

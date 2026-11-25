@@ -1,7 +1,7 @@
 // 岗位库：岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Modal, Skeleton, Tag, Typography } from 'antd'
+import { App, Button, Card, Modal, Skeleton, Tag, Typography, theme } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
@@ -9,7 +9,7 @@ import { newIdempotencyKey } from '../api/http'
 import { EmptyHint } from '../components/EmptyHint'
 import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
-import { JOB_STAGE } from '../labels'
+import { JOB_STAGE, formatJobMeta, formatMatchSummary } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
 
 const JD_COPY = {
@@ -20,6 +20,7 @@ const JD_COPY = {
 }
 
 export function JobsPage(): ReactElement {
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
   const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
@@ -72,8 +73,21 @@ export function JobsPage(): ReactElement {
                 <Typography.Text strong className="job-card-title">
                   {job.title ?? '未命名岗位'}
                 </Typography.Text>
+                {job.salary ? (
+                  <Typography.Text
+                    strong
+                    className="job-card-salary"
+                    style={{ color: token.colorPrimary }}
+                  >
+                    {job.salary}
+                  </Typography.Text>
+                ) : (
+                  <Typography.Text type="secondary" className="job-card-salary">
+                    薪资未填写
+                  </Typography.Text>
+                )}
                 <Typography.Paragraph type="secondary" className="job-company">
-                  {job.company ?? '公司未填写'}
+                  {formatJobMeta(job)}
                 </Typography.Paragraph>
                 {(job.keywords.length > 0 || job.injection_count > 0) && (
                   <div className="job-tags">
@@ -88,6 +102,9 @@ export function JobsPage(): ReactElement {
                     )}
                   </div>
                 )}
+                <Typography.Text type="secondary" className="job-card-match tabular-num">
+                  {formatMatchSummary(job.match_summary)}
+                </Typography.Text>
                 <div className="job-card-foot">
                   <Typography.Text type="secondary">{JOB_STAGE[job.stage]}</Typography.Text>
                 </div>

@@ -190,4 +190,53 @@ describe('JobsPage 添加岗位多种输入方式与幂等重试', () => {
     expect(nextKey).toBeTruthy()
     expect(nextKey).not.toBe(firstKey)
   })
+
+  it('卡片展示薪资、公司·地点·到岗·学历与匹配摘要', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(200, [
+          {
+            job_id: 'job-matched',
+            title: '大模型应用开发实习生',
+            company: '青梧数智',
+            salary: '250-300 元/天',
+            location: '上海',
+            onsite_days_per_week: '每周 4 天',
+            education: '本科',
+            stage: 'saved',
+            keywords: ['Python', 'FastAPI', 'RAG', 'Docker'],
+            injection_count: 0,
+            match_summary: { hard_covered: 4, hard_total: 9, expression_gap: 1 },
+            updated_at: '2026-11-25T10:00:00Z',
+          },
+          {
+            job_id: 'job-unmatched',
+            title: '后端实习生',
+            company: '星桥数据',
+            salary: null,
+            location: '杭州',
+            onsite_days_per_week: null,
+            education: null,
+            stage: 'applied',
+            keywords: ['Go'],
+            injection_count: 0,
+            match_summary: null,
+            updated_at: '2026-11-25T09:00:00Z',
+          },
+        ]),
+      ),
+    )
+
+    renderWithProviders(<JobsPage />)
+
+    expect(await screen.findByText('250-300 元/天')).toBeInTheDocument()
+    expect(screen.getByText('青梧数智 · 上海 · 每周 4 天 · 本科')).toBeInTheDocument()
+    expect(screen.getByText('硬性 4/9 · 表达缺口 1')).toBeInTheDocument()
+    expect(screen.getByText('+1')).toBeInTheDocument()
+
+    expect(screen.getByText('薪资未填写')).toBeInTheDocument()
+    expect(screen.getByText('星桥数据 · 杭州')).toBeInTheDocument()
+    expect(screen.getByText('还没匹配')).toBeInTheDocument()
+  })
 })

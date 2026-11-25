@@ -5,6 +5,7 @@ import type {
   EducationStatus,
   FactKind,
   ItemStatus,
+  JobMatchSummary,
   JobStage,
   MatchVerdict,
   Responsibility,
@@ -129,4 +130,23 @@ export function formatDateTime(iso: string): string {
     minute: '2-digit',
     hour12: false,
   }).format(parsed)
+}
+
+export function formatMatchSummary(summary: JobMatchSummary | null): string {
+  if (!summary) return '还没匹配'
+  const base = `硬性 ${summary.hard_covered}/${summary.hard_total}`
+  return summary.expression_gap > 0 ? `${base} · 表达缺口 ${summary.expression_gap}` : base
+}
+
+export function formatJobMeta(fields: {
+  company: string | null
+  location: string | null
+  onsite_days_per_week: string | null
+  education: string | null
+}): string {
+  return (
+    [fields.company, fields.location, fields.onsite_days_per_week, fields.education]
+      .filter(Boolean)
+      .join(' · ') || '公司未填写'
+  )
 }

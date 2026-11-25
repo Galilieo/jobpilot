@@ -56,7 +56,7 @@ from jobpilot.services.matching import (
     MatchVerdict,
     load_match_inputs,
     match_job,
-    summarize_coverage,
+    summarize_report_counts,
 )
 
 router = APIRouter(prefix="/api", tags=["matching"])
@@ -197,18 +197,17 @@ def _hydrate_report_out(
         )
         for item in items
     ]
+    hard_summary, preferred_summary = summarize_report_counts(
+        snapshot.requirements, items
+    )
     return MatchReportOut(
         report_id=report_id,
         run_id=run_id,
         job_id=job_id,
         fact_set_id=fact_set_id,
         fact_set_version=fact_set_version,
-        hard_summary=summarize_coverage(
-            snapshot.requirements, items, RequirementType.HARD
-        ),
-        preferred_summary=summarize_coverage(
-            snapshot.requirements, items, RequirementType.PREFERRED
-        ),
+        hard_summary=hard_summary,
+        preferred_summary=preferred_summary,
         main_gaps=list(main_gaps),
         items=hydrated_items,
         created_at=created_at,
@@ -349,6 +348,9 @@ async def list_job_matches(
     for report, run, fact_set in rows:
         snapshot = ParsedJob.model_validate(run.job_snapshot_json)
         items = [MatchItem.model_validate(item) for item in report.items_json]
+        hard_summary, preferred_summary = summarize_report_counts(
+            snapshot.requirements, items
+        )
         summaries.append(
             MatchReportSummaryOut(
                 report_id=report.report_id,
@@ -356,12 +358,8 @@ async def list_job_matches(
                 job_id=job_id,
                 fact_set_id=fact_set.fact_set_id,
                 fact_set_version=fact_set.version,
-                hard_summary=summarize_coverage(
-                    snapshot.requirements, items, RequirementType.HARD
-                ),
-                preferred_summary=summarize_coverage(
-                    snapshot.requirements, items, RequirementType.PREFERRED
-                ),
+                hard_summary=hard_summary,
+                preferred_summary=preferred_summary,
                 main_gaps=list(report.main_gaps),
                 created_at=report.created_at,
             )
