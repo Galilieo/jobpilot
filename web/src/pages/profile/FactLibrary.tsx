@@ -28,6 +28,8 @@ import type { DraftItem, Library, PublishedFact, Responsibility } from '../../ap
 import { FACT_KIND, ITEM_STATUS, RESPONSIBILITY, REVIEW_REASON } from '../../labels'
 import { LIBRARY_QUERY, OVERVIEW_QUERY, TAILORED_RESUMES_QUERY } from '../../queryKeys'
 import { AddFactModal } from './AddFactModal'
+import { CriteriaCard } from './CriteriaCard'
+import { EducationCard } from './EducationCard'
 
 function groupByExperience<T extends { experience: string }>(items: T[]): [string, T[]][] {
   const groups = new Map<string, T[]>()
@@ -137,9 +139,12 @@ export function FactLibrary(): ReactElement {
     )
   }
 
-  const { fact_set: factSet, facts: published, draft } = library.data
+  const { fact_set: factSet, facts: published, criteria, education, draft } = library.data
   const pending = draft.items.filter((item) => item.status === 'pending').length
-  const ready = draft.items.some((item) => item.status !== 'pending')
+  const ready =
+    draft.items.some((item) => item.status !== 'pending') ||
+    draft.criteria.some((item) => item.status !== 'pending') ||
+    draft.education.some((item) => item.draft_status !== 'pending')
   const busy = change.isPending || editPublished.isPending || remove.isPending
   const draftByLineage = new Map(draft.items.map((item) => [item.lineage_id, item]))
   const knownExperiences = [
@@ -223,6 +228,20 @@ export function FactLibrary(): ReactElement {
           </>
         )}
       </Card>
+      <CriteriaCard
+        published={criteria}
+        draft={draft.criteria}
+        revision={draft.revision}
+        onSuccess={refresh}
+        onError={onError}
+      />
+      <EducationCard
+        published={education}
+        draft={draft.education}
+        revision={draft.revision}
+        onSuccess={refresh}
+        onError={onError}
+      />
       <PublishedCard
         version={factSet?.version ?? null}
         published={published}

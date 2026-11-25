@@ -31,7 +31,9 @@ export function ProfilePage(): ReactElement {
   const publishedCount = library.data?.facts.length ?? 0
   const version = library.data?.fact_set?.version
   const pendingCount =
-    library.data?.draft.items.filter((item) => item.status === 'pending').length ?? 0
+    (library.data?.draft.items.filter((item) => item.status === 'pending').length ?? 0) +
+    (library.data?.draft.criteria.filter((item) => item.status === 'pending').length ?? 0) +
+    (library.data?.draft.education.filter((item) => item.draft_status === 'pending').length ?? 0)
   const resumeCount = resumes.data?.length ?? 0
 
   function switchTab(next: string): void {

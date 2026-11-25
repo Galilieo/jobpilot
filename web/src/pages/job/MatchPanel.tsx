@@ -176,22 +176,35 @@ function ReportBody({ report }: { report: MatchReport }): ReactElement {
         </section>
       )}
       <ul className="row-list">
-        {report.items.map((item) => (
-          <li key={item.requirement_id}>
-            <Space size={8} wrap>
-              <Tag color={VERDICT[item.verdict].color}>{VERDICT[item.verdict].text}</Tag>
-              <Typography.Text strong>{item.requirement_text}</Typography.Text>
-              {item.requirement_type === 'preferred' && <Tag>加分项</Tag>}
-            </Space>
-            <Typography.Paragraph className="report-reason">{item.reason}</Typography.Paragraph>
-            {item.facts.length > 0 && (
-              <Typography.Paragraph type="secondary" className="report-facts">
-                依据：{item.facts.map((fact) => `${fact.text}（${fact.experience}）`).join('；')}
-              </Typography.Paragraph>
-            )}
-            <Typography.Text type="secondary">建议：{item.suggestion}</Typography.Text>
-          </li>
-        ))}
+        {report.items.map((item) => {
+          const evidence = [
+            ...(item.criteria ?? []).map((c) => `${c.label} · ${c.text}`),
+            ...item.facts.map((fact) => `${fact.text}（${fact.experience}）`),
+          ]
+          return (
+            <li key={item.requirement_id}>
+              <Space size={8} wrap>
+                <Tag color={VERDICT[item.verdict].color}>{VERDICT[item.verdict].text}</Tag>
+                <Typography.Text strong>{item.requirement_text}</Typography.Text>
+                {item.requirement_type === 'preferred' && <Tag>加分项</Tag>}
+                {item.decision_source === 'program' && <Tag color="cyan">按数字比对</Tag>}
+                {item.review_note && <Tag color="warning">待核对</Tag>}
+              </Space>
+              <Typography.Paragraph className="report-reason">{item.reason}</Typography.Paragraph>
+              {item.review_note && (
+                <Typography.Paragraph type="warning" className="report-reason">
+                  待核对说明：{item.review_note}
+                </Typography.Paragraph>
+              )}
+              {evidence.length > 0 && (
+                <Typography.Paragraph type="secondary" className="report-facts">
+                  依据：{evidence.join('；')}
+                </Typography.Paragraph>
+              )}
+              <Typography.Text type="secondary">建议：{item.suggestion}</Typography.Text>
+            </li>
+          )
+        })}
       </ul>
     </>
   )

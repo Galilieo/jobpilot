@@ -52,6 +52,69 @@ export type FactKind = 'action' | 'technology' | 'result' | 'role'
 export type Responsibility = 'lead' | 'own' | 'participate' | 'na'
 export type ItemStatus = 'pending' | 'confirmed' | 'deleted'
 export type SectionKind = 'education' | 'project' | 'internship' | 'skill' | 'award' | 'other'
+export type CriterionField = 'onsite_days_per_week' | 'internship_months' | 'earliest_start'
+export type DegreeLevel = 'associate' | 'bachelor' | 'master' | 'phd'
+export type EducationStatus = 'enrolled' | 'completed'
+
+export interface PublishedCriterion {
+  criterion_id: string
+  field: CriterionField
+  int_value: number | null
+  text_value: string | null
+  source: 'resume' | 'user'
+  source_doc_id: string | null
+  source_quote: string | null
+  span_start: number | null
+  span_end: number | null
+}
+
+export interface DraftCriterion {
+  field: CriterionField
+  status: ItemStatus
+  int_value: number | null
+  text_value: string | null
+  source: 'resume' | 'user'
+  source_doc_id: string | null
+  source_quote: string | null
+  span_start: number | null
+  span_end: number | null
+  quote_verified: boolean
+  review_reasons: string[]
+}
+
+export interface PublishedEducation {
+  record_id: string
+  education_id: string
+  school: string
+  major: string | null
+  degree: DegreeLevel
+  status: EducationStatus
+  start_text: string | null
+  end_text: string | null
+  source: 'resume' | 'user'
+  source_doc_id: string | null
+  source_quote: string | null
+  span_start: number | null
+  span_end: number | null
+}
+
+export interface DraftEducation {
+  education_id: string
+  draft_status: ItemStatus
+  school: string
+  major: string | null
+  degree: DegreeLevel
+  status: EducationStatus | null
+  start_text: string | null
+  end_text: string | null
+  source: 'resume' | 'user'
+  source_doc_id: string | null
+  source_quote: string | null
+  span_start: number | null
+  span_end: number | null
+  quote_verified: boolean
+  review_reasons: string[]
+}
 
 export interface DraftItem {
   lineage_id: string
@@ -81,13 +144,23 @@ export interface PublishedFact {
 export interface Library {
   fact_set: { fact_set_id: string; version: number } | null
   facts: PublishedFact[]
-  draft: { base_fact_set_id: string | null; items: DraftItem[]; revision: number }
+  criteria: PublishedCriterion[]
+  education: PublishedEducation[]
+  draft: {
+    base_fact_set_id: string | null
+    items: DraftItem[]
+    criteria: DraftCriterion[]
+    education: DraftEducation[]
+    revision: number
+  }
 }
 
 export interface UploadedResume {
   doc_id: string
   run_id: string
   items: DraftItem[]
+  criteria?: DraftCriterion[]
+  education?: DraftEducation[]
   revision: number
 }
 
@@ -178,6 +251,13 @@ export interface Coverage {
   missing: number
 }
 
+export interface CitedCriterion {
+  ref_id: string
+  kind: 'criterion' | 'education'
+  label: string
+  text: string
+}
+
 export interface MatchReport {
   report_id: string
   fact_set_version: number
@@ -190,6 +270,9 @@ export interface MatchReport {
     requirement_text: string
     verdict: MatchVerdict
     facts: { fact_id: string; experience: string; text: string }[]
+    criteria?: CitedCriterion[]
+    decision_source?: 'model' | 'program'
+    review_note?: string | null
     reason: string
     suggestion: string
   }[]

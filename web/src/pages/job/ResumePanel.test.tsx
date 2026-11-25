@@ -137,7 +137,9 @@ const RESUME_DATA: TailoredResumeData = {
 const LIBRARY: Library = {
   fact_set: { fact_set_id: 'set-1', version: 1 },
   facts: [],
-  draft: { base_fact_set_id: 'set-1', items: [], revision: 0 },
+  criteria: [],
+  education: [],
+  draft: { base_fact_set_id: 'set-1', items: [], criteria: [], education: [], revision: 0 },
 }
 
 describe('ResumePanel 轮询停止、依据追溯与建议补入', () => {

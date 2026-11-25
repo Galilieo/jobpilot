@@ -1,5 +1,8 @@
 // 后端枚举值对应的界面文字，集中放一处，各页面共用。
 import type {
+  CriterionField,
+  DegreeLevel,
+  EducationStatus,
   FactKind,
   ItemStatus,
   JobStage,
@@ -46,6 +49,25 @@ export const REVIEW_REASON: Record<string, string> = {
   responsibility_unstated: '原文没写明职责程度',
   responsibility_unsupported: '职责程度和原文的写法对不上',
   number_not_in_quote: '数字和原文对不上',
+  education_status_uncertain: '需要核对就读状态（在读或已取得）',
+}
+
+export const CRITERION_LABEL: Record<CriterionField, string> = {
+  onsite_days_per_week: '每周可到岗天数',
+  internship_months: '可实习月数',
+  earliest_start: '最早到岗时间',
+}
+
+export const DEGREE_LABEL: Record<DegreeLevel, string> = {
+  associate: '大专',
+  bachelor: '本科',
+  master: '硕士',
+  phd: '博士',
+}
+
+export const EDUCATION_STATUS_LABEL: Record<EducationStatus, string> = {
+  enrolled: '在读',
+  completed: '已取得',
 }
 
 export const SECTION: Record<SectionKind, string> = {

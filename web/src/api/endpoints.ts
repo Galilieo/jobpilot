@@ -1,7 +1,12 @@
 // 前端用到的全部接口，一个函数对应一个后端接口；路径与 02 第 6 节一致。
 import { request } from './http'
 import type {
+  CriterionField,
+  DegreeLevel,
+  DraftCriterion,
+  DraftEducation,
   DraftItem,
+  EducationStatus,
   FactKind,
   Job,
   JobChanges,
@@ -102,6 +107,48 @@ export const facts = {
   commit: (baseFactSetId: string | null, expectedRevision: number) =>
     request<{ fact_set_id: string; version: number; revision: number }>('/api/facts/commit', {
       json: { base_fact_set_id: baseFactSetId, expected_revision: expectedRevision },
+    }),
+  updateCriterion: (body: {
+    field: CriterionField
+    int_value?: number | null
+    text_value?: string | null
+    confirmed?: boolean
+    delete?: boolean
+    expected_revision: number
+  }) =>
+    request<{ criterion: DraftCriterion | null; revision: number }>('/api/facts/criteria', {
+      method: 'PUT',
+      json: body,
+    }),
+  addEducation: (body: {
+    school: string
+    major?: string | null
+    degree: DegreeLevel
+    status: EducationStatus
+    start_text?: string | null
+    end_text?: string | null
+    expected_revision: number
+  }) => request<DraftEducation & { revision: number }>('/api/facts/education', { json: body }),
+  updateEducation: (
+    educationId: string,
+    body: {
+      school?: string
+      major?: string | null
+      degree?: DegreeLevel
+      status?: EducationStatus
+      start_text?: string | null
+      end_text?: string | null
+      confirmed?: boolean
+      expected_revision: number
+    },
+  ) =>
+    request<DraftEducation & { revision: number }>(`/api/facts/education/${educationId}`, {
+      method: 'PUT',
+      json: body,
+    }),
+  removeEducation: (educationId: string, expectedRevision: number) =>
+    request<void>(`/api/facts/education/${educationId}?expected_revision=${expectedRevision}`, {
+      method: 'DELETE',
     }),
 }
 

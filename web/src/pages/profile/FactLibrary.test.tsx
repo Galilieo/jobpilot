@@ -26,9 +26,13 @@ const INITIAL_LIBRARY: Library = {
       source_quote: '负责查询接口实现与单测',
     },
   ],
+  criteria: [],
+  education: [],
   draft: {
     base_fact_set_id: 'set-1',
     revision: 3,
+    criteria: [],
+    education: [],
     items: [
       {
         lineage_id: 'lin-draft-1',
@@ -50,7 +54,7 @@ const INITIAL_LIBRARY: Library = {
 const REFRESHED_LIBRARY: Library = {
   ...INITIAL_LIBRARY,
   draft: {
-    base_fact_set_id: 'set-1',
+    ...INITIAL_LIBRARY.draft,
     revision: 4,
     items: [
       {
@@ -195,5 +199,60 @@ describe('FactLibrary 409 冲突刷新、手动补充与编辑已发布事实', 
     expect(await screen.findByText('草稿中已修改')).toBeInTheDocument()
     const putCall = calls.find((c) => c.method === 'PUT' && c.url === '/api/facts/lin-pub-1')
     expect(putCall?.body).toEqual({ responsibility: 'lead', expected_revision: 4 })
+  })
+
+  it('求职条件 409 刷新保留本地输入，且删除事实携带修订号', async () => {
+    const user = userEvent.setup()
+    let libraryState: Library = structuredClone(INITIAL_LIBRARY)
+    const calls: { method: string; url: string }[] = []
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      calls.push({ method, url })
+
+      if (url === '/api/facts' && method === 'GET') {
+        return jsonResponse(200, libraryState)
+      }
+      if (url === '/api/facts/criteria' && method === 'PUT') {
+        libraryState = {
+          ...libraryState,
+          draft: { ...libraryState.draft, revision: 9 },
+        }
+        return jsonResponse(409, {
+          detail: { message: '草稿已在别处更新，请刷新后再操作', revision: 9 },
+        })
+      }
+      if (url.startsWith('/api/facts/lin-draft-1') && method === 'DELETE') {
+        libraryState = {
+          ...libraryState,
+          draft: { ...libraryState.draft, items: [], revision: 10 },
+        }
+        return new Response(null, { status: 204, headers: { 'X-Draft-Revision': '10' } })
+      }
+      throw new Error(`未预期的请求: ${method} ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderWithProviders(<FactLibrary />)
+    expect(await screen.findByText('每周可到岗天数')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '编辑最早到岗时间' }))
+    const input = screen.getByRole('textbox', { name: '最早到岗时间' })
+    await user.type(input, '12 月下旬')
+    await user.click(screen.getByRole('button', { name: '保存并确认' }))
+
+    expect(
+      await screen.findByText('事实库已在别处更新，已为你刷新，请再看一眼后操作'),
+    ).toBeInTheDocument()
+    // 409 刷新后本地输入保留在输入框中。
+    expect(screen.getByRole('textbox', { name: '最早到岗时间' })).toHaveValue('12 月下旬')
+
+    // 删除草稿事实时携带最新修订号 9。
+    await user.click(screen.getByRole('button', { name: '删除' }))
+    await user.click(await screen.findByRole('button', { name: '删 除' }))
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/facts/lin-draft-1?expected_revision=9')).toBe(true),
+    )
   })
 })
