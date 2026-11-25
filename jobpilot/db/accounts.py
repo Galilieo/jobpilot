@@ -113,20 +113,26 @@ async def mark_deletion_requested(session: AsyncSession, login: LoginSession) ->
     )
     if locked is None:
         return False
-    valid_session = exists().where(
-        UserSession.session_id == login.session_id,
-        UserSession.user_id == user_id,
-        UserSession.expires_at > func.clock_timestamp(),
-    )
     changed = await session.scalar(
         update(User)
         .where(
-            User.user_id == user_id, User.deletion_requested_at.is_(None), valid_session
+            User.user_id == user_id,
+            User.deletion_requested_at.is_(None),
+            _live_session(login),
         )
         .values(deletion_requested_at=func.clock_timestamp())
         .returning(User.user_id)
     )
     return changed is not None
+
+
+def _live_session(login: LoginSession) -> ColumnElement[bool]:
+    """这个登录现在是否仍然有效：进锁之前，它可能已被注销全部登录的事务撤销。"""
+    return exists().where(
+        UserSession.session_id == login.session_id,
+        UserSession.user_id == login.user.user_id,
+        UserSession.expires_at > func.clock_timestamp(),
+    )
 
 
 async def revoke_account_sessions(session: AsyncSession, user_id: UUID) -> None:
