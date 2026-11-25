@@ -598,6 +598,73 @@ textarea {
   gap: 8px;
 }
 
+.resume-guarantee {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.resume-readonly-alert {
+  margin-bottom: 10px;
+}
+
+.evidence-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evidence-trigger {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.evidence-trigger:hover {
+  background: var(--ant-color-fill-tertiary);
+}
+
+.evidence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.evidence-detail {
+  border-color: var(--ant-color-border-secondary);
+}
+
+.evidence-empty-facts {
+  margin: 4px 0 0 !important;
+}
+
+.evidence-facts-list,
+.evidence-issues {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
+
+.evidence-facts-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
 @media (max-width: 991px) {
   .job-detail {
     grid-template-columns: minmax(0, 1fr);
