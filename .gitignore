@@ -23,3 +23,6 @@ htmlcov/
 
 # macOS
 .DS_Store
+
+# Local resume editor preview (generated sample pages)
+.cache/resume-preview/
