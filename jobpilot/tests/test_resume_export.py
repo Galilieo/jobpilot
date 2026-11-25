@@ -1,7 +1,11 @@
-"""渲染与导出：预览带标记、导出不带；待处理的条目不进成品；三种格式内容一致；转义。"""
+"""渲染与导出：预览带标记、导出不带；待处理的条目不进成品；三种格式内容一致；转义。
+
+导出的 HTML 带离线编辑器，内嵌一份数据：发出去的成品里只能有看得见的文字和版式。
+"""
 
 import io
-from uuid import uuid4
+import json
+from uuid import UUID, uuid4
 
 import pytest
 from docx import Document
@@ -84,7 +88,110 @@ def test_preview_marks_pending_stale_and_flagged_bullets():
     assert 'data-resume-version="3"' in html
 
 
+def export_file(built: ResumeContent) -> str:
+    """和下载接口给出的文件一样：导出模式，带离线编辑器。"""
+    return render_html(
+        built,
+        mode=RenderMode.EXPORT,
+        version=3,
+        editor=EditorContext(version_id=uuid4(), storage_key="r:v3"),
+    )
+
+
+def embedded(html: str) -> dict:
+    """取出文件里内嵌给编辑器的数据。"""
+    data = html.split('<script type="application/json" id="jobpilot-resume">', 1)[1]
+    return json.loads(data.split("</script>", 1)[0])
+
+
+PENDING_MARK = "ZZ_PENDING_MARK"
+ISSUE_MARK = "ZZ_ISSUE_MARK"
+
+
+def content_with_private_marks() -> tuple[ResumeContent, UUID]:
+    """工作经历下有三条：通过的、待处理的（原文和检查问题里各有一个标记）、改过的。"""
+    built = content()
+    fact_id = uuid4()
+    issue = GroundingIssue(
+        kind=IssueKind.ROLE, message=f"{ISSUE_MARK}：「主导」高于职责", fragment="主导"
+    )
+    built.sections[0].entries[0].bullets[1] = bullet_of(
+        uuid4(), f"{PENDING_MARK} 主导重构", [fact_id], CheckStatus.PENDING, [issue]
+    )
+    built.style = built.style.model_copy(
+        update={"font": '"Songti SC", serif', "size_pt": 9.5, "leading": 1.35}
+    )
+    return built, fact_id
+
+
+def test_export_file_embeds_only_visible_text_and_style():
+    """内嵌的数据只放看得见的文字、版式，和编辑器对回页面文字要用的 ID。"""
+    built, _ = content_with_private_marks()
+    data = embedded(export_file(built))
+    content = data["content"]
+
+    assert set(data) == {
+        "content",
+        "version_id",
+        "storage_key",
+        "save_url",
+        "export_url",
+    }
+    assert set(content) == {"header", "sections", "style"}
+    assert content["header"] == built.header
+    assert content["style"] == {
+        "font": '"Songti SC", serif',
+        "size_pt": 9.5,
+        "leading": 1.35,
+    }
+    entries = {e["entry_id"]: e for s in content["sections"] for e in s["entries"]}
+    # 改写过的经历：标题行、时间，待处理的那条不在，进成品的两条只有 ID 和文字
+    work = entries["e1"]
+    assert set(work) == {"entry_id", "title", "time", "lines", "bullets"}
+    assert (work["title"], work["time"], work["lines"]) == (
+        "砚桥商服软件  /  Java 开发工程师",
+        "2024.07 至今",
+        [],
+    )
+    assert [b["text"] for b in work["bullets"]] == ["负责月结清单接口", INJECTED]
+    assert all(set(b) == {"bullet_id", "text"} for b in work["bullets"])
+    # 没改写的经历：底稿原文的每一行都在
+    voucher = built.sections[1].entries[1]
+    assert entries["e3"]["lines"] == voucher.lines
+    assert entries["e3"]["lines"][0].startswith("- 参与对接财务方")
+
+
+def test_export_file_has_no_pending_text_anywhere():
+    """打开源码也看不到：待处理条目的原文、检查问题的说明、引用的事实，整份文件里都没有。"""
+    built, fact_id = content_with_private_marks()
+    html = export_file(built)
+    for private in (PENDING_MARK, ISSUE_MARK, str(fact_id)):
+        assert private not in html
+    assert "「主导」高于职责" not in html
+
+
+def test_preview_embeds_the_full_content_for_saving():
+    """应用里的预览不变：保存时要把没改的条目连同引用原样发回，所以嵌完整内容。"""
+    built, _ = content_with_private_marks()
+    html = render_html(
+        built,
+        mode=RenderMode.PREVIEW,
+        version=3,
+        editor=EditorContext(
+            version_id=uuid4(), storage_key="r", save_url="/api/tailor-runs/x/resume"
+        ),
+    )
+    content = embedded(html)["content"]
+    bullets = [
+        b for s in content["sections"] for e in s["entries"] for b in e["bullets"]
+    ]
+    pending = next(b for b in bullets if PENDING_MARK in b["text"])
+    assert pending["origin"] == "pending" and pending["fact_ids"]
+    assert pending["check"]["issues"][0]["message"].startswith(ISSUE_MARK)
+
+
 def test_export_html_has_no_evidence_marks():
+    """模板本身（不带编辑器）在导出模式下不渲染依据标记。"""
     html = render_html(content_with_marks(), mode=RenderMode.EXPORT, version=3)
     body = html.split("</style>", 1)[1]
     for mark in ("待处理", "待检查", "请核对", "mark-"):

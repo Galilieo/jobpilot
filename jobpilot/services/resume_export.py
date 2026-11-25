@@ -3,6 +3,8 @@
 两种模式：
 - 预览：显示「待处理」「待检查」「请核对」标记，待处理的条目也显示出来，提醒用户处理；
 - 导出：不带依据标记，待处理的条目整条略过（它的文字没有通过检查，不能进成品）。
+两种 HTML 都内嵌编辑器和一份数据：预览页嵌完整内容（保存时要发回服务器），
+导出文件只嵌看得见的文字和版式（OfflineContent），发出去的成品不带依据。
 三种格式都从同一份结构化内容生成，包含的内容一致。PDF 由浏览器打印 HTML 得到。
 """
 
@@ -10,6 +12,7 @@ import io
 import json
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Self
 from uuid import UUID
 
 from docx import Document
@@ -17,10 +20,11 @@ from docx.enum.text import WD_TAB_ALIGNMENT
 from docx.shared import Mm, Pt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup, escape
+from pydantic import BaseModel, Field
 
 from jobpilot.config import REPO_ROOT
 from jobpilot.db.models import CheckStatus
-from jobpilot.services.resume_content import BOLD, Bullet, ResumeContent
+from jobpilot.services.resume_content import BOLD, Bullet, ResumeContent, ResumeStyle
 
 TEMPLATES = REPO_ROOT / "jobpilot" / "templates"
 _ENV = Environment(
@@ -51,6 +55,66 @@ def _add_rich(paragraph, text: str) -> None:
         paragraph.add_run(text[position:])
 
 
+class OfflineBullet(BaseModel):
+    """导出文件里带上的一条条目：只有 ID 和文字。"""
+
+    bullet_id: UUID  # 和页面上 li[data-bullet-id] 对应，编辑器收回文字时用
+    text: str
+
+
+class OfflineEntry(BaseModel):
+    """导出文件里带上的一段经历：标题行、没改写的正文和进成品的条目。"""
+
+    entry_id: str
+    title: str
+    time: str | None = None
+    lines: list[str] = Field(default_factory=list)
+    bullets: list[OfflineBullet] = Field(default_factory=list)
+
+
+class OfflineSection(BaseModel):
+    entries: list[OfflineEntry]
+
+
+class OfflineContent(BaseModel):
+    """导出文件里内嵌给编辑器的数据：只放看得见的文字和版式。
+
+    应用里的预览要把整份内容发回服务器保存，所以嵌完整内容。导出的文件是要发出去的
+    成品，不连服务器，编辑器只用到把页面文字收回成结构化内容时要对照的部分
+    （resume_editor.js 的 collect）。引用的事实、检查结论、待处理的条目都不嵌。
+    """
+
+    header: list[str]
+    sections: list[OfflineSection]
+    style: ResumeStyle
+
+    @classmethod
+    def of(cls, content: ResumeContent) -> Self:
+        """取出看得见、用得到的部分；待处理的条目不进成品，也不进这里。"""
+        return cls(
+            header=content.header,
+            style=content.style,
+            sections=[
+                OfflineSection(
+                    entries=[
+                        OfflineEntry(
+                            entry_id=entry.entry_id,
+                            title=entry.title,
+                            time=entry.time,
+                            lines=entry.lines,
+                            bullets=[
+                                OfflineBullet(bullet_id=b.bullet_id, text=b.text)
+                                for b in exported_bullets(entry.bullets)
+                            ],
+                        )
+                        for entry in section.entries
+                    ]
+                )
+                for section in content.sections
+            ],
+        )
+
+
 @dataclass(frozen=True)
 class EditorContext:
     """内嵌编辑器需要的信息。save_url 为空表示离线文件，修改保存在浏览器本地。"""
@@ -60,6 +124,11 @@ class EditorContext:
     save_url: str | None = None
     export_url: str | None = None
 
+    @property
+    def online(self) -> bool:
+        """在应用里打开：保存要发回服务器。编辑器也是按 save_url 判断的。"""
+        return self.save_url is not None
+
 
 EDITOR_SCRIPT = (TEMPLATES / "resume_editor.js").read_text(encoding="utf-8")
 
@@ -67,10 +136,12 @@ EDITOR_SCRIPT = (TEMPLATES / "resume_editor.js").read_text(encoding="utf-8")
 def _editor_json(content: ResumeContent, editor: EditorContext) -> Markup:
     """嵌在 <script type="application/json"> 里的数据。
 
+    预览页（应用里）嵌整份内容；导出的离线文件只嵌看得见的文字和版式。
     「<」写成 \\u003c：用户文字里的「</script>」不会提前结束脚本标签。
     """
+    embedded = content if editor.online else OfflineContent.of(content)
     data = {
-        "content": content.model_dump(mode="json"),
+        "content": embedded.model_dump(mode="json"),
         "version_id": str(editor.version_id),
         "storage_key": editor.storage_key,
         "save_url": editor.save_url,

@@ -6,6 +6,7 @@
 
 import copy
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from uuid import UUID
 
 import httpx
@@ -16,12 +17,28 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from jobpilot.api import tailoring
 from jobpilot.api.deps import get_model_client
 from jobpilot.api.tailoring import RunLauncher, get_run_launcher
-from jobpilot.db.models import AiRun, ResumeDocument, RunStatus
+from jobpilot.db.models import (
+    AiRun,
+    CheckStatus,
+    FactSet,
+    ResumeDocument,
+    RunStatus,
+    SectionKind,
+)
 from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.main import app
+from jobpilot.services.grounding import GroundingIssue, IssueKind
+from jobpilot.services.resume_content import (
+    Entry,
+    ResumeContent,
+    ResumeSection,
+    bullet_of,
+)
 from jobpilot.tests.test_call_accounting import fake_upstream
 from jobpilot.tests.test_fact_schema import add_user
 from jobpilot.tests.test_facts_api import new_idempotency_headers
+from jobpilot.tests.test_resume_export import embedded
+from jobpilot.tests.test_tailored_resumes_api import _seed_tailored_resume
 from jobpilot.tests.test_tailoring_graph import (
     INTERN,
     PROJECT,
@@ -384,6 +401,80 @@ async def test_preview_and_exports_download_from_the_saved_version(
         f"/api/tailor-runs/{run_id}/export", params={"version": 9}
     )
     assert missing.status_code == 404
+
+
+PRIVATE_MARK = "ZZ_PENDING_MARK"
+
+
+async def test_export_download_carries_only_visible_text(
+    async_client: httpx.AsyncClient, session_factory: Factory
+) -> None:
+    """下载接口给出的文件是要发出去的成品，打开源码也不能看到依据：
+    待处理条目的原文和检查问题的说明、引用的事实 ID、检查结论都不在里面。"""
+    user_id = await sign_in(async_client, "export-data@tailor-api.invalid")
+    fact_id = UUID(int=7)
+    passed = bullet_of(
+        UUID(int=8), "完成接口开发", [UUID(int=9)], CheckStatus.PASSED, []
+    )
+    pending = bullet_of(
+        UUID(int=10),
+        f"{PRIVATE_MARK} 主导重构",
+        [fact_id],
+        CheckStatus.PENDING,
+        [
+            GroundingIssue(
+                kind=IssueKind.ROLE,
+                message=f"{PRIVATE_MARK} 职责高于事实",
+                fragment="主导",
+            )
+        ],
+    )
+    content = ResumeContent(
+        header=["测试同学"],
+        sections=[
+            ResumeSection(
+                title="实习经历",
+                kind=SectionKind.INTERNSHIP,
+                entries=[
+                    Entry(
+                        entry_id="e1",
+                        experience="示例实习",
+                        heading="示例实习",
+                        title="示例实习",
+                        bullets=[passed, pending],
+                    )
+                ],
+            )
+        ],
+    )
+    async with session_factory.begin() as db:
+        doc = ResumeDocument(user_id=user_id, raw_text="简历原文")
+        fact_set = FactSet(user_id=user_id, version=1)
+        db.add_all([doc, fact_set])
+        await db.flush()
+        _, run_id = await _seed_tailored_resume(
+            db,
+            user_id,
+            doc_id=doc.doc_id,
+            fact_set_id=fact_set.fact_set_id,
+            job_title="后端实习",
+            job_company="示例科技",
+            version_number=1,
+            created_at=datetime.now(UTC),
+            content=content,
+        )
+
+    exported = await async_client.get(f"/api/tailor-runs/{run_id}/export")
+    assert exported.status_code == 200
+    for private in (PRIVATE_MARK, str(fact_id), str(UUID(int=9))):
+        assert private not in exported.text
+    # 离线编辑器和它的数据还在；数据里只有页面上看得见的那一条，只有 ID 和文字
+    [entry] = [
+        e for s in embedded(exported.text)["content"]["sections"] for e in s["entries"]
+    ]
+    assert entry["bullets"] == [
+        {"bullet_id": str(passed.bullet_id), "text": "完成接口开发"}
+    ]
 
 
 async def test_old_version_preview_is_read_only(

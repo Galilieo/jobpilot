@@ -46,7 +46,39 @@ async def _seed_tailored_resume(
     version_number: int,
     created_at: datetime,
     bullet_origin: CheckStatus = CheckStatus.PASSED,
-) -> UUID:
+    content: ResumeContent | None = None,
+) -> tuple[UUID, UUID]:
+    """直接写入一次成功的改写运行和它的简历，返回 (个人岗位 ID, 运行 ID)。
+
+    没给 content 时用一条条目的固定内容，这条条目的生成结果取 bullet_origin。
+    """
+    if content is None:
+        content = ResumeContent(
+            header=["测试同学"],
+            sections=[
+                ResumeSection(
+                    title="项目经历",
+                    kind=SectionKind.PROJECT,
+                    entries=[
+                        Entry(
+                            entry_id="e1",
+                            experience="示例项目",
+                            heading="示例项目",
+                            title="示例项目",
+                            bullets=[
+                                bullet_of(
+                                    uuid4(),
+                                    "完成接口开发",
+                                    [uuid4()],
+                                    bullet_origin,
+                                    [],
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
     posting = JobPosting(
         owner_id=user_id,
         raw_text=f"{job_company} {job_title}",
@@ -79,29 +111,6 @@ async def _seed_tailored_resume(
 
     resume_id = uuid4()
     version_id = uuid4()
-    content = ResumeContent(
-        header=["测试同学"],
-        sections=[
-            ResumeSection(
-                title="项目经历",
-                kind=SectionKind.PROJECT,
-                entries=[
-                    Entry(
-                        entry_id="e1",
-                        experience="示例项目",
-                        heading="示例项目",
-                        title="示例项目",
-                        bullets=[
-                            bullet_of(
-                                uuid4(), "完成接口开发", [uuid4()], bullet_origin, []
-                            )
-                        ],
-                    )
-                ],
-            )
-        ],
-    ).model_dump(mode="json")
-
     db.add(
         TailoredResume(
             resume_id=resume_id,
@@ -116,12 +125,12 @@ async def _seed_tailored_resume(
             resume_id=resume_id,
             user_id=user_id,
             version=version_number,
-            content_json=content,
+            content_json=content.model_dump(mode="json"),
             created_at=created_at,
         )
     )
     await db.flush()
-    return user_job.user_job_id
+    return user_job.user_job_id, run.run_id
 
 
 async def test_tailored_resumes_ordered_with_status_and_isolated(
@@ -139,7 +148,7 @@ async def test_tailored_resumes_ordered_with_status_and_isolated(
         db.add_all([doc, v1, v2])
         await db.flush()
 
-        job_old = await _seed_tailored_resume(
+        job_old, _ = await _seed_tailored_resume(
             db,
             user_id,
             doc_id=doc.doc_id,
@@ -150,7 +159,7 @@ async def test_tailored_resumes_ordered_with_status_and_isolated(
             created_at=now - timedelta(hours=2),
             bullet_origin=CheckStatus.PASSED,
         )
-        job_mid = await _seed_tailored_resume(
+        job_mid, _ = await _seed_tailored_resume(
             db,
             user_id,
             doc_id=doc.doc_id,
@@ -161,7 +170,7 @@ async def test_tailored_resumes_ordered_with_status_and_isolated(
             created_at=now - timedelta(hours=1),
             bullet_origin=CheckStatus.PENDING,
         )
-        job_new = await _seed_tailored_resume(
+        job_new, _ = await _seed_tailored_resume(
             db,
             user_id,
             doc_id=doc.doc_id,
