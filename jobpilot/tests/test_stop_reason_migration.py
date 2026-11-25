@@ -53,8 +53,7 @@ def _check_migration(connection: Connection, user_id) -> None:
         text("DELETE FROM ai_run WHERE run_id = :run_id"),
         {"run_id": bad_run_id},
     )
-    connection.commit()
-    connection.begin()
+    connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     command.upgrade(config, "head")
     command.downgrade(config, "20261125_02")
     command.upgrade(config, "head")
