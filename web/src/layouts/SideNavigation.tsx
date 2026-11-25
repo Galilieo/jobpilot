@@ -11,7 +11,10 @@ import {
 import { Avatar, Button, Dropdown, Empty, Menu, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import type { ReactElement } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
+import { auth } from '../api/endpoints'
+import { ME_QUERY, useCurrentUser } from '../auth'
 
 interface SideNavigationProps {
   onNavigate?: () => void
@@ -27,6 +30,15 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
   const { token } = theme.useToken()
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const email = useCurrentUser().data?.email
+
+  async function logout(): Promise<void> {
+    await auth.logout().catch(() => undefined) // 已过期也照样回到登录页
+    queryClient.clear() // 不把上一个账号的数据留在缓存里
+    await queryClient.invalidateQueries({ queryKey: ME_QUERY })
+    void navigate('/login', { replace: true })
+  }
   const selectedKey = navigationItems.find(({ key }) => pathname.startsWith(key))?.key
 
   function openPage(destination: string): void {
@@ -59,16 +71,18 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
         menu={{
           items: [
             { key: '/account', icon: <SettingOutlined />, label: '账号设置' },
-            { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', disabled: true },
+            { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
           ],
-          onClick: ({ key }) => openPage(key),
+          onClick: ({ key }) => (key === 'logout' ? void logout() : openPage(key)),
         }}
       >
         <Button type="text" className="account-menu" aria-label="打开账号菜单">
           <Avatar icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
           <span className="account-copy">
             <Typography.Text>我的账号</Typography.Text>
-            <Typography.Text type="secondary">本地使用</Typography.Text>
+            <Typography.Text type="secondary" ellipsis>
+              {email}
+            </Typography.Text>
           </span>
           <DownOutlined />
         </Button>

@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router'
 import { AppShell } from './layouts/AppShell'
 import { ConversationPage } from './pages/ConversationPage'
 import { JobsPage } from './pages/JobsPage'
+import { LoginPage } from './pages/LoginPage'
 import {
   AccountPage,
   JobDetailPage,
@@ -15,6 +16,7 @@ import {
 export default function App(): ReactElement {
   return (
     <Routes>
+      <Route path="login" element={<LoginPage />} />
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/jobs" replace />} />
         <Route path="workspace" element={<WorkspacePage />} />

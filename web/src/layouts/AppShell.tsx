@@ -1,8 +1,9 @@
 // 共享侧栏与主区；窄屏仅把同一份导航放进抽屉，不另建一套路由。
 import { MenuOutlined } from '@ant-design/icons'
-import { Button, Drawer, Grid, Layout, theme } from 'antd'
+import { Button, Drawer, Grid, Layout, Result, Spin, theme } from 'antd'
 import { useState, type ReactElement } from 'react'
-import { Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
+import { isUnauthorized, useCurrentUser } from '../auth'
 import { SideNavigation } from './SideNavigation'
 
 export function AppShell(): ReactElement {
@@ -11,6 +12,24 @@ export function AppShell(): ReactElement {
   // 与 index.css 里的 @media (max-width: 991px) 对应，改断点时两处一起改。
   const isNarrow = screens.lg === false
   const [navigationOpen, setNavigationOpen] = useState(false)
+  const user = useCurrentUser()
+  const location = useLocation()
+
+  // 没登录就去登录页，登录后回到原来要去的页面。
+  if (user.isPending) return <Spin fullscreen />
+  if (isUnauthorized(user.error)) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+  if (user.isError) {
+    return (
+      <Result
+        status="warning"
+        title="暂时无法连接服务"
+        subTitle="请确认后端已启动，稍后刷新页面重试。"
+        extra={<Button onClick={() => void user.refetch()}>重新连接</Button>}
+      />
+    )
+  }
 
   return (
     <Layout className="app-shell" style={{ color: token.colorText, fontFamily: token.fontFamily }}>
