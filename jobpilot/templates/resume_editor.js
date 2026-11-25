@@ -190,7 +190,10 @@
     if (!on) save();
   }
 
-  page.addEventListener("input", () => editing && scheduleSave());
+  page.addEventListener("input", () => {
+    updateFit();
+    if (editing) scheduleSave();
+  });
   page.addEventListener("keydown", (event) => {
     // 每段文字各自一段：回车不新建段落（服务器不认识新段落）。
     if (event.key === "Enter" && event.target.closest("[data-part]")) event.preventDefault();
@@ -213,6 +216,8 @@
   const statusText = document.createElement("span");
   statusText.className = "toolbar-status";
   statusText.setAttribute("role", "status");
+  const fitText = document.createElement("span");
+  fitText.className = "toolbar-fit";
 
   function addButton(name, label, onClick) {
     const button = document.createElement("button");
@@ -238,17 +243,6 @@
     URL.revokeObjectURL(link.href);
   }
 
-  addButton("edit", "编辑", () => setEditing(!editing));
-  if (online && data.export_url) {
-    addButton("export", "导出 HTML", () => {
-      window.location.href = data.export_url;
-    });
-  } else {
-    addButton("download", "保存 HTML", downloadHtml);
-  }
-  addButton("print", "打印 / 导出 PDF", () => window.print());
-  toolbar.append(statusText);
-
   const css = document.createElement("style");
   css.textContent = `
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap;
@@ -256,13 +250,164 @@
       border-bottom: 1px solid var(--rule); font: 13px var(--font); }
     .toolbar button, .toolbar select { font: inherit; padding: 3px 8px; }
     .toolbar-status { color: var(--muted); margin-left: auto; }
+    .toolbar-fit { color: var(--muted); }
+    body.paged .page { background-image: repeating-linear-gradient(to bottom,
+      transparent 0, transparent calc(297mm - 1px), #cf222e calc(297mm - 1px), #cf222e 297mm); }
     body.editing [data-part]:hover { outline: 1px dashed var(--rule); }
     body.editing [data-part]:focus { outline: 1px solid #0969da; }
   `;
   document.head.append(css);
   document.body.prepend(toolbar);
 
+  // ---------- 版式：字体、字号、加粗、撤回、页面模式 ----------
+
+  const FONTS = [
+    ["默认字体", ""],
+    ["苹方", '"PingFang SC", sans-serif'],
+    ["微软雅黑", '"Microsoft YaHei", sans-serif'],
+    ["思源黑体", '"Source Han Sans SC", "Noto Sans CJK SC", sans-serif'],
+    ["宋体", '"Songti SC", SimSun, serif'],
+    ["楷体", '"Kaiti SC", KaiTi, serif'],
+  ];
+  const SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 12];
+  const VIEW_KEY = "jobpilot-view";
+  const selects = {};
+
+  function addSelect(label, options, value, onChange) {
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", label);
+    for (const [text, optionValue] of options) {
+      const option = document.createElement("option");
+      option.textContent = text;
+      option.value = optionValue;
+      select.append(option);
+    }
+    select.value = value;
+    select.addEventListener("change", () => onChange(select.value));
+    toolbar.append(select);
+    return select;
+  }
+
+  function setStyle(name, value) {
+    if (value === "") page.style.removeProperty(name);
+    else page.style.setProperty(name, value);
+    updateFit();
+    scheduleSave();
+  }
+
+  function addFormatting() {
+    const style = currentStyle();
+    addSelect("字体", FONTS, style.font, (font) => setStyle("--font", font));
+    const sizes = SIZES.map((size) => [`${size} pt`, String(size)]);
+    if (!SIZES.includes(style.size_pt)) sizes.unshift([`${style.size_pt} pt`, String(style.size_pt)]);
+    selects.size = addSelect("字号", sizes, String(style.size_pt), (size) =>
+      setStyle("--size", `${size}pt`),
+    );
+    // 加粗、撤回、前进用浏览器自带的编辑命令，作用于正在编辑的文字。
+    addButton("bold", "加粗", () => editing && document.execCommand("bold"));
+    addButton("undo", "撤回", () => editing && document.execCommand("undo"));
+    addButton("redo", "前进", () => editing && document.execCommand("redo"));
+    addButton("paged", "A4 分页", () => setPaged(!document.body.classList.contains("paged")));
+    addButton("fit", "自动一页", fitOnePage);
+  }
+  function setPaged(on) {
+    document.body.classList.toggle("paged", on);
+    buttons.paged.textContent = on ? "连续显示" : "A4 分页";
+    storage.set(VIEW_KEY, { paged: on }); // 只是看的方式，不属于简历内容
+  }
+
+  // ---------- 自动一页 ----------
+
+  const A4_PX = (() => {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;visibility:hidden;height:297mm";
+    document.body.append(probe);
+    const height = probe.getBoundingClientRect().height;
+    probe.remove();
+    return height;
+  })();
+
+  function contentHeight() {
+    // 页面本身至少一页高，量内容时先去掉最小高度。
+    const minHeight = page.style.minHeight;
+    page.style.minHeight = "0";
+    const height = page.scrollHeight;
+    page.style.minHeight = minHeight;
+    return height;
+  }
+
+  function updateFit() {
+    const ratio = contentHeight() / A4_PX;
+    fitText.textContent =
+      ratio <= 1
+        ? `一页内 · 占用 ${Math.round(ratio * 100)}%`
+        : `超出 ${Math.ceil(ratio) - 1} 页`;
+    return ratio <= 1;
+  }
+
+  function fitOnePage() {
+    // 先缩字号，到 9 pt 后再缩行距，最低 8 pt、1.25 倍；还放不下就停在最小值并如实显示。
+    let { size_pt: size, leading } = currentStyle();
+    while (!updateFit() && (size > 8 || leading > 1.25)) {
+      if (size > 9 || leading <= 1.25) size = Math.max(8, size - 0.25);
+      else leading = Math.max(1.25, Math.round((leading - 0.05) * 100) / 100);
+      page.style.setProperty("--size", `${size}pt`);
+      page.style.setProperty("--leading", String(leading));
+    }
+    if (selects.size) {
+      if (![...selects.size.options].some((o) => o.value === String(size))) {
+        selects.size.add(new Option(`${size} pt`, String(size)), 0);
+      }
+      selects.size.value = String(size);
+    }
+    scheduleSave();
+  }
+
+  // ---------- 重置 ----------
+
+  async function reset() {
+    if (!confirm("回到系统生成的版本？现在的修改会作为历史版本保留。")) return;
+    if (!online) {
+      storage.remove(OFFLINE_KEY); // 离线文件回到导出时的样子
+      window.location.reload();
+      return;
+    }
+    const generated = await fetch(`${data.save_url}?version=1`, { credentials: "same-origin" });
+    if (!generated.ok) {
+      setStatus("没能读取系统生成的版本");
+      return;
+    }
+    const response = await fetch(data.save_url, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        base_version_id: versionId,
+        content: (await generated.json()).content,
+      }),
+    });
+    if (response.ok) window.location.reload();
+    else setStatus(response.status === 409 ? "简历已在别处保存过，请刷新后再重置" : "重置失败");
+  }
+
+  function buildToolbar() {
+    addButton("edit", "编辑", () => setEditing(!editing));
+    addFormatting();
+    if (online && data.export_url) {
+      addButton("export", "导出 HTML", () => {
+        window.location.href = data.export_url;
+      });
+    } else {
+      addButton("download", "保存 HTML", downloadHtml);
+    }
+    addButton("print", "打印 / 导出 PDF", () => window.print());
+    addButton("reset", "重置", reset);
+    toolbar.append(fitText, statusText);
+  }
+
   // ---------- 打开时 ----------
+
+  buildToolbar();
 
   if (!online) {
     const saved = storage.get(OFFLINE_KEY);
@@ -291,6 +436,9 @@
     });
   }
 
+  if (storage.get(VIEW_KEY)?.paged) setPaged(true);
+  updateFit();
+
   // 测试和其他脚本可以调用（例如应用外壳在关闭前立即保存）。
-  window.jobpilotEditor = { collect, save, setEditing };
+  window.jobpilotEditor = { collect, save, setEditing, fitOnePage };
 })();
