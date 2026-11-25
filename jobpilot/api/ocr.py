@@ -1,6 +1,6 @@
-"""截图与扫描件识别接口：识别结果只返回给前端核对，图片和文字都不保存。
+"""通用文字导入接口：文件提取与截图/扫描件识别，图片、原文件和文字都不保存。
 
-简历和 JD 共用这个接口。用户在文本框里核对、修改后，再把文字提交给各自的上传接口。
+简历和 JD 共用这里的两个接口。用户在文本框里核对、修改后，再把文字提交给各自的保存接口。
 """
 
 from collections.abc import AsyncIterator
@@ -10,13 +10,16 @@ from typing import Annotated
 import anyio
 import anyio.to_thread
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from jobpilot.api.deps import CurrentUser
 from jobpilot.services.parsing import (
     MAX_OCR_IMAGES,
+    NeedsOcrError,
     ParseError,
     UnsupportedFormatError,
+    extract_text,
     ocr_pages,
 )
 
@@ -65,11 +68,43 @@ class OcrQueue:
 ocr_queue = OcrQueue(max_requests=4)
 
 
+class ExtractOut(BaseModel):
+    text: str
+
+
 class OcrOut(BaseModel):
     """text 是按上传顺序拼接的全文；pages 是每张图片或每页 PDF 各自的识别结果。"""
 
     text: str
     pages: list[str]
+
+
+@router.post("/extract-text")
+async def extract(
+    user: CurrentUser,
+    file: Annotated[UploadFile, File(description="TXT、Markdown、HTML、DOCX 或 PDF")],
+) -> ExtractOut:
+    """只提取文字，不保存；图片和扫描版 PDF 请改用 /api/ocr。"""
+    data = await read_limited(file)
+    filename = file.filename or ""
+    try:
+        text = await run_in_threadpool(extract_text, filename, data)
+    except NeedsOcrError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{filename}：需要文字识别，请改用 /api/ocr",
+        ) from None
+    except UnsupportedFormatError as error:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"{filename}：{error}",
+        ) from None
+    except ParseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"{filename}：{error}",
+        ) from None
+    return ExtractOut(text=text)
 
 
 @router.post("/ocr")

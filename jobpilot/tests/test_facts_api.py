@@ -64,7 +64,7 @@ async def test_extract_returns_text_without_saving(
     signed_in: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     response = await signed_in.post(
-        "/api/resumes/extract",
+        "/api/extract-text",
         files={"file": ("resume.txt", RESUME.encode(), "text/plain")},
     )
 
@@ -76,7 +76,7 @@ async def test_extract_returns_text_without_saving(
 
 async def test_extract_sends_images_to_ocr(signed_in: httpx.AsyncClient) -> None:
     response = await signed_in.post(
-        "/api/resumes/extract",
+        "/api/extract-text",
         files={"file": ("resume.png", b"\x89PNG\r\n\x1a\n", "image/png")},
     )
 

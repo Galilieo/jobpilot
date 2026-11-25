@@ -9,8 +9,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, Depends, HTTPException, status
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
@@ -23,7 +22,6 @@ from jobpilot.api.deps import (
     finish_product,
 )
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
-from jobpilot.api.ocr import read_limited
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.models import AiRun, ResumeDocument, RunStatus
 from jobpilot.db.runs import set_run_status
@@ -35,13 +33,7 @@ from jobpilot.services.llm_gateway import (
     EmptyModelResponseError,
     ModelBudget,
 )
-from jobpilot.services.parsing import (
-    NeedsOcrError,
-    ParseError,
-    UnsupportedFormatError,
-    extract_text,
-    normalize_text,
-)
+from jobpilot.services.parsing import normalize_text
 
 router = APIRouter(prefix="/api", tags=["resumes"])
 
@@ -57,10 +49,6 @@ _MODEL_ERRORS = (
     EmptyModelResponseError,
     ValidationError,
 )
-
-
-class ExtractOut(BaseModel):
-    text: str
 
 
 class ResumeIn(BaseModel):
@@ -109,34 +97,6 @@ async def reserve_resume(
 ResumeSubmission = Annotated[
     tuple[ResumeIn, Attempt], Depends(reserve_resume, scope="function")
 ]
-
-
-@router.post("/resumes/extract")
-async def extract(
-    user: CurrentUser,
-    file: Annotated[UploadFile, File(description="TXT、Markdown、HTML、DOCX 或 PDF")],
-) -> ExtractOut:
-    """只提取文字，不保存；图片和扫描版 PDF 请改用 /api/ocr。"""
-    data = await read_limited(file)
-    filename = file.filename or ""
-    try:
-        text = await run_in_threadpool(extract_text, filename, data)
-    except NeedsOcrError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"{filename}：需要文字识别，请改用 /api/ocr",
-        ) from None
-    except UnsupportedFormatError as error:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"{filename}：{error}",
-        ) from None
-    except ParseError as error:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"{filename}：{error}",
-        ) from None
-    return ExtractOut(text=text)
 
 
 @router.post("/resumes", status_code=status.HTTP_201_CREATED)

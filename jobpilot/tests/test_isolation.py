@@ -34,6 +34,7 @@ SELF_ROUTES: set[Route] = {
     ("DELETE", "/api/account"),
     ("POST", "/api/account/restore"),
     ("GET", "/api/account/export"),
+    ("POST", "/api/extract-text"),  # 只提取文字，不读写任何已保存的数据
     ("POST", "/api/ocr"),  # 识别结果直接返回，不读写任何已保存的数据
 }
 
@@ -250,7 +251,6 @@ OWNED_RESOURCES: list[OwnedResource] = [
         attempts=(Attempt("GET", "/api/resumes/{id}"),),
         routes=frozenset(
             {
-                ("POST", "/api/resumes/extract"),
                 ("POST", "/api/resumes"),
                 ("GET", "/api/resumes/{doc_id}"),
             }
