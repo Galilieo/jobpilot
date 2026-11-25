@@ -179,3 +179,9 @@ def test_bolding_alone_is_not_an_edit():
     assert result.text == "负责**运单查询**接口"
     assert result.check == BULLET.check and not result.edited
     assert result.check_current
+
+
+def test_style_changes_are_kept():
+    content = edit()
+    content.style = content.style.model_copy(update={"size_pt": 9.0, "leading": 1.3})
+    assert run(content).style == content.style

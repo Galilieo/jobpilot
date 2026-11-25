@@ -89,6 +89,7 @@ def render_html(
         version=version,
         header=content.header,
         sections=content.sections,
+        style=content.style,
         visible=_visible(content, mode),
         marks=mode is RenderMode.PREVIEW,
         editor_script=editor_script,

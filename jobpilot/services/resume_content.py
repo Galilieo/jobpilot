@@ -81,9 +81,18 @@ class ResumeSection(BaseModel):
     entries: list[Entry]
 
 
+class ResumeStyle(BaseModel):
+    """编辑器工具栏调的版式：字体、字号、行距。随版本保存，导出文件也带着。"""
+
+    font: str = Field(default="", max_length=60)  # 空表示默认的系统中文字体
+    size_pt: float = Field(default=10.5, ge=7, le=14)
+    leading: float = Field(default=1.5, ge=1.1, le=2.0)
+
+
 class ResumeContent(BaseModel):
     header: list[str]  # 页头各行，第一行一般是姓名
     sections: list[ResumeSection]
+    style: ResumeStyle = Field(default_factory=ResumeStyle)
 
 
 class BaseSection(BaseModel):

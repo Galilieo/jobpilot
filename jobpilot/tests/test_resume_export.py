@@ -127,3 +127,14 @@ def test_docx_turns_bold_markers_into_bold_runs():
         for run in paragraph.runs
     ]
     assert runs == [("负责", False), ("月结清单", True), ("接口", False)]
+
+
+def test_saved_style_is_applied_to_the_page():
+    built = content()
+    built.style = built.style.model_copy(
+        update={"font": '"Songti SC", serif', "size_pt": 9.5, "leading": 1.35}
+    )
+    html = render_html(built, mode=RenderMode.EXPORT, version=1)
+    assert "--size: 9.5pt; --leading: 1.35;" in html
+    # 字体名也是用户可改的文字，引号要转义，不能闭合 style 属性
+    assert "--font: &#34;Songti SC&#34;, serif;" in html

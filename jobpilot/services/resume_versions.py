@@ -89,7 +89,9 @@ def recheck(
                 entry.model_copy(update={"experience": experience, "bullets": bullets})
             )
         sections.append(section.model_copy(update={"entries": checked}))
-    return ResumeContent(header=submitted.header, sections=sections)
+    return ResumeContent(
+        header=submitted.header, sections=sections, style=submitted.style
+    )
 
 
 def _reject_unknown(
