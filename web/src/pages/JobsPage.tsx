@@ -30,7 +30,11 @@ export function JobsPage(): ReactElement {
       {list.isPending ? (
         <Skeleton active />
       ) : list.isError ? (
-        <Empty description={list.error.message} />
+        <Card>
+          <Empty description={list.error.message}>
+            <Button onClick={() => void list.refetch()}>重试</Button>
+          </Empty>
+        </Card>
       ) : list.data.length === 0 ? (
         <Card>
           <Empty description="还没有岗位。贴入一份 JD 开始。">

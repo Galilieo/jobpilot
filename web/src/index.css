@@ -92,6 +92,7 @@ textarea {
 .account-menu {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   width: 100%;
   height: auto;
@@ -99,9 +100,15 @@ textarea {
   text-align: left;
 }
 
+.account-menu .ant-avatar {
+  flex-shrink: 0;
+}
+
 .account-copy {
   display: flex;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
   flex-direction: column;
 }
 

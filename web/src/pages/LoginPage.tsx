@@ -82,7 +82,7 @@ export function LoginPage(): ReactElement {
           >
             <Input.Password autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
           </Form.Item>
-          {error && <Alert type="error" showIcon message={error} className="login-error" />}
+          {error && <Alert type="error" showIcon title={error} className="login-error" />}
           <Button type="primary" htmlType="submit" block loading={submitting}>
             {mode === 'login' ? '登录' : '注册并登录'}
           </Button>
