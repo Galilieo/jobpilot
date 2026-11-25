@@ -1,7 +1,6 @@
 /*
- * 全局结构与间距。颜色、字体族和 antd 组件的默认外观由 theme.ts 提供；
- * 这里只放布局，以及少量 token 覆盖不到的尺寸。
- * 按区块组织：基础重置 → 应用外壳 → 侧栏 → 通用页面 → 对话页 → 窄屏。
+ * 全局结构、疏密与视觉细节。颜色、字体族与组件默认外观集中在 theme.ts；
+ * 这里只写布局、过渡与基于 var(--ant-*) 的边框/底色修饰，不写零散色值。
  */
 
 /* ---------- 基础重置 ---------- */
@@ -13,6 +12,7 @@
 body {
   margin: 0;
   min-width: 320px;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* 表单控件默认不继承字体，统一跟随页面。 */
@@ -32,6 +32,10 @@ textarea {
   height: 100dvh;
 }
 
+.app-shell .ant-layout-sider {
+  border-right: 1px solid var(--ant-color-border-secondary);
+}
+
 /* flex 子项默认 min-size 为 auto，会被长内容撑开；归零后内部滚动才生效。 */
 .app-main,
 .app-content {
@@ -47,12 +51,12 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 14px;
 }
 
 .mobile-header .brand {
   padding: 0;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 /* ---------- 侧栏（SideNavigation） ---------- */
@@ -60,16 +64,16 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   height: 100%;
-  padding: 20px 12px 12px;
+  padding: 16px 10px 10px;
 }
 
 .brand {
-  padding: 0 12px;
-  font-size: 20px;
+  padding: 2px 10px 4px;
+  font-size: 18px;
   font-weight: 650;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.4px;
 }
 
 /* antd 的 inline Menu 自带右边框，且选择器优先级较高，只能用 !important 去掉。 */
@@ -82,11 +86,25 @@ textarea {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 12px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.recent-conversations > .ant-typography {
+  font-size: 12px;
 }
 
 .recent-conversations .ant-empty {
-  margin: 24px 0;
+  margin: 20px 0;
+}
+
+.recent-conversations .ant-empty-image {
+  height: 28px;
+  margin-bottom: 6px;
+}
+
+.recent-conversations .ant-empty-description {
+  font-size: 12px;
 }
 
 .account-menu {
@@ -96,7 +114,9 @@ textarea {
   gap: 10px;
   width: 100%;
   height: auto;
-  padding: 10px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
   text-align: left;
 }
 
@@ -110,6 +130,11 @@ textarea {
   min-width: 0;
   overflow: hidden;
   flex-direction: column;
+  line-height: 1.35;
+}
+
+.account-copy .ant-typography:last-child {
+  font-size: 12px;
 }
 
 /* ---------- 工作台（WorkspacePage） ---------- */
@@ -118,10 +143,24 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.workspace-page {
+  max-width: 1040px;
+}
+
 .workspace-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.workspace-card {
+  background: var(--ant-color-fill-quaternary);
+  border-color: var(--ant-color-border-secondary);
+  transition: border-color 0.2s ease;
+}
+
+.workspace-card:hover {
+  border-color: var(--ant-color-primary-border);
 }
 
 .workspace-card .ant-card-body {
@@ -129,6 +168,24 @@ textarea {
   flex-direction: column;
   gap: 6px;
   height: 100%;
+  padding: 16px 18px;
+}
+
+.workspace-card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.workspace-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .workspace-metric {
@@ -136,8 +193,10 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   align-items: baseline;
-  font-size: 22px;
+  margin-top: 2px;
+  font-size: 24px;
   font-weight: 600;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
 
@@ -147,20 +206,27 @@ textarea {
 }
 
 .workspace-card-note {
-  margin-bottom: auto !important;
+  margin-bottom: 10px !important;
   font-size: 13px;
+  line-height: 1.55;
+}
+
+.workspace-card-action {
+  margin-top: auto;
+  align-self: flex-start;
 }
 
 .workspace-board-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 6px 12px;
   align-items: baseline;
   margin-bottom: 12px;
 }
 
 .workspace-board-head h4 {
   margin: 0 !important;
+  font-weight: 600;
 }
 
 .workspace-board {
@@ -175,32 +241,83 @@ textarea {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  padding: 10px;
+  min-height: 140px;
+  padding: 12px;
   border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .board-column-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 2px;
+  padding: 0 2px 4px;
+}
+
+.board-column-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.board-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.board-count {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
 }
 
 .board-column-empty {
-  padding: 8px 2px;
-  font-size: 13px;
+  padding: 16px 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.board-card {
+  border-color: var(--ant-color-border-secondary);
+  border-radius: 10px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.board-card:hover {
+  border-color: var(--ant-color-primary-border);
+  box-shadow: 0 4px 12px rgba(80, 104, 127, 0.08);
+  transform: translateY(-1px);
 }
 
 .board-card .ant-card-body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 10px 12px;
 }
 
 .board-card-sub {
   margin: 0 !important;
-  font-size: 13px;
+  font-size: 12px;
+}
+
+.board-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 @media (max-width: 1199px) {
@@ -215,21 +332,24 @@ textarea {
   }
 }
 
-/* ---------- 通用页面（岗位库、占位页） ---------- */
+/* ---------- 通用页面（岗位库、我的、占位页） ---------- */
 
 .page {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 32px;
+  padding: 28px 32px 48px;
 }
 
 .page-heading {
-  margin-bottom: 28px;
+  margin-bottom: 22px;
 }
 
 .page-heading h1 {
-  margin: 0 0 8px;
+  margin: 0 0 4px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+  line-height: 1.35 !important;
 }
 
 .page-empty {
@@ -243,7 +363,6 @@ textarea {
 
 /* ---------- 对话页（ConversationPage） ---------- */
 
-/* 纵向三段：标题栏、可滚动的消息区、固定在底部的输入框。 */
 .conversation-page {
   display: flex;
   flex-direction: column;
@@ -255,7 +374,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 14px 24px;
 }
 
 .conversation-body {
@@ -303,7 +422,7 @@ textarea {
  */
 @media (max-width: 991px) {
   .page {
-    padding: 24px 16px;
+    padding: 20px 16px 36px;
   }
 
   .conversation-heading {
@@ -326,16 +445,20 @@ textarea {
   place-items: center;
   min-height: 100dvh;
   padding: 16px;
+  background: var(--ant-color-fill-quaternary);
 }
 
 .login-card {
-  width: min(400px, 100%);
+  width: min(390px, 100%);
+  border-radius: 14px;
+  border-color: var(--ant-color-border-secondary);
+  box-shadow: 0 10px 30px rgba(31, 31, 31, 0.06);
 }
 
 .login-brand {
   padding: 0;
   margin-bottom: 4px;
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .login-form {
@@ -346,13 +469,30 @@ textarea {
   margin-bottom: 16px;
 }
 
-/* ---------- 我的：经历 ---------- */
+/* ---------- 我的：经历与简历 ---------- */
 
 .profile-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.profile-stat-card {
+  background: var(--ant-color-fill-quaternary);
+  border-color: var(--ant-color-border-secondary);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.profile-stat-card:hover {
+  border-color: var(--ant-color-primary-border);
+}
+
+.profile-stat-card-active {
+  background: var(--ant-color-bg-container);
+  border-color: var(--ant-color-primary);
 }
 
 .full-width {
@@ -366,6 +506,7 @@ textarea {
 
 .import-hint {
   margin: 12px 0 8px;
+  font-size: 13px;
 }
 
 .import-actions {
@@ -376,8 +517,39 @@ textarea {
   margin-top: 12px;
 }
 
+.fact-group {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ant-color-bg-container);
+}
+
 .fact-group + .fact-group {
-  margin-top: 16px;
+  margin-top: 14px;
+}
+
+.fact-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--ant-color-fill-quaternary);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.fact-group-head h5 {
+  margin: 0 !important;
+  font-weight: 600 !important;
+}
+
+.fact-group > .row-list > li {
+  padding: 11px 14px;
+}
+
+.fact-item-warn {
+  background: var(--ant-color-warning-bg);
 }
 
 .fact-row {
@@ -389,7 +561,7 @@ textarea {
 }
 
 .fact-text {
-  margin-bottom: 0 !important; /* antd 的段落自带下边距 */
+  margin-bottom: 0 !important;
 }
 
 .fact-quote {
@@ -405,18 +577,6 @@ textarea {
   margin-left: 8px;
 }
 
-.fact-group-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.fact-group-head h5 {
-  margin: 0 !important; /* antd 标题自带上下边距 */
-}
-
 /* ---------- 岗位库 ---------- */
 
 .page-heading-actions {
@@ -427,30 +587,58 @@ textarea {
   justify-content: space-between;
 }
 
+.job-card {
+  border-color: var(--ant-color-border-secondary);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.job-card:hover {
+  border-color: var(--ant-color-primary-border);
+  box-shadow: 0 6px 18px rgba(80, 104, 127, 0.08);
+  transform: translateY(-1px);
+}
+
+.job-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .job-card .job-company {
-  margin: 4px 0 8px;
+  margin: 3px 0 10px;
+  font-size: 13px;
 }
 
 .job-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 0;
+  gap: 6px 0;
+}
+
+.job-card-go {
+  margin-top: auto;
+  padding-top: 12px;
+  font-size: 13px;
 }
 
 /* ---------- 岗位详情（岗位信息 + 匹配报告 | 定制简历面板） ---------- */
 
 .page-wide {
-  max-width: none;
+  max-width: 1440px;
 }
 
 .back-link {
   padding-inline: 0;
+  margin-bottom: 2px;
 }
 
 .job-detail {
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
-  gap: 16px;
+  gap: 18px;
   align-items: start;
 }
 
@@ -467,16 +655,31 @@ textarea {
   min-width: 0;
 }
 
+.resume-panel {
+  background: var(--ant-color-fill-quaternary);
+  border-color: var(--ant-color-border-secondary);
+}
+
 .job-requirements {
-  margin-top: 12px;
+  margin-top: 4px;
+}
+
+.job-requirements h5 {
+  margin-bottom: 6px !important;
+  font-weight: 600 !important;
 }
 
 .job-keywords {
-  margin: 12px 0 4px;
+  margin: 6px 0 4px;
 }
 
 .job-raw {
   white-space: pre-wrap;
+  padding: 12px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  background: var(--ant-color-fill-quaternary);
+  font-size: 13px;
 }
 
 .job-injection-list {
@@ -486,18 +689,19 @@ textarea {
 
 .job-fields-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 10px;
   overflow: hidden;
+  background: var(--ant-color-bg-container);
 }
 
 .job-field-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-right: 1px solid var(--ant-color-border-secondary);
   border-bottom: 1px solid var(--ant-color-border-secondary);
 }
@@ -505,22 +709,31 @@ textarea {
 .job-field-label {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   font-size: 12px;
+}
+
+.job-field-label .ant-tag {
+  margin-inline-end: 0;
+  font-size: 11px;
+  line-height: 18px;
+  padding-inline: 5px;
 }
 
 .job-field-value {
   display: block;
   width: 100%;
-  padding: 2px 4px;
-  margin-left: -4px;
+  padding: 2px 5px;
+  margin-left: -5px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: inherit;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .job-field-value:hover {
@@ -543,7 +756,7 @@ textarea {
 
 .job-add-row > .ant-input {
   flex: 1;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .keyword-tag {
@@ -553,16 +766,24 @@ textarea {
   padding-right: 2px;
 }
 
+.match-history {
+  padding-top: 8px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
 .match-history h5 {
-  margin-bottom: 4px;
+  margin-bottom: 4px !important;
+  font-weight: 600 !important;
 }
 
 .coverage-stat .ant-statistic-content {
   font-variant-numeric: tabular-nums;
+  font-size: 20px;
 }
 
 .report-meta {
-  margin: 4px 0 12px;
+  margin: 4px 0 8px !important;
+  font-size: 12px;
 }
 
 .report-gaps {
@@ -572,7 +793,8 @@ textarea {
 
 .report-reason,
 .report-facts {
-  margin: 6px 0 2px !important; /* antd 段落自带下边距 */
+  margin: 5px 0 2px !important;
+  font-size: 13px;
 }
 
 .resume-preview-actions {
@@ -580,7 +802,7 @@ textarea {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .resume-preview-actions > :first-child {
@@ -589,10 +811,11 @@ textarea {
 
 .resume-frame {
   width: 100%;
-  height: calc(100dvh - 220px);
+  height: calc(100dvh - 240px);
   min-height: 480px;
   border: 1px solid var(--ant-color-border);
-  border-radius: 8px;
+  border-radius: 10px;
+  background: var(--ant-color-bg-container);
 }
 
 .partial-bullets {
@@ -611,8 +834,9 @@ textarea {
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--ant-color-primary-border);
+  border-radius: 10px;
   font-size: 13px;
 }
 
@@ -631,18 +855,34 @@ textarea {
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding: 4px 6px;
-  margin-left: -6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
+  padding: 8px 10px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--ant-color-bg-container);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .evidence-trigger:hover {
-  background: var(--ant-color-fill-tertiary);
+  border-color: var(--ant-color-primary-border);
+}
+
+.evidence-trigger-active {
+  border-color: var(--ant-color-primary);
+  border-left-color: var(--ant-color-primary);
+}
+
+.evidence-trigger-warn {
+  border-left-color: var(--ant-color-warning);
+}
+
+.evidence-trigger-error {
+  border-left-color: var(--ant-color-error);
 }
 
 .evidence-head {
@@ -652,7 +892,7 @@ textarea {
 }
 
 .evidence-detail {
-  border-color: var(--ant-color-border-secondary);
+  border-color: var(--ant-color-primary-border);
 }
 
 .evidence-empty-facts {
@@ -691,7 +931,7 @@ textarea {
 }
 
 .row-list > li {
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--ant-color-border-secondary);
 }
 
@@ -700,7 +940,7 @@ textarea {
 }
 
 .requirement-list > li {
-  padding: 6px 0;
+  padding: 7px 0;
 }
 
 .fact-item {
@@ -718,7 +958,7 @@ textarea {
 .job-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 /* 窄屏时操作按钮换到文字下面，不挤占经历文字的宽度。 */
