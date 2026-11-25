@@ -6,7 +6,9 @@
 
 import json
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -1014,3 +1016,106 @@ async def test_criteria_only_allows_match_but_blocks_tailor_and_hydrates_legacy_
     assert legacy_item["criteria"] == []
     assert legacy_item["decision_source"] == "model"
     assert legacy_item["review_note"] is None
+
+
+async def test_same_timestamp_match_reports_always_order_newest_first(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """同一时刻写入两份报告，新报告 ID 字典序更小时，列表与复用查询仍取后插入的那份。"""
+    from jobpilot.services.jobs import ParsedJob
+    from jobpilot.services.tailoring_store import TailorInputs, reusable_match_items
+
+    lib = await _publish_resume_facts(signed_in, model_outputs)
+    fact_id = lib["facts"][0]["fact_id"]
+    fact_set_id = UUID(lib["fact_set"]["fact_set_id"])
+    job = await _add_job(signed_in, model_outputs)
+    job_id = UUID(job["job_id"])
+    r_hard, r_pref = job["parsed"]["requirements"]
+    me = UUID((await signed_in.get("/api/me")).json()["user_id"])
+
+    same_time = datetime(2026, 11, 25, 12, 0, 0, tzinfo=UTC)
+    older_report_id = UUID("ffffffff-ffff-4fff-8fff-ffffffffffff")
+    newer_report_id = UUID("00000000-0000-4000-8000-000000000000")
+    older_items = [
+        {
+            "requirement_id": r_hard["requirement_id"],
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "旧报告",
+            "suggestion": "旧建议",
+        },
+        {
+            "requirement_id": r_pref["requirement_id"],
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "旧报告",
+            "suggestion": "旧建议",
+        },
+    ]
+    newer_items = [
+        {
+            "requirement_id": r_hard["requirement_id"],
+            "verdict": "covered",
+            "fact_ids": [fact_id],
+            "reason": "新报告",
+            "suggestion": "新建议",
+        },
+        {
+            "requirement_id": r_pref["requirement_id"],
+            "verdict": "missing",
+            "fact_ids": [],
+            "reason": "新报告",
+            "suggestion": "新建议",
+        },
+    ]
+
+    async with session_factory.begin() as db:
+        for report_id, items in (
+            (older_report_id, older_items),
+            (newer_report_id, newer_items),
+        ):
+            run = AiRun(
+                user_id=me,
+                kind="match",
+                status=RunStatus.SUCCEEDED,
+                user_job_id=job_id,
+                fact_set_id=fact_set_id,
+                job_snapshot_json=job["parsed"],
+                started_at=same_time,
+                finished_at=same_time,
+            )
+            db.add(run)
+            await db.flush()
+            db.add(
+                MatchReport(
+                    report_id=report_id,
+                    user_id=me,
+                    run_id=run.run_id,
+                    items_json=items,
+                    main_gaps=[],
+                    created_at=same_time,
+                )
+            )
+            await db.flush()
+
+    history = (await signed_in.get(f"/api/jobs/{job_id}/matches")).json()
+    assert [h["report_id"] for h in history] == [
+        str(newer_report_id),
+        str(older_report_id),
+    ]
+
+    inputs = TailorInputs(
+        fact_set_id=fact_set_id,
+        user_job_id=job_id,
+        base_doc_id=uuid4(),
+        base_text="",
+        base_sections=(),
+        snapshot=ParsedJob.model_validate(job["parsed"]),
+        facts=(),
+        candidates=(),
+    )
+    reused = await reusable_match_items(session_factory, me, inputs)
+    assert reused is not None
+    assert reused[0].reason == "新报告"

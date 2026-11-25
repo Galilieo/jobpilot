@@ -119,7 +119,7 @@ async def reusable_match_items(
                 AiRun.fact_set_id == inputs.fact_set_id,
                 AiRun.job_snapshot_json == inputs.snapshot.model_dump(mode="json"),
             )
-            .order_by(AiRun.finished_at.desc())
+            .order_by(MatchReport.seq.desc())
             .limit(1)
         )
     if items is None:

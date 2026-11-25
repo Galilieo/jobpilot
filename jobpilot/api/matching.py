@@ -343,7 +343,7 @@ async def list_job_matches(
     rows = await db.execute(
         _report_query()
         .where(MatchReport.user_id == user.user_id, AiRun.user_job_id == job_id)
-        .order_by(MatchReport.created_at.desc(), MatchReport.report_id.desc())
+        .order_by(MatchReport.seq.desc())
     )
     summaries: list[MatchReportSummaryOut] = []
     for report, run, fact_set in rows:
