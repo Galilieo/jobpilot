@@ -259,6 +259,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
         ),
         routes=frozenset(
             {
+                ("GET", "/api/tailored-resumes"),
                 ("GET", "/api/tailor-runs/{run_id}"),
                 ("GET", "/api/tailor-runs/{run_id}/resume"),
                 ("PUT", "/api/tailor-runs/{run_id}/resume"),

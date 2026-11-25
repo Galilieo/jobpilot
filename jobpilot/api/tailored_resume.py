@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -16,9 +16,19 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
 from jobpilot.api.deps import CurrentUser, DbSession
-from jobpilot.db.models import AiRun, FactSource
+from jobpilot.db.models import (
+    AiRun,
+    CheckStatus,
+    FactSet,
+    FactSource,
+    JobPosting,
+    ResumeVersion,
+    TailoredResume,
+    UserJob,
+)
 from jobpilot.services import drafts
 from jobpilot.services.grounding import GroundingFact, organizations_of
+from jobpilot.services.jobs import BasicFields, ParsedJob, effective_parsed_job
 from jobpilot.services.resume_content import ResumeContent
 from jobpilot.services.resume_export import (
     EditorContext,
@@ -69,6 +79,113 @@ class ResumeIn(BaseModel):
 
     base_version_id: UUID  # 开始编辑时的版本；已不是当前版本时 409
     content: ResumeContent
+
+
+TailoredResumeStatus = Literal["generated", "edited", "needs_attention"]
+
+
+class TailoredResumeSummary(BaseModel):
+    resume_id: UUID
+    run_id: UUID
+    job_id: UUID | None
+    job_title: str | None
+    job_company: str | None
+    fact_set_version: int | None
+    latest_fact_set_version: int | None
+    current_version: int
+    status: TailoredResumeStatus
+    updated_at: datetime
+
+
+def _resume_status(
+    content: ResumeContent, current_version: int
+) -> TailoredResumeStatus:
+    has_pending = any(
+        bullet.origin is CheckStatus.PENDING
+        for section in content.sections
+        for entry in section.entries
+        for bullet in entry.bullets
+    )
+    if has_pending:
+        return "needs_attention"
+    return "edited" if current_version > 1 else "generated"
+
+
+def _job_fields(
+    posting: JobPosting | None, user_job: UserJob | None, run: AiRun
+) -> BasicFields | None:
+    if posting is not None and user_job is not None:
+        return effective_parsed_job(posting, user_job).basic_fields
+    if run.job_snapshot_json is not None:
+        return ParsedJob.model_validate(run.job_snapshot_json).basic_fields
+    return None
+
+
+def _build_summary(
+    resume: TailoredResume,
+    version: ResumeVersion,
+    run: AiRun,
+    fact_set: FactSet | None,
+    user_job: UserJob | None,
+    posting: JobPosting | None,
+    latest_version: int | None,
+) -> TailoredResumeSummary:
+    fields = _job_fields(posting, user_job, run)
+    content = ResumeContent.model_validate(version.content_json)
+    return TailoredResumeSummary(
+        resume_id=resume.resume_id,
+        run_id=resume.run_id,
+        job_id=run.user_job_id,
+        job_title=fields.title if fields else None,
+        job_company=fields.company if fields else None,
+        fact_set_version=fact_set.version if fact_set else None,
+        latest_fact_set_version=latest_version,
+        current_version=version.version,
+        status=_resume_status(content, version.version),
+        updated_at=version.created_at,
+    )
+
+
+@router.get("/tailored-resumes")
+async def list_tailored_resumes(
+    user: CurrentUser, db: DbSession
+) -> list[TailoredResumeSummary]:
+    """列出当前用户的定制简历，按当前版本更新时间倒序。"""
+    latest_set = await drafts.latest_fact_set(db, user.user_id)
+    latest_version = latest_set.version if latest_set else None
+    rows = (
+        await db.execute(
+            select(TailoredResume, ResumeVersion, AiRun, FactSet, UserJob, JobPosting)
+            .join(
+                ResumeVersion,
+                (ResumeVersion.resume_version_id == TailoredResume.current_version_id)
+                & (ResumeVersion.user_id == TailoredResume.user_id),
+            )
+            .join(
+                AiRun,
+                (AiRun.run_id == TailoredResume.run_id)
+                & (AiRun.user_id == TailoredResume.user_id),
+            )
+            .outerjoin(
+                FactSet,
+                (FactSet.fact_set_id == AiRun.fact_set_id)
+                & (FactSet.user_id == AiRun.user_id),
+            )
+            .outerjoin(
+                UserJob,
+                (UserJob.user_job_id == AiRun.user_job_id)
+                & (UserJob.user_id == AiRun.user_id),
+            )
+            .outerjoin(
+                JobPosting,
+                (JobPosting.posting_id == UserJob.posting_id)
+                & (JobPosting.owner_id == UserJob.user_id),
+            )
+            .where(TailoredResume.user_id == user.user_id)
+            .order_by(ResumeVersion.created_at.desc(), TailoredResume.resume_id.desc())
+        )
+    ).all()
+    return [_build_summary(*row, latest_version=latest_version) for row in rows]
 
 
 def _not_found() -> HTTPException:
