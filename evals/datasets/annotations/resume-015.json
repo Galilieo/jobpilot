@@ -297,7 +297,7 @@
     "onsite_days_per_week": null,
     "internship_months": null,
     "earliest_start": {
-      "value": "1 月",
+      "value": "1 月起可到岗",
       "source_quote": "1 月起可到岗"
     }
   },
@@ -316,6 +316,7 @@
       "major": "自动化",
       "degree": "bachelor",
       "status": "completed",
+      "status_context": "higher_degree_enrolled",
       "start_text": "2020.09",
       "end_text": "2024.06",
       "source_quote": "2020.09–2024.06             东钧工业学院，自动化，本科"

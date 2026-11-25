@@ -241,7 +241,7 @@
     "onsite_days_per_week": null,
     "internship_months": null,
     "earliest_start": {
-      "value": "预计三周内",
+      "value": "预计三周内到岗",
       "source_quote": "预计三周内到岗"
     }
   },
@@ -251,6 +251,7 @@
       "major": "电子商务",
       "degree": "bachelor",
       "status": "completed",
+      "status_context": "full_time_work_after",
       "start_text": "2019.09",
       "end_text": "2023.06",
       "source_quote": "至明应用技术学院（本科）｜电子商务｜2019.09—2023.06"

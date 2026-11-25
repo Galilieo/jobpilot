@@ -25,6 +25,14 @@ from jobpilot.services.parsing import normalize_text
 
 DATASETS = REPO_ROOT / "evals" / "datasets"
 RESUME_ANNOTATIONS = sorted((DATASETS / "annotations").glob("resume-*.json"))
+_STATUS_KEYWORDS = ("在读", "预计", "已毕业")
+_STATUS_CONTEXTS = {"higher_degree_enrolled", "full_time_work_after"}
+_DEGREE_RANK = {
+    DegreeLevel.ASSOCIATE.value: 1,
+    DegreeLevel.BACHELOR.value: 2,
+    DegreeLevel.MASTER.value: 3,
+    DegreeLevel.PHD.value: 4,
+}
 
 
 def load(path: Path) -> tuple[str, dict[str, Any]]:
@@ -89,13 +97,32 @@ def test_annotated_facts_follow_extraction_rules(path: Path) -> None:
                 continue
             spans = locate_quote(raw_text, entry["source_quote"])
             assert len(spans) == 1, f"{field_name}: {entry['source_quote']}"
+            if field_name == CriterionField.EARLIEST_START.value:
+                val = "".join(ch for ch in str(entry["value"]) if not ch.isspace())
+                quote_ns = "".join(
+                    ch for ch in entry["source_quote"] if not ch.isspace()
+                )
+                assert val and val in quote_ns, entry
 
     if "education" in annotation:
-        for edu in annotation["education"]:
+        edus = annotation["education"]
+        for edu in edus:
             assert edu["school"].strip()
             DegreeLevel(edu["degree"])
             if edu["status"] is not None:
                 EducationStatus(edu["status"])
+                has_kw = any(kw in edu["source_quote"] for kw in _STATUS_KEYWORDS)
+                ctx = edu.get("status_context")
+                assert has_kw or ctx in _STATUS_CONTEXTS, edu
+                if not has_kw:
+                    assert edu["status"] == EducationStatus.COMPLETED.value, edu
+                    if ctx == "higher_degree_enrolled":
+                        assert any(
+                            other["status"] == EducationStatus.ENROLLED.value
+                            and _DEGREE_RANK[other["degree"]]
+                            > _DEGREE_RANK[edu["degree"]]
+                            for other in edus
+                        ), edu
             spans = locate_quote(raw_text, edu["source_quote"])
             assert len(spans) == 1, edu["source_quote"]
 

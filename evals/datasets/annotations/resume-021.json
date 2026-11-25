@@ -233,7 +233,7 @@
     "onsite_days_per_week": null,
     "internship_months": null,
     "earliest_start": {
-      "value": "2027 年 2 月",
+      "value": "2027 年 2 月起可全职到岗",
       "source_quote": "2027 年 2 月起可全职到岗"
     }
   },
@@ -252,6 +252,7 @@
       "major": "信息工程",
       "degree": "bachelor",
       "status": "completed",
+      "status_context": "higher_degree_enrolled",
       "start_text": "2021.09",
       "end_text": "2025.06",
       "source_quote": "2021.09–2025.06　南汀信息工程学院　信息工程本科"
