@@ -157,9 +157,7 @@ async def _tailored_fact_sets(
             .order_by(AiRun.user_job_id, AiRun.started_at.desc())
         )
     ).all()
-    return {
-        job_id: fact_set_id for job_id, fact_set_id in rows if job_id is not None
-    }
+    return {job_id: fact_set_id for job_id, fact_set_id in rows if job_id is not None}
 
 
 async def _job_board(
