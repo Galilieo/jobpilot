@@ -369,16 +369,6 @@ textarea {
   align-items: center;
 }
 
-.page-heading {
-  margin-bottom: 24px;
-}
-
-.page-heading h1.ant-typography {
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
-  line-height: 1.35;
-}
-
 .empty-hint {
   display: flex;
   flex-direction: column;
@@ -675,7 +665,7 @@ textarea {
 .job-detail {
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
-  gap: 18px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -697,6 +687,10 @@ textarea {
   border-color: var(--ant-color-border-secondary);
 }
 
+.ant-divider-horizontal.section-divider {
+  margin: 4px 0;
+}
+
 .job-requirements {
   margin-top: 4px;
 }
@@ -706,13 +700,12 @@ textarea {
 }
 
 .job-keywords {
-  margin: 6px 0 4px;
+  margin: 4px 0;
 }
 
 .job-raw {
   white-space: pre-wrap;
   padding: 12px;
-  border: 1px solid var(--ant-color-border-secondary);
   border-radius: 10px;
   background: var(--ant-color-fill-quaternary);
   font-size: 13px;
@@ -725,48 +718,50 @@ textarea {
 
 .job-fields-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--ant-color-bg-container);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+}
+
+@media (max-width: 575px) {
+  .job-fields-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .job-field-cell {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
-  padding: 9px 12px;
-  border-right: 1px solid var(--ant-color-border-secondary);
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--ant-color-border-secondary);
 }
 
 .job-field-label {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 8px;
   align-items: center;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .job-field-label .ant-tag {
   margin-inline-end: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
-  padding-inline: 5px;
+  padding-inline: 6px;
 }
 
 .job-field-value {
   display: block;
   width: 100%;
-  padding: 2px 5px;
-  margin-left: -5px;
+  padding: 4px 8px;
+  margin-left: -8px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: inherit;
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.15s ease;
@@ -778,8 +773,8 @@ textarea {
 
 .job-fields-hint {
   display: block;
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 8px;
+  font-size: 13px;
 }
 
 .job-add-row {
@@ -795,15 +790,54 @@ textarea {
   min-width: 160px;
 }
 
-.keyword-tag {
+.keyword-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding-right: 2px;
+  gap: 4px;
+  margin-inline-end: 0;
+  padding: 2px 4px 2px 8px;
+}
+
+.keyword-chip-text {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.keyword-chip-remove {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.keyword-chip:hover .keyword-chip-remove,
+.keyword-chip:focus-within .keyword-chip-remove,
+.keyword-chip:has(.ant-popover-open) .keyword-chip-remove {
+  opacity: 1;
+}
+
+@media (max-width: 991px), (hover: none) {
+  .keyword-chip-remove {
+    opacity: 1;
+  }
+}
+
+.keyword-inline-input {
+  width: 120px;
+}
+
+.match-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .match-history {
-  padding-top: 8px;
+  padding-top: 12px;
   border-top: 1px solid var(--ant-color-border-secondary);
 }
 
@@ -813,11 +847,12 @@ textarea {
 
 .coverage-stat .ant-statistic-content {
   font-variant-numeric: tabular-nums;
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 600;
 }
 
 .ant-typography.report-meta {
-  margin: 4px 0 8px;
+  margin: 0;
   font-size: 13px;
 }
 
@@ -828,7 +863,7 @@ textarea {
 
 .ant-typography.report-reason,
 .ant-typography.report-facts {
-  margin: 4px 0 4px;
+  margin: 4px 0;
   font-size: 13px;
 }
 
@@ -837,7 +872,7 @@ textarea {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .resume-preview-actions > :first-child {
@@ -848,7 +883,7 @@ textarea {
   width: 100%;
   height: calc(100dvh - 240px);
   min-height: 480px;
-  border: 1px solid var(--ant-color-border);
+  border: 1px solid var(--ant-color-border-secondary);
   border-radius: 10px;
   background: var(--ant-color-bg-container);
 }
@@ -869,8 +904,7 @@ textarea {
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 12px;
-  border: 1px solid var(--ant-color-primary-border);
+  padding: 8px 12px;
   border-radius: 10px;
   font-size: 13px;
 }

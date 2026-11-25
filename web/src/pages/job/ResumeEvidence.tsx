@@ -1,8 +1,9 @@
 // 依据追溯与底稿没写到的要求：展示改写条目引用的事实、原文片段和检查结论，以及底稿没写到、可以写进去的岗位要求。
 import { CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined } from '@ant-design/icons'
-import { Card, Empty, Space, Tag, Typography, theme } from 'antd'
+import { Card, Space, Tag, Typography, theme } from 'antd'
 import { useState, type ReactElement } from 'react'
 import type { CitedFact, PlanBlock, ResumeBullet, TailoredResumeData } from '../../api/types'
+import { EmptyHint } from '../../components/EmptyHint'
 import { isUnwritten, UNWRITTEN_LABEL } from './unwritten'
 
 interface BulletEntry {
@@ -71,7 +72,7 @@ export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): Reac
   const [selectedId, setSelectedId] = useState<string | null>(entries[0]?.bullet.bullet_id ?? null)
 
   if (entries.length === 0) {
-    return <Empty description="这份简历还没有改写条目。" />
+    return <EmptyHint description="这份简历还没有改写条目。" />
   }
 
   return (

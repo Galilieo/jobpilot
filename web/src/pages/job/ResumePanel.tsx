@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Dropdown,
-  Empty,
   Form,
   Modal,
   Select,
@@ -28,6 +27,7 @@ import type {
   TailorRunSummary,
   TailoredResumeData,
 } from '../../api/types'
+import { EmptyHint } from '../../components/EmptyHint'
 import { RUN_STATUS, SECTION, STOP_REASON } from '../../labels'
 import {
   LIBRARY_QUERY,
@@ -103,38 +103,42 @@ export function ResumePanel({ jobId }: { jobId: string }): ReactElement {
     },
   })
 
-  const generate = (
+  const regenerate = activeSummary ? (
     <Button
-      type={activeSummary ? 'default' : 'primary'}
-      icon={activeSummary ? <ReloadOutlined /> : undefined}
+      icon={<ReloadOutlined />}
       loading={start.isPending}
       disabled={run.data?.status === 'running'}
       onClick={() => start.mutate({})}
     >
-      {activeSummary ? '重新生成' : '生成定制简历'}
+      重新生成
     </Button>
-  )
+  ) : null
 
   return (
-    <Card title="定制简历" extra={generate} className="resume-panel">
+    <Card title="定制简历" extra={regenerate} className="resume-panel">
       {runs.isPending ? (
         <Skeleton active />
       ) : runs.isError ? (
-        <Empty description={runs.error.message}>
-          <Button onClick={() => void runs.refetch()}>重试</Button>
-        </Empty>
+        <EmptyHint
+          description={runs.error.message}
+          action={<Button onClick={() => void runs.refetch()}>重试</Button>}
+        />
       ) : !activeSummary ? (
-        <Empty description="按这个岗位改写你的经历：每一条都引用已确认的事实，检查不过的会退回原文。">
-          <Button type="primary" loading={start.isPending} onClick={() => start.mutate({})}>
-            生成定制简历
-          </Button>
-        </Empty>
+        <EmptyHint
+          description="按这个岗位改写你的经历：每一条都引用已确认的事实，检查不过的会退回原文。"
+          action={
+            <Button type="primary" loading={start.isPending} onClick={() => start.mutate({})}>
+              生成定制简历
+            </Button>
+          }
+        />
       ) : run.isPending ? (
         <Skeleton active />
       ) : run.isError ? (
-        <Empty description={run.error.message}>
-          <Button onClick={() => void run.refetch()}>重试</Button>
-        </Empty>
+        <EmptyHint
+          description={run.error.message}
+          action={<Button onClick={() => void run.refetch()}>重试</Button>}
+        />
       ) : (
         <RunView
           run={run.data}
@@ -227,9 +231,10 @@ function RunView({
     if (resume.isPending) return <Skeleton active />
     if (resume.isError) {
       return (
-        <Empty description={resume.error.message}>
-          <Button onClick={() => void resume.refetch()}>重试</Button>
-        </Empty>
+        <EmptyHint
+          description={resume.error.message}
+          action={<Button onClick={() => void resume.refetch()}>重试</Button>}
+        />
       )
     }
     const latestSet = library.data?.fact_set

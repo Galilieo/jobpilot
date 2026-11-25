@@ -1,9 +1,10 @@
 // 定制简历面板的历史页签：版本历史（只读预览与导出旧版）与同岗位改写运行历史。
 import { ReloadOutlined } from '@ant-design/icons'
-import { Button, Dropdown, Empty, Space, Tag, Typography } from 'antd'
+import { Button, Dropdown, Space, Tag, Typography } from 'antd'
 import type { ReactElement } from 'react'
 import { tailoring } from '../../api/endpoints'
 import type { TailorRunSummary, VersionSummary } from '../../api/types'
+import { EmptyHint } from '../../components/EmptyHint'
 import { RUN_STATUS, STOP_REASON, formatDateTime } from '../../labels'
 
 interface ResumeHistoryProps {
@@ -111,7 +112,7 @@ export function ResumeHistory({
       <section>
         <Typography.Title level={5}>运行历史</Typography.Title>
         {runs.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有改写运行记录" />
+          <EmptyHint compact description="还没有改写运行记录" />
         ) : (
           <ul className="row-list">
             {runs.map((item) => {

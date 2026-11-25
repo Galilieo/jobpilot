@@ -1,14 +1,32 @@
-// 匹配报告：逐条要求的结论、依据和建议；支持查看与切换同岗位的历史匹配报告。
+// 匹配报告：顶部展示硬性与加分项已覆盖数及主要短板，下方逐条列出依据和建议；支持历史切换。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Empty, Skeleton, Space, Statistic, Tag, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Collapse,
+  Skeleton,
+  Space,
+  Statistic,
+  Tag,
+  Typography,
+} from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { jobs } from '../../api/endpoints'
 import { newIdempotencyKey } from '../../api/http'
 import type { Coverage, MatchReport, MatchSummary } from '../../api/types'
+import { EmptyHint } from '../../components/EmptyHint'
 import { VERDICT, formatDateTime } from '../../labels'
 import { OVERVIEW_QUERY, matchReportQuery, matchesQuery } from '../../queryKeys'
 
-export function MatchPanel({ jobId }: { jobId: string }): ReactElement {
+export function MatchPanel({
+  jobId,
+  embedded = false,
+}: {
+  jobId: string
+  embedded?: boolean
+}): ReactElement {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const key = useRef(newIdempotencyKey())
@@ -42,59 +60,75 @@ export function MatchPanel({ jobId }: { jobId: string }): ReactElement {
     },
   })
 
-  const action = (
+  const rematchButton = (
     <Button loading={match.isPending} onClick={() => match.mutate()}>
       {latestId ? '重新匹配' : '分析匹配度'}
     </Button>
   )
 
-  return (
-    <Card title="匹配报告" extra={action}>
-      {summaries.isPending || (activeId && report.isPending) ? (
-        <Skeleton active />
-      ) : summaries.isError ? (
-        <Empty description={summaries.error.message}>
-          <Button onClick={() => void summaries.refetch()}>重试</Button>
-        </Empty>
-      ) : !activeId ? (
-        <Empty description="用已发布的事实库逐条对照岗位要求，看哪些能写、哪些缺。">
+  const content =
+    summaries.isPending || (activeId && report.isPending) ? (
+      <Skeleton active />
+    ) : summaries.isError ? (
+      <EmptyHint
+        description={summaries.error.message}
+        action={<Button onClick={() => void summaries.refetch()}>重试</Button>}
+      />
+    ) : !activeId ? (
+      <EmptyHint
+        description="用已发布的事实库逐条对照岗位要求，看哪些能写、哪些缺。"
+        action={
           <Button loading={match.isPending} onClick={() => match.mutate()}>
             分析匹配度
           </Button>
-        </Empty>
-      ) : report.isError ? (
-        <Empty description={report.error.message}>
-          <Button onClick={() => void report.refetch()}>重试</Button>
-        </Empty>
-      ) : (
-        report.data && (
-          <Space orientation="vertical" size={16} className="full-width">
-            {viewingOld && (
-              <Alert
-                type="info"
-                showIcon
-                title={`正在查看历史报告（基于第 ${report.data.fact_set_version} 版事实库）`}
-                action={
-                  <Button size="small" onClick={() => setSelectedReportId(null)}>
-                    回到最新报告
-                  </Button>
-                }
-              />
-            )}
-            <ReportBody report={report.data} />
-            {summaries.data && summaries.data.length > 1 && (
-              <MatchHistory
-                items={summaries.data}
-                activeId={activeId}
-                latestId={latestId}
-                onSelect={(reportId) =>
-                  setSelectedReportId(reportId === latestId ? null : reportId)
-                }
-              />
-            )}
-          </Space>
-        )
-      )}
+        }
+      />
+    ) : report.isError ? (
+      <EmptyHint
+        description={report.error.message}
+        action={<Button onClick={() => void report.refetch()}>重试</Button>}
+      />
+    ) : (
+      report.data && (
+        <Space orientation="vertical" size={16} className="full-width">
+          {embedded && (
+            <div className="match-bar">
+              <Typography.Text type="secondary" className="report-meta">
+                基于第 {report.data.fact_set_version} 版事实库
+              </Typography.Text>
+              {rematchButton}
+            </div>
+          )}
+          {viewingOld && (
+            <Alert
+              type="info"
+              showIcon
+              title={`正在查看历史报告（基于第 ${report.data.fact_set_version} 版事实库）`}
+              action={
+                <Button size="small" onClick={() => setSelectedReportId(null)}>
+                  回到最新报告
+                </Button>
+              }
+            />
+          )}
+          <ReportBody report={report.data} showVersion={!embedded} />
+          {summaries.data && summaries.data.length > 1 && (
+            <MatchHistory
+              items={summaries.data}
+              activeId={activeId}
+              latestId={latestId}
+              onSelect={(reportId) => setSelectedReportId(reportId === latestId ? null : reportId)}
+            />
+          )}
+        </Space>
+      )
+    )
+
+  if (embedded) return <>{content}</>
+
+  return (
+    <Card title="匹配报告" extra={rematchButton}>
+      {content}
     </Card>
   )
 }
@@ -121,7 +155,7 @@ function MatchHistory({
           return (
             <li key={item.report_id} className="fact-item">
               <div className="fact-row">
-                <Space size={6} wrap>
+                <Space size={8} wrap>
                   <Typography.Text strong={isCurrent} className="tabular-num">
                     {formatDateTime(item.created_at)}
                   </Typography.Text>
@@ -155,24 +189,54 @@ function CoverageStat({ title, coverage }: { title: string; coverage: Coverage }
   )
 }
 
-function ReportBody({ report }: { report: MatchReport }): ReactElement {
+function ReportBody({
+  report,
+  showVersion,
+}: {
+  report: MatchReport
+  showVersion: boolean
+}): ReactElement {
+  const topGaps = report.main_gaps.slice(0, 3)
+  const extraGaps = report.main_gaps.slice(3)
+
   return (
     <>
       <Space size={32} wrap>
         <CoverageStat title="硬性要求" coverage={report.hard_summary} />
         <CoverageStat title="加分项" coverage={report.preferred_summary} />
       </Space>
-      <Typography.Paragraph type="secondary" className="report-meta">
-        基于第 {report.fact_set_version} 版事实库
-      </Typography.Paragraph>
-      {report.main_gaps.length > 0 && (
+      {showVersion && (
+        <Typography.Paragraph type="secondary" className="report-meta">
+          基于第 {report.fact_set_version} 版事实库
+        </Typography.Paragraph>
+      )}
+      {topGaps.length > 0 && (
         <section>
           <Typography.Title level={5}>主要短板</Typography.Title>
           <ul className="report-gaps">
-            {report.main_gaps.map((gap) => (
+            {topGaps.map((gap) => (
               <li key={gap}>{gap}</li>
             ))}
           </ul>
+          {extraGaps.length > 0 && (
+            <Collapse
+              ghost
+              size="small"
+              items={[
+                {
+                  key: 'more-gaps',
+                  label: `展开其余 ${extraGaps.length} 条短板`,
+                  children: (
+                    <ul className="report-gaps">
+                      {extraGaps.map((gap) => (
+                        <li key={gap}>{gap}</li>
+                      ))}
+                    </ul>
+                  ),
+                },
+              ]}
+            />
+          )}
         </section>
       )}
       <ul className="row-list">
