@@ -6,7 +6,7 @@ import { App, Button, Card, Input, Segmented, Typography, Upload } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { resumes } from '../../api/endpoints'
 import { newIdempotencyKey } from '../../api/http'
-import { LIBRARY_QUERY } from './queries'
+import { LIBRARY_QUERY } from '../../queryKeys'
 
 type Source = 'paste' | 'file' | 'screenshots'
 

@@ -311,3 +311,23 @@ textarea {
     margin-top: 8px;
   }
 }
+
+/* ---------- 岗位库 ---------- */
+
+.page-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.job-card .job-company {
+  margin: 4px 0 8px;
+}
+
+.job-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+}

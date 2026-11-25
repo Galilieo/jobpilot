@@ -21,7 +21,7 @@ import { facts } from '../../api/endpoints'
 import { ApiError } from '../../api/http'
 import type { DraftItem, Library, Responsibility } from '../../api/types'
 import { ITEM_STATUS, RESPONSIBILITY, REVIEW_REASON } from '../../labels'
-import { LIBRARY_QUERY } from './queries'
+import { LIBRARY_QUERY } from '../../queryKeys'
 
 function groupByExperience(items: DraftItem[]): [string, DraftItem[]][] {
   const groups = new Map<string, DraftItem[]>()
