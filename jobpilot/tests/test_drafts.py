@@ -11,6 +11,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import (
+    CriterionField,
+    DegreeLevel,
+    EducationStatus,
     Fact,
     FactDraft,
     FactKind,
@@ -24,8 +27,11 @@ from jobpilot.db.models import (
 from jobpilot.services import drafts
 from jobpilot.services.drafts import (
     CannotConfirmError,
+    DraftCriterion,
+    DraftEducation,
     DraftItem,
     DraftRevisionConflictError,
+    EducationChanges,
     FactChanges,
     ItemNotFoundError,
     ItemStatus,
@@ -588,3 +594,264 @@ async def test_facts_of_a_version_follow_resume_order(session_factory: Factory) 
     async with session_factory() as session:
         facts = await drafts.facts_in(session, user_id, fact_set_id)
     assert [fact.span_start for fact in facts] == [0, 12, 30, None]
+
+
+# ---------- 求职条件与教育：四种状态、出处保留与合并 ----------
+
+
+async def test_criteria_and_education_publish_four_states(
+    session_factory: Factory, owner: tuple[UUID, UUID]
+) -> None:
+    """没碰继承、确认且未改字保留简历出处、待核对留草稿且沿用旧值、明确删除移除。"""
+    user_id, doc_id = owner
+    day_quote = "负责实现按周次筛选课程的功能"
+    day_start = RAW_TEXT.index(day_quote)
+    edu_quote = "项目｜课程排班面板"
+    edu_start = RAW_TEXT.index(edu_quote)
+
+    extracted_criteria = [
+        DraftCriterion(
+            field=CriterionField.ONSITE_DAYS_PER_WEEK,
+            status=ItemStatus.PENDING,
+            int_value=4,
+            source=FactSource.RESUME,
+            source_doc_id=doc_id,
+            source_quote=day_quote,
+            span_start=day_start,
+            span_end=day_start + len(day_quote),
+            quote_verified=True,
+        ),
+        DraftCriterion(
+            field=CriterionField.INTERNSHIP_MONTHS,
+            status=ItemStatus.PENDING,
+            int_value=3,
+            source=FactSource.RESUME,
+            source_doc_id=doc_id,
+            source_quote=day_quote,
+            span_start=day_start,
+            span_end=day_start + len(day_quote),
+            quote_verified=True,
+        ),
+    ]
+    extracted_edu = [
+        DraftEducation(
+            education_id=uuid4(),
+            draft_status=ItemStatus.PENDING,
+            school="澄湖大学",
+            major="计算机",
+            degree=DegreeLevel.BACHELOR,
+            status=EducationStatus.COMPLETED,
+            start_text="2020.09",
+            end_text="2024.06",
+            source=FactSource.RESUME,
+            source_doc_id=doc_id,
+            source_quote=edu_quote,
+            span_start=edu_start,
+            span_end=edu_start + len(edu_quote),
+            quote_verified=True,
+        )
+    ]
+
+    await run(
+        session_factory,
+        lambda db: drafts.add_extracted(
+            db, user_id, [], criteria=extracted_criteria, educations=extracted_edu
+        ),
+    )
+    # 只点确认不改值：保留简历出处。
+    confirmed_day = await run(
+        session_factory,
+        lambda db: drafts.edit_criterion(
+            db, user_id, CriterionField.ONSITE_DAYS_PER_WEEK, confirmed=True
+        ),
+    )
+    assert confirmed_day is not None and confirmed_day.source is FactSource.RESUME
+    await run(
+        session_factory,
+        lambda db: drafts.edit_criterion(
+            db, user_id, CriterionField.INTERNSHIP_MONTHS, confirmed=True
+        ),
+    )
+    edu_id = extracted_edu[0].education_id
+    await run(
+        session_factory,
+        lambda db: drafts.edit_education(
+            db, user_id, edu_id, EducationChanges(confirmed=True)
+        ),
+    )
+    # 即使没有事实，只确认求职条件和教育也能发布第 1 版。
+    v1 = await publish(session_factory, user_id)
+    v1_crit = {
+        c.field: c
+        for c in await run(session_factory, lambda db: drafts.criteria_of(db, v1))
+    }
+    assert v1_crit["onsite_days_per_week"].int_value == 4
+    assert v1_crit["onsite_days_per_week"].source == FactSource.RESUME
+    assert v1_crit["internship_months"].int_value == 3
+
+    # 再上传一份抽取，把到岗改成 5 天（PENDING）；同时改月数为 6（USER，CONFIRMED），
+    # 并明确删除教育。
+    await run(
+        session_factory,
+        lambda db: drafts.add_extracted(
+            db,
+            user_id,
+            [],
+            criteria=[
+                DraftCriterion(
+                    field=CriterionField.ONSITE_DAYS_PER_WEEK,
+                    status=ItemStatus.PENDING,
+                    int_value=5,
+                    source=FactSource.RESUME,
+                    source_doc_id=doc_id,
+                    source_quote=day_quote,
+                    span_start=day_start,
+                    span_end=day_start + len(day_quote),
+                    quote_verified=True,
+                )
+            ],
+        ),
+    )
+    edited_months = await run(
+        session_factory,
+        lambda db: drafts.edit_criterion(
+            db,
+            user_id,
+            CriterionField.INTERNSHIP_MONTHS,
+            int_value=6,
+            confirmed=True,
+        ),
+    )
+    assert edited_months is not None and edited_months.source is FactSource.USER
+    await run(session_factory, lambda db: drafts.delete_education(db, user_id, edu_id))
+
+    v2 = await publish(session_factory, user_id)
+    v2_crit = {
+        c.field: c
+        for c in await run(session_factory, lambda db: drafts.criteria_of(db, v2))
+    }
+    # 待核对的 5 天留在草稿，v2 沿用 v1 的 4 天；已确认改字的 6 个月变成 user 来源。
+    assert v2_crit["onsite_days_per_week"].int_value == 4
+    assert v2_crit["internship_months"].int_value == 6
+    assert v2_crit["internship_months"].source == FactSource.USER
+    assert await run(session_factory, lambda db: drafts.educations_of(db, v2)) == []
+
+    # 草稿里还留着待确认的 5 天；再补一条事实并发布 v3，v2 没碰的 6 个月继承。
+    [draft_day] = await run(
+        session_factory,
+        lambda db: drafts.read_draft(db, user_id),
+    ) and drafts.draft_criteria_of(
+        await run(session_factory, lambda db: drafts.read_draft(db, user_id))
+    )
+    assert draft_day.int_value == 5 and draft_day.status is ItemStatus.PENDING
+    await run(
+        session_factory,
+        lambda db: drafts.add_user_fact(
+            db,
+            user_id,
+            experience="测试项目",
+            kind=FactKind.ACTION,
+            responsibility=Responsibility.OWN,
+            text="只改事实",
+        ),
+    )
+    v3 = await publish(session_factory, user_id)
+    v3_crit = {
+        c.field: c
+        for c in await run(session_factory, lambda db: drafts.criteria_of(db, v3))
+    }
+    assert v3_crit["internship_months"].int_value == 6
+    assert v3_crit["onsite_days_per_week"].int_value == 4
+
+
+async def test_reupload_merges_criteria_and_education_without_overwriting_confirmed(
+    session_factory: Factory, owner: tuple[UUID, UUID]
+) -> None:
+    """二次上传时：已确认求职条件和教育不覆盖，未确认的替换，教育复用已有 ID。"""
+    user_id, doc_id = owner
+    await run(
+        session_factory,
+        lambda db: drafts.edit_criterion(
+            db,
+            user_id,
+            CriterionField.ONSITE_DAYS_PER_WEEK,
+            int_value=5,
+            confirmed=True,
+        ),
+    )
+    first_edu_id = uuid4()
+    await run(
+        session_factory,
+        lambda db: drafts.add_extracted(
+            db,
+            user_id,
+            [],
+            criteria=[
+                DraftCriterion(
+                    field=CriterionField.ONSITE_DAYS_PER_WEEK,
+                    status=ItemStatus.PENDING,
+                    int_value=3,
+                    source=FactSource.USER,
+                ),
+                DraftCriterion(
+                    field=CriterionField.INTERNSHIP_MONTHS,
+                    status=ItemStatus.PENDING,
+                    int_value=3,
+                    source=FactSource.USER,
+                ),
+            ],
+            educations=[
+                DraftEducation(
+                    education_id=first_edu_id,
+                    draft_status=ItemStatus.PENDING,
+                    school="澄湖大学",
+                    major="软件工程",
+                    degree=DegreeLevel.BACHELOR,
+                    status=EducationStatus.ENROLLED,
+                    source=FactSource.USER,
+                )
+            ],
+        ),
+    )
+    # 再次上传：覆盖 PENDING 的实习月数与教育（保留原 education_id），
+    # 不覆盖已确认的 5 天。
+    await run(
+        session_factory,
+        lambda db: drafts.add_extracted(
+            db,
+            user_id,
+            [],
+            criteria=[
+                DraftCriterion(
+                    field=CriterionField.ONSITE_DAYS_PER_WEEK,
+                    status=ItemStatus.PENDING,
+                    int_value=2,
+                    source=FactSource.USER,
+                ),
+                DraftCriterion(
+                    field=CriterionField.INTERNSHIP_MONTHS,
+                    status=ItemStatus.PENDING,
+                    int_value=6,
+                    source=FactSource.USER,
+                ),
+            ],
+            educations=[
+                DraftEducation(
+                    education_id=uuid4(),
+                    draft_status=ItemStatus.PENDING,
+                    school="澄湖大学",
+                    major="计算机",
+                    degree=DegreeLevel.BACHELOR,
+                    status=EducationStatus.COMPLETED,
+                    source=FactSource.USER,
+                )
+            ],
+        ),
+    )
+    draft = await run(session_factory, lambda db: drafts.read_draft(db, user_id))
+    crit = {c.field: c for c in drafts.draft_criteria_of(draft)}
+    assert crit[CriterionField.ONSITE_DAYS_PER_WEEK].int_value == 5
+    assert crit[CriterionField.INTERNSHIP_MONTHS].int_value == 6
+    [edu] = drafts.draft_educations_of(draft)
+    assert edu.education_id == first_edu_id
+    assert edu.major == "计算机"

@@ -87,6 +87,32 @@ async def _create_fact(client: httpx.AsyncClient, _model_outputs: list[str]) -> 
     return created.json()["lineage_id"]
 
 
+async def _create_education(
+    client: httpx.AsyncClient, _model_outputs: list[str]
+) -> str:
+    """B 补充一条教育经历并发布，返回 education_id。"""
+    created = await client.post(
+        "/api/facts/education",
+        json={
+            "school": "B 的学校",
+            "major": "计算机",
+            "degree": "bachelor",
+            "status": "enrolled",
+            "expected_revision": 0,
+        },
+    )
+    assert created.status_code == 201, created.text
+    committed = await client.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": created.json()["revision"],
+        },
+    )
+    assert committed.status_code == 200, committed.text
+    return created.json()["education_id"]
+
+
 async def _create_resume(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
     """B 上传一份简历；假模型返回「没有经历」，只留下原文。"""
     created = await client.post(
@@ -193,6 +219,27 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("DELETE", "/api/facts/{lineage_id}"),
                 ("POST", "/api/facts/batch"),
                 ("POST", "/api/facts/commit"),
+                ("PUT", "/api/facts/criteria"),
+            }
+        ),
+    ),
+    OwnedResource(
+        name="education",
+        create=_create_education,
+        read=("GET", "/api/facts"),
+        attempts=(
+            Attempt(
+                "PUT",
+                "/api/facts/education/{id}",
+                {"school": "A 改的", "confirmed": True, "expected_revision": 0},
+            ),
+            Attempt("DELETE", "/api/facts/education/{id}?expected_revision=0"),
+        ),
+        routes=frozenset(
+            {
+                ("POST", "/api/facts/education"),
+                ("PUT", "/api/facts/education/{education_id}"),
+                ("DELETE", "/api/facts/education/{education_id}"),
             }
         ),
     ),

@@ -75,8 +75,18 @@ async def _facts_overview(
     db: AsyncSession, user_id: UUID
 ) -> tuple[FactsOverview, UUID | None]:
     draft, latest = await drafts.read_snapshot(db, user_id)
-    pending_count = sum(
-        1 for item in drafts.items_of(draft) if item.status is ItemStatus.PENDING
+    pending_count = (
+        sum(1 for item in drafts.items_of(draft) if item.status is ItemStatus.PENDING)
+        + sum(
+            1
+            for item in drafts.draft_criteria_of(draft)
+            if item.status is ItemStatus.PENDING
+        )
+        + sum(
+            1
+            for item in drafts.draft_educations_of(draft)
+            if item.draft_status is ItemStatus.PENDING
+        )
     )
     published_count = 0
     if latest is not None:

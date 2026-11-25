@@ -117,6 +117,7 @@ class ReviewReason(StrEnum):
     RESPONSIBILITY_UNSTATED = "responsibility_unstated"
     RESPONSIBILITY_UNSUPPORTED = "responsibility_unsupported"
     NUMBER_NOT_IN_QUOTE = "number_not_in_quote"
+    EDUCATION_STATUS_UNCERTAIN = "education_status_uncertain"
 
 
 class Section(BaseModel):

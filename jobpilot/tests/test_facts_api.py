@@ -553,3 +553,93 @@ async def test_delete_requires_current_revision_and_blocks_stale_window(
     ok_delete = await signed_in.delete(f"{path}?expected_revision={new_rev}")
     assert ok_delete.status_code == 204
     assert int(ok_delete.headers["X-Draft-Revision"]) == new_rev + 1
+
+
+async def test_criteria_and_education_routes_and_revision_conflicts(
+    signed_in: httpx.AsyncClient,
+) -> None:
+    """静态路由不被 {lineage_id} 当成 UUID 拦成 422；增删改查、发布和 409 正常。"""
+    lib0 = (await signed_in.get("/api/facts")).json()
+    rev = lib0["draft"]["revision"]
+
+    # 1. 求职条件：新增并确认、过期修订号 409
+    crit_res = await signed_in.put(
+        "/api/facts/criteria",
+        json={
+            "field": "onsite_days_per_week",
+            "int_value": 5,
+            "confirmed": True,
+            "expected_revision": rev,
+        },
+    )
+    assert crit_res.status_code == 200, crit_res.text
+    assert crit_res.json()["criterion"]["int_value"] == 5
+    assert crit_res.json()["criterion"]["status"] == "confirmed"
+    rev = crit_res.json()["revision"]
+
+    stale_crit = await signed_in.put(
+        "/api/facts/criteria",
+        json={
+            "field": "onsite_days_per_week",
+            "int_value": 3,
+            "expected_revision": rev - 1,
+        },
+    )
+    assert stale_crit.status_code == 409
+
+    # 2. 教育：新增、修改、发布、只改条件或教育也能发布
+    edu_res = await signed_in.post(
+        "/api/facts/education",
+        json={
+            "school": "东澜理工学院",
+            "major": "软件工程",
+            "degree": "bachelor",
+            "status": "enrolled",
+            "start_text": "2023.09",
+            "end_text": "2027.06（预计）",
+            "expected_revision": rev,
+        },
+    )
+    assert edu_res.status_code == 201, edu_res.text
+    edu_id = edu_res.json()["education_id"]
+    rev = edu_res.json()["revision"]
+
+    edited_edu = await signed_in.put(
+        f"/api/facts/education/{edu_id}",
+        json={"end_text": "2027.06", "expected_revision": rev},
+    )
+    assert edited_edu.status_code == 200, edited_edu.text
+    rev = edited_edu.json()["revision"]
+
+    published = await signed_in.post(
+        "/api/facts/commit",
+        json={"base_fact_set_id": None, "expected_revision": rev},
+    )
+    assert published.status_code == 200, published.text
+    rev = published.json()["revision"]
+
+    lib1 = (await signed_in.get("/api/facts")).json()
+    assert len(lib1["criteria"]) == 1 and lib1["criteria"][0]["int_value"] == 5
+    assert len(lib1["education"]) == 1 and lib1["education"][0]["end_text"] == "2027.06"
+
+    # 3. 删除已发布教育需要正确修订号，发布后从新版本移除
+    stale_del = await signed_in.delete(
+        f"/api/facts/education/{edu_id}?expected_revision={rev - 1}"
+    )
+    assert stale_del.status_code == 409
+    deleted = await signed_in.delete(
+        f"/api/facts/education/{edu_id}?expected_revision={rev}"
+    )
+    assert deleted.status_code == 204
+    rev = int(deleted.headers["X-Draft-Revision"])
+    published2 = await signed_in.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": lib1["fact_set"]["fact_set_id"],
+            "expected_revision": rev,
+        },
+    )
+    assert published2.status_code == 200
+    lib2 = (await signed_in.get("/api/facts")).json()
+    assert lib2["education"] == []
+    assert len(lib2["criteria"]) == 1

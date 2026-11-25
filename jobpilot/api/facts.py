@@ -12,12 +12,26 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.api.deps import CurrentUser, DbSession
-from jobpilot.db.models import Fact, FactKind, FactSet, Responsibility
+from jobpilot.db.models import (
+    CriterionField,
+    DegreeLevel,
+    EducationStatus,
+    Fact,
+    FactKind,
+    FactSet,
+    FactSetCriterion,
+    FactSetEducation,
+    Responsibility,
+)
 from jobpilot.services import drafts
 from jobpilot.services.drafts import (
     CannotConfirmError,
+    CriterionValueError,
+    DraftCriterion,
+    DraftEducation,
     DraftItem,
     DraftRevisionConflictError,
+    EducationChanges,
     FactChanges,
     ItemNotFoundError,
     NothingToPublishError,
@@ -59,15 +73,55 @@ class FactOut(BaseModel):
         return cls.model_validate(fact, from_attributes=True)
 
 
+class CriterionOut(BaseModel):
+    criterion_id: UUID
+    field: CriterionField
+    int_value: int | None
+    text_value: str | None
+    source: str
+    source_doc_id: UUID | None
+    source_quote: str | None
+    span_start: int | None
+    span_end: int | None
+
+    @classmethod
+    def of(cls, row: FactSetCriterion) -> "CriterionOut":
+        return cls.model_validate(row, from_attributes=True)
+
+
+class EducationOut(BaseModel):
+    record_id: UUID
+    education_id: UUID
+    school: str
+    major: str | None
+    degree: DegreeLevel
+    status: EducationStatus
+    start_text: str | None
+    end_text: str | None
+    source: str
+    source_doc_id: UUID | None
+    source_quote: str | None
+    span_start: int | None
+    span_end: int | None
+
+    @classmethod
+    def of(cls, row: FactSetEducation) -> "EducationOut":
+        return cls.model_validate(row, from_attributes=True)
+
+
 class DraftOut(BaseModel):
     base_fact_set_id: UUID | None
     items: list[DraftItem]
+    criteria: list[DraftCriterion]
+    education: list[DraftEducation]
     revision: int
 
 
 class LibraryOut(BaseModel):
     fact_set: FactSetOut | None  # 还没发布过时为空
     facts: list[FactOut]
+    criteria: list[CriterionOut]
+    education: list[EducationOut]
     draft: DraftOut
 
 
@@ -78,6 +132,44 @@ class FactDetailOut(BaseModel):
 
 
 class DraftItemOut(DraftItem):
+    revision: int
+
+
+class CriterionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: CriterionField
+    int_value: int | None = None
+    text_value: str | None = Field(default=None, max_length=200)
+    confirmed: bool | None = None
+    delete: bool = False
+    expected_revision: ExpectedRevision
+
+
+class CriterionUpdateOut(BaseModel):
+    criterion: DraftCriterion | None
+    revision: int
+
+
+class NewEducationIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    school: str = Field(min_length=1, max_length=200)
+    major: str | None = Field(default=None, max_length=200)
+    degree: DegreeLevel
+    status: EducationStatus
+    start_text: str | None = Field(default=None, max_length=60)
+    end_text: str | None = Field(default=None, max_length=60)
+    expected_revision: ExpectedRevision
+
+
+class EducationChangesIn(EducationChanges):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: ExpectedRevision
+
+
+class DraftEducationOut(DraftEducation):
     revision: int
 
 
@@ -167,11 +259,137 @@ async def get_library(user: CurrentUser, db: DbSession) -> LibraryOut:
     return LibraryOut(
         fact_set=FactSetOut.of(latest) if latest else None,
         facts=[FactOut.of(fact) for fact in await drafts.facts_of(db, latest)],
+        criteria=[CriterionOut.of(row) for row in await drafts.criteria_of(db, latest)],
+        education=[
+            EducationOut.of(row) for row in await drafts.educations_of(db, latest)
+        ],
         draft=DraftOut(
             base_fact_set_id=draft.base_fact_set_id if draft else None,
             items=drafts.items_of(draft),
+            criteria=drafts.draft_criteria_of(draft),
+            education=drafts.draft_educations_of(draft),
             revision=drafts.revision_of(draft),
         ),
+    )
+
+
+@router.put("/facts/criteria")
+async def edit_criterion(
+    body: CriterionIn, user: CurrentUser, db: DbSession
+) -> CriterionUpdateOut:
+    try:
+        item = await drafts.edit_criterion(
+            db,
+            user.user_id,
+            body.field,
+            int_value=body.int_value,
+            text_value=body.text_value,
+            confirmed=body.confirmed,
+            delete=body.delete,
+            expected_revision=body.expected_revision,
+        )
+    except ItemNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="求职条件不存在"
+        ) from None
+    except DraftRevisionConflictError as error:
+        raise _revision_conflict(error) from None
+    except CannotConfirmError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="原文校验没有通过，请修改值或删除这项条件",
+        ) from None
+    except CriterionValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from None
+    revision = await _commit_draft(db, user.user_id)
+    return CriterionUpdateOut(criterion=item, revision=revision)
+
+
+@router.post("/facts/education", status_code=status.HTTP_201_CREATED)
+async def add_education(
+    body: NewEducationIn, user: CurrentUser, db: DbSession
+) -> DraftEducationOut:
+    try:
+        item = await drafts.add_user_education(
+            db,
+            user.user_id,
+            school=body.school,
+            major=body.major,
+            degree=body.degree,
+            status=body.status,
+            start_text=body.start_text,
+            end_text=body.end_text,
+            expected_revision=body.expected_revision,
+        )
+    except DraftRevisionConflictError as error:
+        raise _revision_conflict(error) from None
+    except CriterionValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from None
+    revision = await _commit_draft(db, user.user_id)
+    return DraftEducationOut(**item.model_dump(), revision=revision)
+
+
+@router.put("/facts/education/{education_id}")
+async def edit_education(
+    education_id: UUID,
+    body: EducationChangesIn,
+    user: CurrentUser,
+    db: DbSession,
+) -> DraftEducationOut:
+    try:
+        item = await drafts.edit_education(
+            db,
+            user.user_id,
+            education_id,
+            body,
+            expected_revision=body.expected_revision,
+        )
+    except ItemNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="教育经历不存在"
+        ) from None
+    except DraftRevisionConflictError as error:
+        raise _revision_conflict(error) from None
+    except CannotConfirmError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="请先确认就读状态，或修改后再确认",
+        ) from None
+    except CriterionValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from None
+    revision = await _commit_draft(db, user.user_id)
+    return DraftEducationOut(**item.model_dump(), revision=revision)
+
+
+@router.delete(
+    "/facts/education/{education_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_education(
+    education_id: UUID,
+    expected_revision: QueryRevision,
+    user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    try:
+        await drafts.delete_education(
+            db, user.user_id, education_id, expected_revision=expected_revision
+        )
+    except ItemNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="教育经历不存在"
+        ) from None
+    except DraftRevisionConflictError as error:
+        raise _revision_conflict(error) from None
+    revision = await _commit_draft(db, user.user_id)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"X-Draft-Revision": str(revision)},
     )
 
 
