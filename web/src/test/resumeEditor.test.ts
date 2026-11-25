@@ -1,4 +1,4 @@
-// 简历编辑器前端行为测试：验证保存串行、导出等保存、保存失败中止导出、改用事实原文等保存与字体代码发送。
+// 简历编辑器前端行为测试：验证保存串行、重置等保存、保存失败中止重置、改用事实原文等保存、字体代码发送，以及在线/离线工具栏按钮契约。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import editorScript from '../../../jobpilot/templates/resume_editor.js?raw'
 
@@ -72,17 +72,17 @@ function makeContent(bulletText: string, font = 'default') {
   }
 }
 
-function mountEditor(initialText = '模型改写 30%') {
+function mountEditor(initialText = '模型改写 30%', online = true) {
   const initialContent = makeContent(initialText)
   const embedded = {
     content: initialContent,
     version: 1,
     version_id: 'v1-uuid',
     storage_key: 'resume-test',
-    save_url: '/api/tailor-runs/run-1/resume',
-    export_url: '/api/tailor-runs/run-1/export?format=html',
-    reset_url: '/api/tailor-runs/run-1/resume/reset',
-    use_facts_url: '/api/tailor-runs/run-1/resume/bullets/{bullet_id}/use-facts',
+    save_url: online ? '/api/tailor-runs/run-1/resume' : null,
+    export_url: online ? '/api/tailor-runs/run-1/export?format=html' : null,
+    reset_url: online ? '/api/tailor-runs/run-1/resume/reset' : null,
+    use_facts_url: online ? '/api/tailor-runs/run-1/resume/bullets/{bullet_id}/use-facts' : null,
     fonts: FONTS,
   }
 
@@ -113,6 +113,7 @@ function mountEditor(initialText = '模型改写 30%') {
     return gate.promise
   })
   vi.stubGlobal('fetch', fetchMock)
+  vi.stubGlobal('confirm', () => true)
 
   const downloads: string[] = []
   const origClick = HTMLAnchorElement.prototype.click
@@ -147,6 +148,44 @@ describe('resume_editor.js 编辑器行为', () => {
     document.body.innerHTML = ''
     localStorage.clear()
     delete (window as { jobpilotEditor?: unknown }).jobpilotEditor
+  })
+
+  it('应用内预览工具栏分组且隐藏导出和打印按钮，编辑切换带激活态', () => {
+    mountEditor('初稿内容', true)
+    const labels = [...document.querySelectorAll('.toolbar button')].map((b) => b.textContent)
+    expect(labels).not.toContain('导出 HTML')
+    expect(labels).not.toContain('保存 HTML')
+    expect(labels).not.toContain('打印 / 导出 PDF')
+    expect(document.querySelectorAll('.toolbar-group').length).toBeGreaterThanOrEqual(5)
+
+    const editBtn = document.querySelector('.toolbar button') as HTMLButtonElement
+    expect(editBtn.getAttribute('aria-pressed')).toBe('false')
+    editBtn.click()
+    expect(editBtn.classList.contains('is-active')).toBe(true)
+    expect(editBtn.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('离线导出文件工具栏保留保存 HTML 与打印按钮，且支持本地保存和下载', () => {
+    const { requests, downloads } = mountEditor('离线内容', false)
+    const labels = [...document.querySelectorAll('.toolbar button')].map((b) => b.textContent)
+    expect(labels).toContain('保存 HTML')
+    expect(labels).toContain('打印 / 导出 PDF')
+
+    vi.stubGlobal('URL', {
+      createObjectURL: () => 'blob:offline-resume',
+      revokeObjectURL: () => undefined,
+    })
+    const api = (window as unknown as { jobpilotEditor: { save: () => Promise<unknown> } })
+      .jobpilotEditor
+    void api.save()
+    expect(requests).toHaveLength(0)
+    expect(localStorage.getItem('jobpilot:resume-test')).toContain('离线内容')
+
+    const downloadBtn = [...document.querySelectorAll('.toolbar button')].find(
+      (b) => b.textContent === '保存 HTML',
+    ) as HTMLButtonElement
+    downloadBtn.click()
+    expect(downloads).toEqual(['blob:offline-resume'])
   })
 
   it('同一时刻最多一个保存请求在飞，第二次以第一次返回的版本为基准', async () => {
@@ -189,57 +228,59 @@ describe('resume_editor.js 编辑器行为', () => {
     expect(sentContent.sections[0].entries[0].bullets[0].text).toBe('第二次修改')
   })
 
-  it('改字后立即导出：先保存，返回新版本后再按返回版本号导出', async () => {
-    const { requests, downloads } = mountEditor('原句')
+  it('改字后立即重置：先保存，返回新版本后再带新 version_id 发重置请求', async () => {
+    const { requests } = mountEditor('原句')
     const api = (window as unknown as { jobpilotEditor: { setEditing: (on: boolean) => void } })
       .jobpilotEditor
     const textSpan = document.querySelector('[data-part="text"]')!
-    const exportBtn = [...document.querySelectorAll('.toolbar button')].find(
-      (b) => b.textContent === '导出 HTML',
+    const resetBtn = [...document.querySelectorAll('.toolbar button')].find(
+      (b) => b.textContent === '重置',
     ) as HTMLButtonElement
 
     api.setEditing(true)
-    textSpan.textContent = '导出前刚改的新句子'
+    textSpan.textContent = '重置前刚改的新句子'
     textSpan.dispatchEvent(new Event('input', { bubbles: true }))
-    exportBtn.click()
+    resetBtn.click()
 
-    // 保存尚未返回：已经发出 PUT，但还没触发下载
+    // 保存尚未返回：已经发出 PUT，但还没发 POST reset
     expect(requests).toHaveLength(1)
     expect(requests[0].init.method).toBe('PUT')
-    expect(downloads).toEqual([])
 
     requests[0].gate.resolve(
       jsonResponse(200, {
         version_id: 'v2-uuid',
         version: 2,
-        content: makeContent('导出前刚改的新句子'),
+        content: makeContent('重置前刚改的新句子'),
       }),
     )
     await flushMicrotasks()
 
-    expect(downloads).toEqual(['/api/tailor-runs/run-1/export?format=html&version=2'])
+    expect(requests).toHaveLength(2)
+    expect(requests[1].init.method).toBe('POST')
+    expect(requests[1].url).toBe('/api/tailor-runs/run-1/resume/reset')
+    expect(requests[1].body.base_version_id).toBe('v2-uuid')
   })
 
-  it('保存失败时不导出，并把修改留在本地草稿', async () => {
-    const { requests, downloads } = mountEditor('原句')
+  it('保存失败时不重置，并把修改留在本地草稿', async () => {
+    const { requests } = mountEditor('原句')
     const api = (window as unknown as { jobpilotEditor: { setEditing: (on: boolean) => void } })
       .jobpilotEditor
     const textSpan = document.querySelector('[data-part="text"]')!
-    const exportBtn = [...document.querySelectorAll('.toolbar button')].find(
-      (b) => b.textContent === '导出 HTML',
+    const resetBtn = [...document.querySelectorAll('.toolbar button')].find(
+      (b) => b.textContent === '重置',
     ) as HTMLButtonElement
 
     api.setEditing(true)
     textSpan.textContent = '保存会失败的修改'
     textSpan.dispatchEvent(new Event('input', { bubbles: true }))
-    exportBtn.click()
+    resetBtn.click()
 
     expect(requests).toHaveLength(1)
     requests[0].gate.resolve(jsonResponse(500, { detail: 'server error' }))
     await flushMicrotasks()
 
-    expect(downloads).toEqual([])
-    expect(document.querySelector('.toolbar-status')?.textContent).toContain('没有导出')
+    expect(requests).toHaveLength(1)
+    expect(document.querySelector('.toolbar-status')?.textContent).toContain('没有重置')
     expect(localStorage.getItem('jobpilot-draft:resume-test')).toContain('保存会失败的修改')
   })
 

@@ -332,3 +332,25 @@ def test_editor_reads_only_keys_that_are_embedded(online: bool):
     )
     read = set(re.findall(r"\bdata\.([a-z_]+)", script))
     assert read and read <= set(embedded(html)), read - set(embedded(html))
+
+
+def test_editor_toolbar_theme_vars_and_offline_vs_online_buttons():
+    """工具栏带主题变量、分组样式，且仅离线导出分支挂保存 HTML 与打印按钮。"""
+    preview_html = render_html(
+        content(),
+        mode=RenderMode.PREVIEW,
+        version=1,
+        editor=EditorContext(
+            version_id=uuid4(), storage_key="r", save_url="/api/tailor-runs/x/resume"
+        ),
+    )
+    offline_html = export_file(content())
+    for html in (preview_html, offline_html):
+        assert "--tb-border: #E6E6E2;" in html
+        assert "--tb-active-bg: #E4EAF0;" in html
+        assert "toolbar-group" in html
+        assert "if (!online)" in html
+        assert '"保存 HTML"' in html and '"打印 / 导出 PDF"' in html
+    assert '"导出 HTML"' not in preview_html and '"导出 HTML"' not in offline_html
+    assert embedded(preview_html)["save_url"] == "/api/tailor-runs/x/resume"
+    assert embedded(offline_html)["save_url"] is None

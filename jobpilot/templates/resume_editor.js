@@ -11,7 +11,7 @@
   const online = Boolean(data.save_url);
   const SAVE_DELAY_MS = 1000;
   let versionId = data.version_id;
-  let version = data.version; // 页面上这一版是第几版；导出时按它下载
+  let version = data.version;
   let fontCode = page.dataset.fontCode || data.content?.style?.font || "default";
   let editing = false;
   let saveTimer = null;
@@ -135,7 +135,7 @@
     return saving;
   }
 
-  // 存完手上的修改再返回，导出、重置这类要先落地的动作用它；没有要存的就算成功。
+  // 存完手上的修改再返回，重置、改用事实原文这类要先落地的动作用它；没有要存的就算成功。
   async function flush() {
     clearTimeout(saveTimer);
     const pending = saving ? await saving : null;
@@ -248,10 +248,25 @@
     setStatus(statusMessage);
   }
 
-  // ---------- 编辑开关 ----------
+  // ---------- 编辑开关与按钮激活态 ----------
 
   function editableParts() {
     return page.querySelectorAll("[data-part]");
+  }
+
+  function setPressed(button, active) {
+    if (!button) return;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+
+  function syncBoldState() {
+    const boldActive = Boolean(
+      editing &&
+        typeof document.queryCommandState === "function" &&
+        document.queryCommandState("bold"),
+    );
+    setPressed(buttons.bold, boldActive);
   }
 
   function setEditing(on) {
@@ -259,6 +274,8 @@
     for (const part of editableParts()) part.contentEditable = on ? "true" : "false";
     document.body.classList.toggle("editing", on);
     buttons.edit.textContent = on ? "完成编辑" : "编辑";
+    setPressed(buttons.edit, on);
+    syncBoldState();
     if (!on) save();
   }
 
@@ -277,6 +294,9 @@
     const text = event.clipboardData.getData("text/plain").replace(/\s+/g, " ");
     document.execCommand("insertText", false, text);
   });
+  document.addEventListener("selectionchange", syncBoldState);
+  page.addEventListener("keyup", syncBoldState);
+  page.addEventListener("mouseup", syncBoldState);
 
   // ---------- 工具栏 ----------
 
@@ -291,12 +311,20 @@
   const fitText = document.createElement("span");
   fitText.className = "toolbar-fit";
 
-  function addButton(name, label, onClick) {
+  function addGroup() {
+    const group = document.createElement("div");
+    group.className = "toolbar-group";
+    toolbar.append(group);
+    return group;
+  }
+
+  function addButton(parent, name, label, onClick, toggle = false) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = label;
+    if (toggle) button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", onClick);
-    toolbar.append(button);
+    parent.append(button);
     buttons[name] = button;
     return button;
   }
@@ -317,20 +345,53 @@
 
   const css = document.createElement("style");
   css.textContent = `
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap;
-      gap: 6px; align-items: center; padding: 8px 12px; background: #fff;
-      border-bottom: 1px solid var(--rule); font: 13px var(--font); }
-    .toolbar button, .toolbar select { font: inherit; padding: 3px 8px; }
-    .toolbar-status { color: var(--muted); margin-left: auto; }
-    .toolbar-fit { color: var(--muted); }
+    .toolbar {
+      --tb-bg: #FFFFFF; /* theme.token.colorBgContainer */
+      --tb-hover: #F2F2F0; /* theme.token.colorFillTertiary */
+      --tb-border: #E6E6E2; /* theme.token.colorBorder */
+      --tb-divider: #EFEFEC; /* theme.token.colorBorderSecondary */
+      --tb-ink: #1F1F1F; /* theme.token.colorText */
+      --tb-muted: #5F5F5B; /* theme.token.colorTextSecondary */
+      --tb-active-bg: #E4EAF0; /* theme.token.colorPrimaryBg */
+      --tb-active-border: #C9D4DF; /* theme.token.colorPrimaryBorder */
+      --tb-active-ink: #3B5268; /* theme.token.colorPrimaryText */
+      --tb-focus: #50687F; /* theme.token.colorPrimary */
+      --tb-radius: 6px; /* theme.token.borderRadiusSM */
+      position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap;
+      gap: 6px 10px; align-items: center; padding: 8px 12px;
+      background: var(--tb-bg); border-bottom: 1px solid var(--tb-divider);
+      color: var(--tb-ink); font: 14px var(--font);
+    }
+    .toolbar-group { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .toolbar-group + .toolbar-group { padding-left: 10px; border-left: 1px solid var(--tb-divider); }
+    .toolbar button, .toolbar select {
+      font: inherit; font-size: 14px; line-height: 1.4; color: var(--tb-ink);
+      background: var(--tb-bg); border: 1px solid var(--tb-border);
+      border-radius: var(--tb-radius); padding: 4px 10px; cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .toolbar button:hover, .toolbar select:hover { background: var(--tb-hover); }
+    .toolbar button:focus-visible, .toolbar select:focus-visible {
+      outline: 2px solid var(--tb-active-border); outline-offset: 1px;
+    }
+    .toolbar button.is-active {
+      background: var(--tb-active-bg); border-color: var(--tb-active-border);
+      color: var(--tb-active-ink); font-weight: 500;
+    }
+    .toolbar-fit, .toolbar-status {
+      font-size: 13px; color: var(--tb-muted); font-variant-numeric: tabular-nums;
+    }
+    .toolbar-fit { margin-left: auto; }
     body.paged .page { background-image: repeating-linear-gradient(to bottom,
       transparent 0, transparent calc(297mm - 1px), #cf222e calc(297mm - 1px), #cf222e 297mm); }
-    body.editing [data-part]:hover { outline: 1px dashed var(--rule); }
-    body.editing [data-part]:focus { outline: 1px solid #0969da; }
-    .bullet-action { font: inherit; font-size: .78em; color: var(--muted); background: #fff;
-      border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; margin-left: 6px;
-      cursor: pointer; }
-    .bullet-action:hover { color: var(--ink); border-color: var(--ink); }
+    body.editing [data-part]:hover { outline: 1px dashed var(--tb-border); }
+    body.editing [data-part]:focus { outline: 1px solid var(--tb-focus); }
+    .bullet-action {
+      font: inherit; font-size: .78em; color: var(--tb-muted); background: var(--tb-bg);
+      border: 1px solid var(--tb-border); border-radius: var(--tb-radius); padding: 1px 6px;
+      margin-left: 6px; cursor: pointer;
+    }
+    .bullet-action:hover { color: var(--tb-ink); background: var(--tb-hover); }
   `;
   document.head.append(css);
   document.body.prepend(toolbar);
@@ -338,12 +399,12 @@
   // ---------- 版式：字体、字号、加粗、撤回、页面模式 ----------
 
   const FONTS = (data.fonts || []).map((item) => [item.label, item.code, item.css]);
-  const FONT_CSS_BY_CODE = new Map(FONTS.map(([, code, css]) => [code, css]));
+  const FONT_CSS_BY_CODE = new Map(FONTS.map(([, code, cssText]) => [code, cssText]));
   const SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 12];
   const VIEW_KEY = "jobpilot-view";
   const selects = {};
 
-  function addSelect(label, options, value, onChange) {
+  function addSelect(parent, label, options, value, onChange) {
     const select = document.createElement("select");
     select.setAttribute("aria-label", label);
     for (const [text, optionValue] of options) {
@@ -354,7 +415,7 @@
     }
     select.value = value;
     select.addEventListener("change", () => onChange(select.value));
-    toolbar.append(select);
+    parent.append(select);
     return select;
   }
 
@@ -367,7 +428,9 @@
 
   function addFormatting() {
     const style = currentStyle();
+    const typoGroup = addGroup();
     selects.font = addSelect(
+      typoGroup,
       "字体",
       FONTS.map(([label, code]) => [label, code]),
       FONT_CSS_BY_CODE.has(style.font) ? style.font : "default",
@@ -379,19 +442,40 @@
     );
     const sizes = SIZES.map((size) => [`${size} pt`, String(size)]);
     if (!SIZES.includes(style.size_pt)) sizes.unshift([`${style.size_pt} pt`, String(style.size_pt)]);
-    selects.size = addSelect("字号", sizes, String(style.size_pt), (size) =>
+    selects.size = addSelect(typoGroup, "字号", sizes, String(style.size_pt), (size) =>
       setStyle("--size", `${size}pt`),
     );
     // 加粗、撤回、前进用浏览器自带的编辑命令，作用于正在编辑的文字。
-    addButton("bold", "加粗", () => editing && document.execCommand("bold"));
-    addButton("undo", "撤回", () => editing && document.execCommand("undo"));
-    addButton("redo", "前进", () => editing && document.execCommand("redo"));
-    addButton("paged", "A4 分页", () => setPaged(!document.body.classList.contains("paged")));
-    addButton("fit", "自动一页", fitOnePage);
+    addButton(
+      typoGroup,
+      "bold",
+      "加粗",
+      () => {
+        if (!editing) return;
+        document.execCommand("bold");
+        syncBoldState();
+      },
+      true,
+    );
+
+    const historyGroup = addGroup();
+    addButton(historyGroup, "undo", "撤回", () => editing && document.execCommand("undo"));
+    addButton(historyGroup, "redo", "前进", () => editing && document.execCommand("redo"));
+
+    const layoutGroup = addGroup();
+    addButton(
+      layoutGroup,
+      "paged",
+      "A4 分页",
+      () => setPaged(!document.body.classList.contains("paged")),
+      true,
+    );
+    addButton(layoutGroup, "fit", "自动一页", fitOnePage);
   }
   function setPaged(on) {
     document.body.classList.toggle("paged", on);
     buttons.paged.textContent = on ? "连续显示" : "A4 分页";
+    setPressed(buttons.paged, on);
     storage.set(VIEW_KEY, { paged: on }); // 只是看的方式，不属于简历内容
   }
 
@@ -469,23 +553,6 @@
     else setStatus(response.status === 409 ? "简历已在别处保存过，请刷新后再重置" : "重置失败");
   }
 
-  // 导出的是存到服务器上的那一版：先把修改存完，再按返回的版本号下载。没存上就不导出，
-  // 不然下载到的还是改之前的文字。
-  async function exportHtml() {
-    setStatus("保存后导出…");
-    const saved = await flush();
-    if (!saved.ok) {
-      setStatus(`没有导出，有修改没能保存。${saved.reason}`);
-      return;
-    }
-    const link = document.createElement("a");
-    link.href = `${data.export_url}&version=${version}`;
-    link.download = "";
-    document.body.append(link);
-    link.click();
-    link.remove();
-  }
-
   async function useFacts(bulletId) {
     setStatus("保存并改用事实原文…");
     const saved = await flush();
@@ -540,15 +607,17 @@
   }
 
   function buildToolbar() {
-    addButton("edit", "编辑", () => setEditing(!editing));
+    const editGroup = addGroup();
+    addButton(editGroup, "edit", "编辑", () => setEditing(!editing), true);
     addFormatting();
-    if (online && data.export_url) {
-      addButton("export", "导出 HTML", exportHtml);
-    } else {
-      addButton("download", "保存 HTML", downloadHtml);
+    // 在应用里预览时统一走外层面板顶部导出，离线导出文件才自带保存与打印。
+    if (!online) {
+      const offlineGroup = addGroup();
+      addButton(offlineGroup, "download", "保存 HTML", downloadHtml);
+      addButton(offlineGroup, "print", "打印 / 导出 PDF", () => window.print());
     }
-    addButton("print", "打印 / 导出 PDF", () => window.print());
-    addButton("reset", "重置", reset);
+    const resetGroup = addGroup();
+    addButton(resetGroup, "reset", "重置", reset);
     toolbar.append(fitText, statusText);
   }
 
@@ -571,7 +640,8 @@
     }
   } else if (storage.get(DRAFT_KEY)) {
     setStatus("有一份未保存到服务器的本机草稿");
-    addButton("draft", "用本机草稿覆盖", async () => {
+    const draftGroup = addGroup();
+    addButton(draftGroup, "draft", "用本机草稿覆盖", async () => {
       if (!confirm("用本机草稿覆盖服务器上的当前版本？当前版本仍会保留在历史里。")) return;
       if (saving) await saving; // 和自动保存串行：上一次没返回之前不发这一次
       data.content = storage.get(DRAFT_KEY);
