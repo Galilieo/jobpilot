@@ -1,7 +1,13 @@
 // React Query 的查询键，集中放一处：改数据的地方用同一个键让查询失效。
+export const OVERVIEW_QUERY = ['overview'] as const
 export const LIBRARY_QUERY = ['library'] as const
 export const JOBS_QUERY = ['jobs'] as const
+export const TAILORED_RESUMES_QUERY = ['tailored-resumes'] as const
 
 export const jobQuery = (jobId: string) => ['jobs', jobId] as const
 export const matchesQuery = (jobId: string) => ['jobs', jobId, 'matches'] as const
+export const matchReportQuery = (reportId: string) => ['match-report', reportId] as const
 export const tailorRunsQuery = (jobId: string) => ['jobs', jobId, 'tailor-runs'] as const
+export const tailorRunQuery = (runId: string) => ['tailor-run', runId] as const
+export const tailorResumeQuery = (runId: string, version?: number) =>
+  ['tailor-resume', runId, version ?? 'current'] as const

@@ -7,14 +7,15 @@ import { JobDetailPage } from './pages/job/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
 import { LoginPage } from './pages/LoginPage'
 import { ProfilePage } from './pages/ProfilePage'
-import { AccountPage, NotFoundPage, WorkspacePage } from './pages/PlaceholderPages'
+import { AccountPage, NotFoundPage } from './pages/PlaceholderPages'
+import { WorkspacePage } from './pages/WorkspacePage'
 
 export default function App(): ReactElement {
   return (
     <Routes>
       <Route path="login" element={<LoginPage />} />
       <Route element={<AppShell />}>
-        <Route index element={<Navigate to="/jobs" replace />} />
+        <Route index element={<Navigate to="/workspace" replace />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="conversations/new" element={<ConversationPage />} />
         <Route path="conversations/:conversationId" element={<ConversationPage />} />

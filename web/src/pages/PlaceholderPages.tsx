@@ -21,19 +21,6 @@ function PagePlaceholder({ title, description }: PlaceholderProps): ReactElement
   )
 }
 
-export function WorkspacePage(): ReactElement {
-  return (
-    <PagePlaceholder
-      title="工作台"
-      description={
-        <>
-          工作台将在后续开放，先从<Link to="/jobs">岗位库</Link>开始。
-        </>
-      }
-    />
-  )
-}
-
 export function AccountPage(): ReactElement {
   return <PagePlaceholder title="账号设置" description="登录与账号管理准备中。" />
 }
@@ -44,7 +31,7 @@ export function NotFoundPage(): ReactElement {
       title="找不到这个页面"
       description={
         <>
-          可以<Link to="/jobs">返回岗位库</Link>继续。
+          可以<Link to="/workspace">返回工作台</Link>继续。
         </>
       }
     />

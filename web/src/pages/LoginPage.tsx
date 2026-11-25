@@ -21,7 +21,7 @@ export function LoginPage(): ReactElement {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
-  const destination = (location.state as { from?: string } | null)?.from ?? '/jobs'
+  const destination = (location.state as { from?: string } | null)?.from ?? '/workspace'
 
   async function submit({ email, password }: Credentials): Promise<void> {
     setSubmitting(true)

@@ -2,20 +2,25 @@
 import { request } from './http'
 import type {
   DraftItem,
+  FactKind,
   Job,
+  JobChanges,
   JobSummary,
   Library,
   MatchReport,
   MatchSummary,
+  Overview,
   Responsibility,
   SectionKind,
   TailorRun,
   TailorRunSummary,
+  TailoredResumeData,
+  TailoredResumeSummary,
   UploadedResume,
   User,
 } from './types'
 
-// ---------- 账号 ----------
+// ---------- 账号与工作台 ----------
 
 export const auth = {
   me: (signal?: AbortSignal) => request<User>('/api/me', { signal }),
@@ -24,6 +29,10 @@ export const auth = {
   login: (email: string, password: string) =>
     request<void>('/api/auth/login', { json: { email, password } }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+}
+
+export const overview = {
+  get: (signal?: AbortSignal) => request<Overview>('/api/overview', { signal }),
 }
 
 // ---------- 简历上传与事实库 ----------
@@ -48,6 +57,12 @@ export const resumes = {
 
 export const facts = {
   library: (signal?: AbortSignal) => request<Library>('/api/facts', { signal }),
+  add: (body: {
+    experience: string
+    kind: FactKind
+    responsibility: Responsibility
+    text: string
+  }) => request<DraftItem & { revision: number }>('/api/facts', { json: body }),
   update: (
     lineageId: string,
     changes: { text?: string; responsibility?: Responsibility; confirmed?: boolean },
@@ -88,6 +103,8 @@ export const jobs = {
   get: (jobId: string, signal?: AbortSignal) => request<Job>(`/api/jobs/${jobId}`, { signal }),
   create: (rawText: string, idempotencyKey: string) =>
     request<Job>('/api/jobs', { json: { raw_text: rawText }, idempotencyKey }),
+  update: (jobId: string, changes: JobChanges) =>
+    request<Job>(`/api/jobs/${jobId}`, { method: 'PUT', json: changes }),
   matches: (jobId: string, signal?: AbortSignal) =>
     request<MatchSummary[]>(`/api/jobs/${jobId}/matches`, { signal }),
   match: (jobId: string, idempotencyKey: string) =>
@@ -99,6 +116,8 @@ export const jobs = {
 // ---------- 改写与完整简历 ----------
 
 export const tailoring = {
+  listAll: (signal?: AbortSignal) =>
+    request<TailoredResumeSummary[]>('/api/tailored-resumes', { signal }),
   runs: (jobId: string, signal?: AbortSignal) =>
     request<TailorRunSummary[]>(`/api/jobs/${jobId}/tailor-runs`, { signal }),
   start: (jobId: string, sections: Record<string, SectionKind>, idempotencyKey: string) =>
@@ -108,7 +127,16 @@ export const tailoring = {
     }),
   run: (runId: string, signal?: AbortSignal) =>
     request<TailorRun>(`/api/tailor-runs/${runId}`, { signal }),
-  previewUrl: (runId: string) => `/api/tailor-runs/${runId}/preview`,
-  exportUrl: (runId: string, format: 'html' | 'md' | 'docx') =>
-    `/api/tailor-runs/${runId}/export?format=${format}`,
+  resume: (runId: string, version?: number, signal?: AbortSignal) => {
+    const query = version !== undefined ? `?version=${version}` : ''
+    return request<TailoredResumeData>(`/api/tailor-runs/${runId}/resume${query}`, { signal })
+  },
+  previewUrl: (runId: string, version?: number) =>
+    version !== undefined
+      ? `/api/tailor-runs/${runId}/preview?version=${version}`
+      : `/api/tailor-runs/${runId}/preview`,
+  exportUrl: (runId: string, format: 'html' | 'md' | 'docx', version?: number) => {
+    const ver = version !== undefined ? `&version=${version}` : ''
+    return `/api/tailor-runs/${runId}/export?format=${format}${ver}`
+  },
 }

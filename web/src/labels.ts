@@ -1,11 +1,13 @@
 // 后端枚举值对应的界面文字，集中放一处，各页面共用。
 import type {
+  FactKind,
   ItemStatus,
   JobStage,
   MatchVerdict,
   Responsibility,
   RunStatus,
   SectionKind,
+  TailoredResumeStatus,
 } from './api/types'
 
 export const JOB_STAGE: Record<JobStage, string> = {
@@ -15,6 +17,13 @@ export const JOB_STAGE: Record<JobStage, string> = {
   offer: '已拿 offer',
   rejected: '未通过',
   archived: '已归档',
+}
+
+export const FACT_KIND: Record<FactKind, string> = {
+  action: '做了什么',
+  technology: '技术',
+  result: '结果或数字',
+  role: '角色',
 }
 
 export const RESPONSIBILITY: Record<Responsibility, string> = {
@@ -69,4 +78,33 @@ export const STOP_REASON: Record<string, string> = {
   match_failed: '匹配分析没有完成',
   rewrite_failed: '有一段经历改写失败',
   service_restarted: '服务重启，这次运行被中断',
+}
+
+export const INJECTION_RULE: Record<string, string> = {
+  ignore_instructions: '要求忽略原有规则或指令',
+  role_play: '试图让模型扮演新角色',
+  addressing_ai: '直接向 AI 或自动化工具发指令',
+  system_prompt: '提及系统提示词或开发者模式',
+  write_into_output: '试图在输出或简历中硬塞内容',
+  data_tag: '试图伪造数据分隔标记',
+  chat_role_marker: '包含伪造的对话角色前缀',
+}
+
+export const TAILORED_RESUME_STATUS: Record<TailoredResumeStatus, { text: string; color: string }> =
+  {
+    generated: { text: '已生成', color: 'default' },
+    edited: { text: '已手动修改', color: 'warning' },
+    needs_attention: { text: '有待处理条目', color: 'error' },
+  }
+
+export function formatDateTime(iso: string): string {
+  const parsed = new Date(iso)
+  if (Number.isNaN(parsed.getTime())) return iso
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(parsed)
 }

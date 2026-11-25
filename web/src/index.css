@@ -105,6 +105,109 @@ textarea {
   flex-direction: column;
 }
 
+/* ---------- 工作台（WorkspacePage） ---------- */
+
+.tabular-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.workspace-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+}
+
+.workspace-metric {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-metric-sub {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.workspace-card-note {
+  margin-bottom: auto !important;
+  font-size: 13px;
+}
+
+.workspace-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.workspace-board-head h4 {
+  margin: 0 !important;
+}
+
+.workspace-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+}
+
+.board-column-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.board-column-empty {
+  padding: 8px 2px;
+  font-size: 13px;
+}
+
+.board-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.board-card-sub {
+  margin: 0 !important;
+  font-size: 13px;
+}
+
+@media (max-width: 1199px) {
+  .workspace-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 991px) {
+  .workspace-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---------- 通用页面（岗位库、占位页） ---------- */
 
 .page {

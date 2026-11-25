@@ -1,8 +1,47 @@
-// 后端接口的数据形状（与 FastAPI 的响应模型对应，只列前端用到的字段）。
+// 后端接口的数据形状（与 FastAPI 的响应模型对应）。
 
 export interface User {
   user_id: string
   email: string
+}
+
+// ---------- 工作台汇总 ----------
+
+export interface FactsOverview {
+  published_count: number
+  version: number | null
+  pending_count: number
+}
+
+export interface GroundingOverview {
+  total: number
+  passed: number
+  fallback: number
+  pending: number
+  resume_count: number
+}
+
+export interface BoardJobCard {
+  job_id: string
+  title: string | null
+  company: string | null
+  location: string | null
+  stage: JobStage
+  updated_at: string
+  resume_stale: boolean
+}
+
+export interface JobBoard {
+  unmatched: BoardJobCard[]
+  matched: BoardJobCard[]
+  tailored: BoardJobCard[]
+  applied: BoardJobCard[]
+}
+
+export interface Overview {
+  facts: FactsOverview
+  grounding: GroundingOverview
+  board: JobBoard
 }
 
 // ---------- 事实库 ----------
@@ -59,6 +98,14 @@ export interface Requirement {
   requirement_id: string
   type: RequirementType
   text: string
+  source_quote?: string | null
+  quote_verified?: boolean
+}
+
+export interface RequirementChange {
+  requirement_id?: string | null
+  type: RequirementType
+  text: string
 }
 
 export interface BasicFields {
@@ -73,9 +120,18 @@ export interface BasicFields {
   application_deadline: string | null
 }
 
+export interface InjectionFlag {
+  rule: string
+  match: string
+  context: string
+  start: number
+  end: number
+}
+
 export interface Job {
   job_id: string
   stage: JobStage
+  note: string | null
   raw_text: string
   parsed: {
     basic_fields: BasicFields
@@ -83,8 +139,19 @@ export interface Job {
     duties: { text: string }[]
     keywords: string[]
   }
-  injection_flags: unknown[]
+  overridden: string[]
+  overridden_basic_fields: string[]
+  injection_flags: InjectionFlag[]
   created_at: string
+  updated_at: string
+}
+
+export interface JobChanges {
+  stage?: JobStage
+  note?: string | null
+  basic_fields?: Partial<BasicFields>
+  requirements?: RequirementChange[]
+  keywords?: string[]
 }
 
 export interface JobSummary {
@@ -129,7 +196,7 @@ export interface MatchReport {
 
 export type MatchSummary = Omit<MatchReport, 'items'>
 
-// ---------- 改写 ----------
+// ---------- 改写与定制简历 ----------
 
 export type RunStatus =
   'running' | 'waiting_confirmation' | 'succeeded' | 'failed' | 'cancelled' | 'budget_exhausted'
@@ -154,10 +221,110 @@ export interface PlanBlock {
   }[]
 }
 
+export interface RunBullet {
+  bullet_id: string
+  section: string
+  experience: string | null
+  order_no: number
+  text: string
+  check_status: string
+  revision_count: number
+  issues: { kind: string; message: string; fragment?: string | null }[]
+  fact_ids: string[]
+}
+
 export interface TailorRun {
   run_id: string
+  job_id: string | null
+  base_doc_id: string | null
+  fact_set_id: string | null
   status: RunStatus
   stop_reason: string | null
+  started_at: string
+  finished_at: string | null
   blocks: PlanBlock[]
-  bullets: { bullet_id: string; experience: string | null; text: string; check_status: string }[]
+  bullets: RunBullet[]
+}
+
+export type CheckLayers = 'full' | 'program'
+export type CheckStatus = 'passed' | 'fallback' | 'pending'
+
+export interface GroundingIssue {
+  kind: string
+  message: string
+  fragment: string | null
+}
+
+export interface BulletCheck {
+  text: string
+  layers: CheckLayers
+  issues: GroundingIssue[]
+}
+
+export interface ResumeBullet {
+  bullet_id: string
+  text: string
+  fact_ids: string[]
+  origin: CheckStatus
+  edited: boolean
+  check: BulletCheck
+}
+
+export interface ResumeEntry {
+  entry_id: string
+  experience: string | null
+  heading: string
+  title: string
+  time: string | null
+  lines: string[]
+  bullets: ResumeBullet[]
+}
+
+export interface ResumeSection {
+  title: string | null
+  kind: SectionKind
+  entries: ResumeEntry[]
+}
+
+export interface CitedFact {
+  experience: string
+  text: string
+  source: 'resume' | 'user'
+  source_quote: string | null
+}
+
+export interface VersionSummary {
+  version_id: string
+  version: number
+  created_at: string
+}
+
+export interface TailoredResumeData {
+  resume_id: string
+  run_id: string
+  version_id: string
+  version: number
+  current_version_id: string
+  versions: VersionSummary[]
+  content: {
+    header: string[]
+    sections: ResumeSection[]
+    style: { font: string; size_pt: number; leading: number }
+  }
+  facts: Record<string, CitedFact>
+}
+
+export type TailoredResumeStatus = 'generated' | 'edited' | 'needs_attention'
+
+export interface TailoredResumeSummary {
+  resume_id: string
+  run_id: string
+  job_id: string | null
+  job_title: string | null
+  job_company: string | null
+  fact_set_version: number | null
+  latest_fact_set_version: number | null
+  current_version: number
+  status: TailoredResumeStatus
+  updated_at: string
 }
