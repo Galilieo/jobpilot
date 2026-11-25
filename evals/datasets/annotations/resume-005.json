@@ -35,7 +35,8 @@
       "text": "人工复核 18 份合成表单，记录缺项漏报与字段误判",
       "has_number": true,
       "source_quote": "人工复核 18 份合成表单，记录缺项漏报与字段误判",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["合成表单"]
     },
     {
       "experience": "校园办事材料检查助手",
@@ -55,5 +56,11 @@
       "source_quote": "在页面上提示用户确认不明确的填写项",
       "needs_confirmation": true
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

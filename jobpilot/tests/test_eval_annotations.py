@@ -98,3 +98,22 @@ def test_annotated_facts_follow_extraction_rules(path: Path) -> None:
                 EducationStatus(edu["status"])
             spans = locate_quote(raw_text, edu["source_quote"])
             assert len(spans) == 1, edu["source_quote"]
+
+
+def test_dev_set_has_at_least_five_qualifier_cases() -> None:
+    """开发集至少包含 5 条带限定语的事实标注，且均含求职条件与教育字段。"""
+    ann_dir = DATASETS / "annotations"
+    dev_ids = [
+        *(f"resume-{i:03d}" for i in range(1, 6)),
+        "resume-011",
+        "resume-015",
+        "resume-021",
+        "resume-022",
+        "resume-023",
+    ]
+    qualifier_count = 0
+    for sample_id in dev_ids:
+        data = json.loads((ann_dir / f"{sample_id}.json").read_text(encoding="utf-8"))
+        assert "criteria" in data and "education" in data, sample_id
+        qualifier_count += sum(1 for f in data["facts"] if f.get("qualifiers"))
+    assert qualifier_count >= 5, f"开发集限定语事实数不足: {qualifier_count}"

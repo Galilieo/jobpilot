@@ -107,7 +107,8 @@
       "text": "在 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条",
       "has_number": true,
       "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["80 条验收查询"]
     },
     {
       "experience": "榛集电商技术 搜索算法实习",
@@ -125,7 +126,8 @@
       "text": "带型号后缀的查询新增了 3 条错召回",
       "has_number": true,
       "source_quote": "负责在现有 BM25 召回上试两种查询改写规则。按时间切开调试数据与验收数据，在其中 80 条验收查询上，前十位至少出现一个相关商品的查询从 49 条增至 56 条。提升主要来自别名查询，带型号后缀的查询新增了 3 条错召回",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["带型号后缀的查询"]
     },
     {
       "experience": "榛集电商技术 搜索算法实习",
@@ -225,6 +227,34 @@
       "has_number": true,
       "source_quote": "雅思 7.0（2025）",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": {
+      "value": "2027 年 2 月",
+      "source_quote": "2027 年 2 月起可全职到岗"
+    }
+  },
+  "education": [
+    {
+      "school": "英国韦林大学",
+      "major": "数据科学",
+      "degree": "master",
+      "status": "enrolled",
+      "start_text": "2025.09",
+      "end_text": "2026.12（预计）",
+      "source_quote": "2025.09–2026.12（预计）　英国韦林大学　数据科学硕士（授课型）"
+    },
+    {
+      "school": "南汀信息工程学院",
+      "major": "信息工程",
+      "degree": "bachelor",
+      "status": "completed",
+      "start_text": "2021.09",
+      "end_text": "2025.06",
+      "source_quote": "2021.09–2025.06　南汀信息工程学院　信息工程本科"
     }
   ]
 }

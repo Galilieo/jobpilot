@@ -98,7 +98,14 @@
       "text": "并发数为 5 时，检索阶段的 P95 耗时为 180 毫秒，不含模型生成",
       "has_number": true,
       "source_quote": "负责在单机环境复测查询耗时。在并发数为 5 时，检索阶段的 P95 耗时为 180 毫秒，耗时不含模型生成",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["不含模型生成"]
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

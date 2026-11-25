@@ -125,7 +125,8 @@
       "text": "在实验室 Jetson Orin Nano 上验证单路摄像头的推理流程",
       "has_number": false,
       "source_quote": "在实验室 Jetson Orin Nano 上验证单路摄像头的推理流程",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["在实验室 Jetson Orin Nano 上", "单路摄像头"]
     },
     {
       "experience": "铝壳表面缺陷检测",
@@ -152,7 +153,8 @@
       "text": "连续运行 30 分钟，整图方案每帧中位耗时 39 ms",
       "has_number": true,
       "source_quote": "负责用 ONNX 导出模型，记录图像预处理、推理、后处理各段用时。连续跑 30 分钟，整图方案每帧中位耗时 39 ms",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["整图方案"]
     },
     {
       "experience": "铝壳表面缺陷检测",
@@ -197,7 +199,8 @@
       "text": "在公开样例上比较裁剪前后对细线的影响",
       "has_number": false,
       "source_quote": "在公开样例上比较裁剪前后对细线的影响",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["在公开样例上"]
     },
     {
       "experience": "道路标线分割",
@@ -288,6 +291,34 @@
       "has_number": false,
       "source_quote": "了解 TensorRT 的基本部署流程",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": {
+      "value": "1 月",
+      "source_quote": "1 月起可到岗"
+    }
+  },
+  "education": [
+    {
+      "school": "岚江大学",
+      "major": "电子信息",
+      "degree": "master",
+      "status": "enrolled",
+      "start_text": "2024.09",
+      "end_text": "2027.06（预计）",
+      "source_quote": "2024.09–2027.06（预计）  岚江大学，电子信息，硕士"
+    },
+    {
+      "school": "东钧工业学院",
+      "major": "自动化",
+      "degree": "bachelor",
+      "status": "completed",
+      "start_text": "2020.09",
+      "end_text": "2024.06",
+      "source_quote": "2020.09–2024.06             东钧工业学院，自动化，本科"
     }
   ]
 }

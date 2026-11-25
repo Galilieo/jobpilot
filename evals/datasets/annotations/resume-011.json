@@ -170,7 +170,8 @@
       "text": "用 60 条仿写报修记录比较两版提示词，按工种推荐与小组标注一致来计分",
       "has_number": true,
       "source_quote": "用 60 条仿写报修记录比较两版提示词，按工种推荐与小组标注一致来计分",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["60 条仿写报修记录", "按工种推荐与小组标注一致来计分"]
     },
     {
       "experience": "物业报修工单分流",
@@ -306,6 +307,31 @@
       "has_number": false,
       "source_quote": "了解 Docker Compose，能按项目文档启动本地环境",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": {
+      "value": 4,
+      "source_quote": "每周 4 天"
+    },
+    "internship_months": {
+      "value": 4,
+      "source_quote": "可实习 4 个月"
+    },
+    "earliest_start": {
+      "value": "12 月中旬",
+      "source_quote": "12 月中旬可到岗"
+    }
+  },
+  "education": [
+    {
+      "school": "东澜理工学院",
+      "major": "软件工程",
+      "degree": "bachelor",
+      "status": "enrolled",
+      "start_text": "2023.09",
+      "end_text": "2027.06（预计）",
+      "source_quote": "东澜理工学院 ｜ 软件工程 ｜ 本科                         2023.09–2027.06（预计）"
     }
   ]
 }

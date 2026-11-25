@@ -17,7 +17,8 @@
       "text": "按教学示例用 Python 清洗 300 条评论，去除空文本和重复记录",
       "has_number": true,
       "source_quote": "按教学示例用 Python 清洗 300 条评论，去除空文本和重复记录",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["按教学示例"]
     },
     {
       "experience": "电影评论情感分类",
@@ -35,7 +36,8 @@
       "text": "在课程提供的验证集上准确率为 72%",
       "has_number": true,
       "source_quote": "在课程提供的验证集上准确率为 72%",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["在课程提供的验证集上"]
     },
     {
       "experience": "电影评论情感分类",
@@ -46,5 +48,11 @@
       "source_quote": "在汇报中展示了两条被误分类的评论",
       "needs_confirmation": true
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

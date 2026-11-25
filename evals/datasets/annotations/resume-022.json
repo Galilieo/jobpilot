@@ -152,7 +152,8 @@
       "text": "答辩时以两类图书为例给出订货建议",
       "has_number": true,
       "source_quote": "答辩时以两类图书为例给出订货建议",
-      "needs_confirmation": false
+      "needs_confirmation": false,
+      "qualifiers": ["以两类图书为例"]
     },
     {
       "experience": "学院迎新志愿者组",
@@ -198,6 +199,28 @@
       "has_number": false,
       "source_quote": "用 Power BI 做过课程仪表板",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": {
+      "value": 4,
+      "source_quote": "每周 4 天"
+    },
+    "internship_months": null,
+    "earliest_start": {
+      "value": "12 月下旬",
+      "source_quote": "12 月下旬起"
+    }
+  },
+  "education": [
+    {
+      "school": "秦川财经学院",
+      "major": "会计学",
+      "degree": "bachelor",
+      "status": "enrolled",
+      "start_text": "2023.09",
+      "end_text": "2027.06，预计",
+      "source_quote": "秦川财经学院，会计学，本科（2023.09—2027.06，预计）"
     }
   ]
 }

@@ -37,5 +37,11 @@
       "source_quote": "参与组件测试，编写了 6 条用例。",
       "needs_confirmation": false
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }

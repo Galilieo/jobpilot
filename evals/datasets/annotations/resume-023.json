@@ -107,7 +107,8 @@
       "text": "试点最终开放给两组坐席，保留人工确认",
       "has_number": true,
       "source_quote": "试点最终开放给两组坐席，保留人工确认",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["保留人工确认"]
     },
     {
       "experience": "简序办公软件 实施工程师",
@@ -234,6 +235,25 @@
       "has_number": false,
       "source_quote": "主要做需求拆解、字段校验、样例回放与客户验收",
       "needs_confirmation": false
+    }
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": {
+      "value": "预计三周内",
+      "source_quote": "预计三周内到岗"
+    }
+  },
+  "education": [
+    {
+      "school": "至明应用技术学院",
+      "major": "电子商务",
+      "degree": "bachelor",
+      "status": "completed",
+      "start_text": "2019.09",
+      "end_text": "2023.06",
+      "source_quote": "至明应用技术学院（本科）｜电子商务｜2019.09—2023.06"
     }
   ]
 }

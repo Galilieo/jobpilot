@@ -62,7 +62,8 @@
       "text": "在本地用 20 个并发用户模拟重复预约，连续运行 10 分钟",
       "has_number": true,
       "source_quote": "在本地用 20 个并发用户模拟重复预约，连续运行 10 分钟",
-      "needs_confirmation": true
+      "needs_confirmation": true,
+      "qualifiers": ["在本地"]
     },
     {
       "experience": "校内器材预约系统",
@@ -82,5 +83,11 @@
       "source_quote": "编写 8 条接口测试，覆盖相同幂等键重试、不同用户抢占同一时段和取消后重新预约",
       "needs_confirmation": true
     }
-  ]
+  ],
+  "criteria": {
+    "onsite_days_per_week": null,
+    "internship_months": null,
+    "earliest_start": null
+  },
+  "education": []
 }
