@@ -51,14 +51,15 @@ export const jobpilotTheme: ThemeConfig = {
     colorBorder: '#E6E6E2',
     colorBorderSecondary: '#EFEFEC',
 
-    // 字体与克制的圆角
+    // 字体与固定档位字号（规则 8：页面标题 22、区块 16、卡片 14、正文 14、次要 13）
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     fontSize: 14,
+    fontSizeSM: 13,
     fontSizeHeading1: 22,
     fontSizeHeading2: 18,
     fontSizeHeading3: 16,
-    fontSizeHeading4: 15,
+    fontSizeHeading4: 14,
     fontSizeHeading5: 14,
     lineHeight: 1.65,
     borderRadius: 10,
@@ -67,6 +68,10 @@ export const jobpilotTheme: ThemeConfig = {
     boxShadowSecondary: '0 6px 20px rgba(31, 31, 31, 0.08)',
   },
   components: {
+    Typography: {
+      titleMarginTop: 0,
+      titleMarginBottom: 0,
+    },
     Layout: {
       bodyBg: '#FFFFFF',
       siderBg: '#F6F6F4',
@@ -81,12 +86,13 @@ export const jobpilotTheme: ThemeConfig = {
       itemBorderRadius: 10,
       itemHeight: 38,
       itemMarginInline: 0,
+      activeBarBorderWidth: 0,
     },
     Card: {
       borderRadiusLG: 12,
-      paddingLG: 18,
-      headerFontSize: 15,
-      headerHeight: 46,
+      paddingLG: 16,
+      headerFontSize: 16,
+      headerHeight: 48,
     },
     Tag: {
       borderRadiusSM: 6,

@@ -1,7 +1,9 @@
 // 集中存放尚未接业务接口的页面；只建立导航与内容槽位，不展示虚构业务结果。
-import { Card, Empty, Typography } from 'antd'
+import { Card } from 'antd'
 import type { ReactElement, ReactNode } from 'react'
 import { Link } from 'react-router'
+import { EmptyHint } from '../components/EmptyHint'
+import { PageHeader } from '../components/PageHeader'
 
 interface PlaceholderProps {
   title: string
@@ -11,11 +13,9 @@ interface PlaceholderProps {
 function PagePlaceholder({ title, description }: PlaceholderProps): ReactElement {
   return (
     <section className="page">
-      <header className="page-heading">
-        <Typography.Title level={1}>{title}</Typography.Title>
-      </header>
+      <PageHeader title={title} />
       <Card>
-        <Empty className="page-empty" description={description} />
+        <EmptyHint description={description} />
       </Card>
     </section>
   )

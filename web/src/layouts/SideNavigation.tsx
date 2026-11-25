@@ -1,4 +1,4 @@
-// 导航入口和账号菜单；还未接入会话、登录服务时不伪造历史或登录状态。
+// 导航入口和账号菜单；还未接入会话服务时，最近对话只显示一行浅灰提示文字。
 import {
   AppstoreOutlined,
   DownOutlined,
@@ -8,7 +8,7 @@ import {
   SolutionOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { Avatar, Button, Dropdown, Empty, Menu, Typography, theme } from 'antd'
+import { Avatar, Button, Dropdown, Menu, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
 import type { ReactElement } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -63,7 +63,9 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
       />
       <section className="recent-conversations" aria-label="最近对话">
         <Typography.Text type="secondary">最近对话</Typography.Text>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有对话" />
+        <Typography.Text type="secondary" className="recent-empty">
+          还没有对话
+        </Typography.Text>
       </section>
       <Dropdown
         trigger={['click']}
