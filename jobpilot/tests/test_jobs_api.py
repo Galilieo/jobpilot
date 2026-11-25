@@ -252,14 +252,22 @@ async def test_partial_basic_field_edits_keep_existing_values_and_allow_clear(
     signed_in: httpx.AsyncClient, model_outputs: list[str]
 ) -> None:
     job = (await add_job(signed_in, model_outputs)).json()
+    assert job["overridden_basic_fields"] == []
     url = f"/api/jobs/{job['job_id']}"
     original = job["parsed"]["basic_fields"]
-    for patch in ({"location": "苏州"}, {"company": None}):
+    for patch, expected_overridden in (
+        ({"location": "苏州"}, ["location"]),
+        ({"company": None}, ["company", "location"]),
+        ({"location": "上海"}, ["company"]),
+    ):
         response = await signed_in.put(url, json={"basic_fields": patch})
         assert response.status_code == 200
         original.update(patch)
         assert response.json()["parsed"]["basic_fields"] == original
-    assert (await signed_in.get(url)).json()["parsed"]["basic_fields"] == original
+        assert response.json()["overridden_basic_fields"] == expected_overridden
+    detail = (await signed_in.get(url)).json()
+    assert detail["parsed"]["basic_fields"] == original
+    assert detail["overridden_basic_fields"] == ["company"]
 
 
 async def test_duplicate_requirement_id_is_rejected_before_saving(

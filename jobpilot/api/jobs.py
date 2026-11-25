@@ -122,19 +122,32 @@ class JobOut(BaseModel):
     raw_text: str
     parsed: ParsedJob  # 合并个人修改后的结果，匹配和改写都用它
     overridden: list[str]  # 哪些部分被用户改过
+    overridden_basic_fields: list[str]  # 与 AI 原提取不同的基本字段
     injection_flags: list[dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
 
+def _overridden_basic_fields(posting: JobPosting, effective: ParsedJob) -> list[str]:
+    extracted = ParsedJob.model_validate(posting.parsed_json).basic_fields
+    current = effective.basic_fields
+    return sorted(
+        name
+        for name in BasicFields.model_fields
+        if getattr(current, name) != getattr(extracted, name)
+    )
+
+
 def _job_out(posting: JobPosting, user_job: UserJob) -> JobOut:
+    parsed = effective_parsed_job(posting, user_job)
     return JobOut(
         job_id=user_job.user_job_id,
         stage=JobStage(user_job.stage),
         note=user_job.note,
         raw_text=posting.raw_text,
-        parsed=effective_parsed_job(posting, user_job),
+        parsed=parsed,
         overridden=sorted(user_job.field_overrides_json),
+        overridden_basic_fields=_overridden_basic_fields(posting, parsed),
         injection_flags=posting.injection_flags,
         created_at=user_job.created_at,
         updated_at=user_job.updated_at,
