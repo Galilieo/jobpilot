@@ -7,18 +7,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.models import AiRun, RunStatus, StopReason
 
+_ACTIVE_STATUSES = (RunStatus.RUNNING, RunStatus.WAITING_CONFIRMATION)
+
 
 async def set_run_status(
     session: AsyncSession, user_id: UUID, run_id: UUID, status: RunStatus
 ) -> bool:
     """原子更新未结束的运行；已结束或不属于该用户时返回 False。"""
-    active = (RunStatus.RUNNING, RunStatus.WAITING_CONFIRMATION)
     changed = await session.scalar(
         update(AiRun)
         .where(
-            AiRun.user_id == user_id, AiRun.run_id == run_id, AiRun.status.in_(active)
+            AiRun.user_id == user_id,
+            AiRun.run_id == run_id,
+            AiRun.status.in_(_ACTIVE_STATUSES),
         )
-        .values(status=status, finished_at=None if status in active else func.now())
+        .values(
+            status=status,
+            finished_at=None if status in _ACTIVE_STATUSES else func.now(),
+        )
         .returning(AiRun.run_id)
     )
     return changed is not None
@@ -34,7 +40,7 @@ async def finish_run(
     session: AsyncSession, user_id: UUID, run_id: UUID, status: RunStatus
 ) -> None:
     """在产物的事务里取得终态；发生冲突时调用方必须回滚该事务。"""
-    if status in (RunStatus.RUNNING, RunStatus.WAITING_CONFIRMATION):
+    if status in _ACTIVE_STATUSES:
         raise ValueError("收尾需要终态")
     if await set_run_status(session, user_id, run_id, status):
         return
@@ -61,3 +67,15 @@ async def fail_abandoned_runs(session: AsyncSession) -> int:
         )
     )
     return result.rowcount
+
+
+async def cancel_account_runs(session: AsyncSession, user_id: UUID) -> None:
+    """收尾与取消通过同一运行行串行化，避免迟到的任务覆盖取消状态。"""
+    await session.execute(
+        update(AiRun)
+        .where(
+            AiRun.user_id == user_id,
+            AiRun.status.in_(_ACTIVE_STATUSES),
+        )
+        .values(status=RunStatus.CANCELLED, finished_at=func.now())
+    )

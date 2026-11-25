@@ -200,17 +200,19 @@ async def test_expired_session_is_rejected(
     assert (await async_client.get("/api/me")).status_code == 401
 
 
-async def test_pending_deletion_account_can_only_log_out(
+async def test_pending_deletion_account_can_view_status_and_log_out(
     async_client: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """待删除期间仍能登录和登出，但业务接口（以 /api/me 为代表）返回 403。"""
+    """待删除期间仍能登录、获取恢复状态和登出。"""
     await register(async_client, "foo@x.com")
     async with session_factory.begin() as session:
         await session.execute(update(User).values(deletion_requested_at=func.now()))
 
     assert (await login(async_client, "foo@x.com")).status_code == 204
-    assert (await async_client.get("/api/me")).status_code == 403
+    status = await async_client.get("/api/me")
+    assert status.status_code == 200
+    assert status.json()["deletion_deadline"]
     assert (await async_client.post("/api/auth/logout")).status_code == 204
 
 

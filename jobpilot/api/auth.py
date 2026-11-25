@@ -4,22 +4,23 @@
 之后的请求由 api/deps.py 从 Cookie 识别用户。
 """
 
-from typing import Annotated
+from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 
-from jobpilot.api.deps import CurrentUser, DbSession, current_session
+from jobpilot.api.deps import AuthenticatedSession, DbSession
 from jobpilot.config import settings
 from jobpilot.db.accounts import (
-    LoginSession,
+    DELETION_GRACE_PERIOD,
     create_account,
     create_login_session,
     delete_login_session,
     find_account_by_email,
+    lock_account_for_session,
 )
 from jobpilot.services.auth import (
     hash_password,
@@ -59,6 +60,13 @@ class UserOut(BaseModel):
     email: str
 
 
+class CurrentUserOut(UserOut):
+    """前端根据申请时间与截止时间选择恢复页。"""
+
+    deletion_requested_at: datetime | None
+    deletion_deadline: datetime | None
+
+
 @router.post("/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, db: DbSession) -> UserOut:
     """创建账号；不自动登录，前端随后调用登录接口。"""
@@ -89,7 +97,11 @@ async def login(body: LoginRequest, response: Response, db: DbSession) -> None:
     hashed = user.hashed_password if user is not None else None
     # argon2 故意算得慢（约 20 毫秒），放到线程池，不卡住事件循环上的其他请求。
     password_ok = await run_in_threadpool(verify_password, body.password, hashed)
-    if not password_ok or user is None:
+    if (
+        not password_ok
+        or user is None
+        or not await lock_account_for_session(db, user.user_id)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误"
         )
@@ -105,12 +117,17 @@ async def login(body: LoginRequest, response: Response, db: DbSession) -> None:
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     response: Response,
-    login: Annotated[LoginSession, Depends(current_session)],
+    login: AuthenticatedSession,
     db: DbSession,
 ) -> None:
     """删除当前这条登录记录并清除 Cookie；同一账号的其他登录不受影响。"""
     await delete_login_session(db, login.session_id)
     await db.commit()
+    clear_session_cookie(response)
+
+
+def clear_session_cookie(response: Response) -> None:
+    """登出或删号后让浏览器丢弃已撤销的 token。"""
     response.delete_cookie(
         settings.cookie_name,
         path="/",
@@ -121,9 +138,18 @@ async def logout(
 
 
 @router.get("/me")
-async def me(user: CurrentUser) -> UserOut:
+async def me(login: AuthenticatedSession) -> CurrentUserOut:
     """返回当前登录的账号。"""
-    return UserOut(user_id=user.user_id, email=user.email)
+    user = login.user
+    requested_at = user.deletion_requested_at
+    return CurrentUserOut(
+        user_id=user.user_id,
+        email=user.email,
+        deletion_requested_at=requested_at,
+        deletion_deadline=(requested_at.astimezone(UTC) + DELETION_GRACE_PERIOD)
+        if requested_at is not None
+        else None,
+    )
 
 
 def _set_session_cookie(response: Response, token: str) -> None:

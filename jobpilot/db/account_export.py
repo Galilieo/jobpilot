@@ -1,0 +1,86 @@
+"""读取账号导出所需的业务记录；每组记录都按账号过滤。"""
+
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import Table, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from jobpilot.db.models import (
+    AiRun,
+    BulletFact,
+    Fact,
+    FactDraft,
+    FactSet,
+    JobPosting,
+    MatchReport,
+    ResumeDocument,
+    ResumeVersion,
+    TailoredBullet,
+    TailoredResume,
+    User,
+    UserJob,
+)
+
+# 只列用户拥有的业务表，会话、幂等响应和模型调用记录没有导出入口。
+_EXPORT_TABLES = {
+    "fact_sets": FactSet.__table__,
+    "facts": Fact.__table__,
+    "fact_drafts": FactDraft.__table__,
+    "resume_documents": ResumeDocument.__table__,
+    "job_postings": JobPosting.__table__,
+    "user_jobs": UserJob.__table__,
+    "match_reports": MatchReport.__table__,
+    "ai_runs": AiRun.__table__,
+    "tailored_bullets": TailoredBullet.__table__,
+    "bullet_facts": BulletFact.__table__,
+    "tailored_resumes": TailoredResume.__table__,
+    "resume_versions": ResumeVersion.__table__,
+}
+
+
+async def export_identity(
+    session: AsyncSession, user_id: UUID
+) -> dict[str, Any] | None:
+    """账号表只读取可导出的身份字段。"""
+    identity = (
+        (
+            await session.execute(
+                select(User.user_id, User.email, User.deletion_requested_at).where(
+                    User.user_id == user_id
+                )
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    return dict(identity) if identity is not None else None
+
+
+async def export_business_records(
+    session: AsyncSession, user_id: UUID
+) -> dict[str, list[dict[str, Any]]]:
+    return {
+        name: await _owned_rows(session, user_id, table)
+        for name, table in _EXPORT_TABLES.items()
+    }
+
+
+async def _owned_rows(
+    session: AsyncSession, user_id: UUID, table: Table
+) -> list[dict[str, Any]]:
+    owner = table.c.owner_id if table is JobPosting.__table__ else table.c.user_id
+    columns = [
+        column for column in table.c if column.key not in {"thread_id", "content_hash"}
+    ]
+    ordering = (
+        (table.c.resume_id, table.c.version)
+        if table is ResumeVersion.__table__
+        else (table.c.version,)
+        if table is FactSet.__table__
+        else tuple(table.primary_key)
+    )
+    rows = await session.execute(
+        select(*columns).where(owner == user_id).order_by(*ordering)
+    )
+    return [dict(row) for row in rows.mappings()]

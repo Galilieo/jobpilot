@@ -1,5 +1,7 @@
 """提供 JobPilot HTTP 入口，管理数据库生命周期并检查连通性。"""
 
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -9,6 +11,7 @@ from openai import AsyncOpenAI
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from jobpilot.api.account import router as account_router
 from jobpilot.api.auth import router as auth_router
 from jobpilot.api.facts import router as facts_router
 from jobpilot.api.idempotency import IdempotentReplay, replay_response
@@ -24,6 +27,7 @@ from jobpilot.config import settings
 from jobpilot.db.idempotency import fail_interrupted_keys
 from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.db.session import check_database, create_database_engine, get_session
+from jobpilot.services.accounts import purge_daily, purge_with_logging
 
 
 @asynccontextmanager
@@ -41,9 +45,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         api_key=settings.deepseek_api_key.get_secret_value() or "not-configured",
         base_url=settings.deepseek_base_url,
     )
+    await purge_with_logging(app.state.db_session_factory)
+    account_cleanup = asyncio.create_task(purge_daily(app.state.db_session_factory))
     try:
         yield
     finally:
+        account_cleanup.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await account_cleanup
         await app.state.model_client.close()
         await engine.dispose()
 
@@ -53,6 +62,7 @@ app = FastAPI(title="JobPilot", lifespan=lifespan)
 app.state.run_launcher = RunLauncher()
 app.add_exception_handler(IdempotentReplay, replay_response)
 app.include_router(auth_router)
+app.include_router(account_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)
 app.include_router(facts_router)

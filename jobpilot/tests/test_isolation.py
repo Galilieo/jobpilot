@@ -17,6 +17,7 @@ import httpx
 import pytest
 
 from jobpilot.main import app
+from jobpilot.tests.test_auth import login, register
 from jobpilot.tests.test_facts_api import new_idempotency_headers
 
 Route = tuple[str, str]  # (HTTP 方法, 路径模板)
@@ -30,6 +31,9 @@ SELF_ROUTES: set[Route] = {
     ("POST", "/api/auth/logout"),
     ("GET", "/api/me"),
     ("GET", "/api/overview"),
+    ("DELETE", "/api/account"),
+    ("POST", "/api/account/restore"),
+    ("GET", "/api/account/export"),
     ("POST", "/api/ocr"),  # 识别结果直接返回，不读写任何已保存的数据
 }
 
@@ -392,3 +396,32 @@ async def test_other_users_resources_are_not_found(
 
     after = await user_b.request(read_method, _fill(read_path, resource_id))
     assert after.json() == before.json()
+
+
+PENDING_ACCOUNT_ROUTES: dict[Route, int] = {
+    ("GET", "/api/me"): 200,
+    ("GET", "/api/account/export"): 200,
+    ("POST", "/api/account/restore"): 204,
+    ("POST", "/api/auth/logout"): 204,
+}
+
+
+@pytest.mark.parametrize(
+    "route", sorted(_api_routes() - PUBLIC_ROUTES), ids=lambda r: f"{r[0]} {r[1]}"
+)
+async def test_routes_for_pending_account(
+    async_client: httpx.AsyncClient, route: Route
+) -> None:
+    """待删除账号重新登录后，只能查状态、取回数据、恢复或登出。"""
+    email = "pending@isolation.invalid"
+    assert (await register(async_client, email)).status_code == 201
+    assert (await login(async_client, email)).status_code == 204
+    assert (await async_client.delete("/api/account")).status_code == 204
+    assert (await login(async_client, email)).status_code == 204
+
+    method, path = route
+    response = await async_client.request(
+        method, _fill(path, str(uuid4())), json={}, headers=new_idempotency_headers()
+    )
+
+    assert response.status_code == PENDING_ACCOUNT_ROUTES.get(route, 403), response.text
