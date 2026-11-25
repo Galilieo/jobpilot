@@ -1,13 +1,21 @@
-// 岗位库：岗位卡片列表；「添加岗位」粘贴 JD，解析完进入岗位详情。
+// 岗位库：岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Empty, Input, Modal, Skeleton, Tag, Typography, theme } from 'antd'
+import { App, Button, Card, Empty, Modal, Skeleton, Tag, Typography, theme } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
 import { newIdempotencyKey } from '../api/http'
+import { TextSourceInput } from '../components/TextSourceInput'
 import { JOB_STAGE } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
+
+const JD_COPY = {
+  filePrompt: '点击或拖入 JD 文件',
+  screenshotsPrompt: '点击或拖入 JD 截图，可以多张',
+  pasteHint: '把招聘页上的岗位名称、职责和任职要求整段复制进来，解析通常需要十几秒。',
+  placeholder: 'JD 原文',
+}
 
 export function JobsPage(): ReactElement {
   const { token } = theme.useToken()
@@ -83,6 +91,7 @@ function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }):
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [text, setText] = useState('')
+  const [reading, setReading] = useState(false)
   // 同一次添加的重试用同一个键；同样的正文再贴一次，服务端直接返回已有的岗位。
   const key = useRef(newIdempotencyKey())
 
@@ -105,21 +114,19 @@ function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }):
       title="添加岗位"
       open={open}
       onCancel={onClose}
-      okText="解析并添加"
+      width={720}
+      okText="解析岗位"
       cancelText="取消"
-      okButtonProps={{ disabled: !text.trim() }}
+      okButtonProps={{ disabled: !text.trim() || reading }}
       confirmLoading={create.isPending}
       onOk={() => create.mutate()}
       destroyOnHidden={false}
     >
-      <Typography.Paragraph type="secondary">
-        把招聘页上的岗位名称、职责和任职要求整段复制进来，解析通常需要十几秒。
-      </Typography.Paragraph>
-      <Input.TextArea
+      <TextSourceInput
         value={text}
-        onChange={(event) => setText(event.target.value)}
-        autoSize={{ minRows: 8, maxRows: 16 }}
-        placeholder="JD 原文"
+        onChange={setText}
+        onReadingChange={setReading}
+        copy={JD_COPY}
       />
     </Modal>
   )
