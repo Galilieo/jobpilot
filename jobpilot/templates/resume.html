@@ -86,6 +86,9 @@
   </section>
   {% endfor %}
 </main>
-{% if editor_script %}<script>{{ editor_script | safe }}</script>{% endif %}
+{% if editor_json %}
+<script type="application/json" id="jobpilot-resume">{{ editor_json }}</script>
+<script>{{ editor_script }}</script>
+{% endif %}
 </body>
 </html>

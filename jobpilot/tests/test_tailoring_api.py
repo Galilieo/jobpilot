@@ -355,6 +355,12 @@ async def test_preview_and_exports_download_from_the_saved_version(
     preview = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
     assert preview.status_code == 200
     assert preview.headers["content-type"].startswith("text/html")
+    # 当前版本的预览可以编辑、保存到服务器；导出文件离线编辑
+    assert f'"save_url": "/api/tailor-runs/{run_id}/resume"' in preview.text
+    exported = await async_client.get(f"/api/tailor-runs/{run_id}/export")
+    assert (
+        'id="jobpilot-resume"' in exported.text and '"save_url": null' in exported.text
+    )
     for kind, media in (
         ("html", "text/html"),
         ("md", "text/markdown"),
@@ -372,3 +378,28 @@ async def test_preview_and_exports_download_from_the_saved_version(
         f"/api/tailor-runs/{run_id}/export", params={"version": 9}
     )
     assert missing.status_code == 404
+
+
+async def test_old_version_preview_is_read_only(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    launcher: RunLauncher,
+    model: FakeModel,
+) -> None:
+    """在旧版本上保存必然冲突，所以旧版本的预览不带编辑器。"""
+    user_id = await sign_in(async_client, "oldpreview@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+    model.fact_ids = inputs.fact_ids
+    run_id = (await start(async_client, inputs.user_job_id)).json()["run_id"]
+    await launcher.wait_all()
+    v1 = (await async_client.get(f"/api/tailor-runs/{run_id}/resume")).json()
+    saved = await async_client.put(
+        f"/api/tailor-runs/{run_id}/resume",
+        json={"base_version_id": v1["version_id"], "content": v1["content"]},
+    )
+    assert saved.status_code == 200
+
+    old = await async_client.get(f"/api/tailor-runs/{run_id}/preview?version=1")
+    current = await async_client.get(f"/api/tailor-runs/{run_id}/preview")
+    assert 'id="jobpilot-resume"' not in old.text
+    assert 'id="jobpilot-resume"' in current.text

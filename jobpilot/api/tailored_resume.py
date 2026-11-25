@@ -21,6 +21,7 @@ from jobpilot.services import drafts
 from jobpilot.services.grounding import GroundingFact, organizations_of
 from jobpilot.services.resume_content import ResumeContent
 from jobpilot.services.resume_export import (
+    EditorContext,
     RenderMode,
     render_html,
     title_of,
@@ -214,11 +215,26 @@ async def _load(db: DbSession, user_id: UUID, run_id: UUID, version: int | None)
 async def preview_resume(
     run_id: UUID, user: CurrentUser, db: DbSession, version: int | None = None
 ) -> HTMLResponse:
-    """应用内预览：带「待处理」「待检查」标记。"""
+    """应用内预览：带「待处理」「待检查」标记。当前版本可以直接编辑、自动保存；
+    旧版本只读（在旧版本上保存必然冲突）。"""
     loaded = await _load(db, user.user_id, run_id, version)
+    current = loaded.version.resume_version_id == loaded.resume.current_version_id
+    editor = (
+        EditorContext(
+            version_id=loaded.version.resume_version_id,
+            storage_key=f"{loaded.resume.resume_id}",
+            save_url=f"/api/tailor-runs/{run_id}/resume",
+            export_url=f"/api/tailor-runs/{run_id}/export?format=html",
+        )
+        if current
+        else None
+    )
     return HTMLResponse(
         render_html(
-            loaded.content, mode=RenderMode.PREVIEW, version=loaded.version.version
+            loaded.content,
+            mode=RenderMode.PREVIEW,
+            version=loaded.version.version,
+            editor=editor,
         )
     )
 
@@ -235,7 +251,14 @@ async def export_resume(
     loaded = await _load(db, user.user_id, run_id, version)
     content, number = loaded.content, loaded.version.version
     if kind is ExportFormat.HTML:
-        body: str | bytes = render_html(content, mode=RenderMode.EXPORT, version=number)
+        # 导出文件离线打开也能编辑，修改存在浏览器本地，按简历和版本区分。
+        editor = EditorContext(
+            version_id=loaded.version.resume_version_id,
+            storage_key=f"{loaded.resume.resume_id}:v{number}",
+        )
+        body: str | bytes = render_html(
+            content, mode=RenderMode.EXPORT, version=number, editor=editor
+        )
     elif kind is ExportFormat.MARKDOWN:
         body = to_markdown(content)
     else:

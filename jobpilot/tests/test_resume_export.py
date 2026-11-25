@@ -10,6 +10,7 @@ from jobpilot.db.models import CheckStatus
 from jobpilot.services.grounding import GroundingIssue, IssueKind
 from jobpilot.services.resume_content import ResumeContent, assemble, bullet_of
 from jobpilot.services.resume_export import (
+    EditorContext,
     RenderMode,
     render_html,
     rich,
@@ -138,3 +139,14 @@ def test_saved_style_is_applied_to_the_page():
     assert "--size: 9.5pt; --leading: 1.35;" in html
     # 字体名也是用户可改的文字，引号要转义，不能闭合 style 属性
     assert "--font: &#34;Songti SC&#34;, serif;" in html
+
+
+def test_editor_data_cannot_close_its_script_tag():
+    built = content()
+    built.header[0] = "</script><script>alert(1)</script>"
+    editor = EditorContext(version_id=uuid4(), storage_key="r:v1")
+    html = render_html(built, mode=RenderMode.EXPORT, version=1, editor=editor)
+    data = html.split('<script type="application/json" id="jobpilot-resume">', 1)[1]
+    data = data.split("</script>", 1)[0]
+    assert "<" not in data and "\\u003c/script>" in data
+    assert '"save_url": null' in data  # 离线文件存本地，不连服务器

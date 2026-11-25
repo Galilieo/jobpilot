@@ -7,6 +7,8 @@
 """
 
 import io
+import json
+from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
 
@@ -49,6 +51,34 @@ def _add_rich(paragraph, text: str) -> None:
         paragraph.add_run(text[position:])
 
 
+@dataclass(frozen=True)
+class EditorContext:
+    """内嵌编辑器需要的信息。save_url 为空表示离线文件，修改保存在浏览器本地。"""
+
+    version_id: UUID
+    storage_key: str  # 本地保存和草稿用的键，区分不同简历和版本
+    save_url: str | None = None
+    export_url: str | None = None
+
+
+EDITOR_SCRIPT = (TEMPLATES / "resume_editor.js").read_text(encoding="utf-8")
+
+
+def _editor_json(content: ResumeContent, editor: EditorContext) -> Markup:
+    """嵌在 <script type="application/json"> 里的数据。
+
+    「<」写成 \\u003c：用户文字里的「</script>」不会提前结束脚本标签。
+    """
+    data = {
+        "content": content.model_dump(mode="json"),
+        "version_id": str(editor.version_id),
+        "storage_key": editor.storage_key,
+        "save_url": editor.save_url,
+        "export_url": editor.export_url,
+    }
+    return Markup(json.dumps(data, ensure_ascii=False).replace("<", "\\u003c"))
+
+
 class RenderMode(StrEnum):
     PREVIEW = "preview"
     EXPORT = "export"
@@ -81,9 +111,9 @@ def render_html(
     *,
     mode: RenderMode,
     version: int,
-    editor_script: str | None = None,
+    editor: EditorContext | None = None,
 ) -> str:
-    """单个 HTML 文件：样式内嵌，不依赖网络；editor_script 给出时一并内嵌。"""
+    """单个 HTML 文件：样式内嵌，不依赖网络；给出 editor 时内嵌编辑器和数据。"""
     return _ENV.get_template("resume.html").render(
         title=title_of(content),
         version=version,
@@ -92,7 +122,8 @@ def render_html(
         style=content.style,
         visible=_visible(content, mode),
         marks=mode is RenderMode.PREVIEW,
-        editor_script=editor_script,
+        editor_json=_editor_json(content, editor) if editor else None,
+        editor_script=Markup(EDITOR_SCRIPT) if editor else None,
     )
 
 
