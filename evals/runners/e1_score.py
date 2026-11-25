@@ -165,9 +165,13 @@ def greedy_assignment(
 # ---------- 计分 ----------
 
 
-def load_golds(sample_id: str, raw_text: str) -> list[Item]:
+def load_annotation(sample_id: str) -> dict[str, Any]:
     path = ANNOTATION_DIR / f"{sample_id}.json"
-    facts = json.loads(path.read_text(encoding="utf-8"))["facts"]
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_golds(sample_id: str, raw_text: str) -> list[Item]:
+    facts = load_annotation(sample_id)["facts"]
     items = []
     for fact in facts:
         [(start, end)] = locate_quote(
@@ -177,19 +181,116 @@ def load_golds(sample_id: str, raw_text: str) -> list[Item]:
     return items
 
 
+def _span_overlaps(
+    a_start: int | None, a_end: int | None, b_start: int, b_end: int
+) -> bool:
+    if a_start is None or a_end is None:
+        return False
+    return a_start < b_end and b_start < a_end
+
+
+def _no_ws(text: str) -> str:
+    return "".join(ch for ch in text if not ch.isspace())
+
+
+def _score_criteria(
+    ann: dict[str, Any], record: dict[str, Any], raw_text: str
+) -> tuple[int, int, int]:
+    """返回 (求职条件命中数, 标注非空总数, 编造数)。"""
+    gold_criteria = ann.get("criteria")
+    if gold_criteria is None:
+        return 0, 0, 0
+    pred_by_field = {c["field"]: c for c in record.get("criteria", ())}
+    ok = total = fab = 0
+    for field in ("onsite_days_per_week", "internship_months", "earliest_start"):
+        gold = gold_criteria.get(field)
+        pred = pred_by_field.get(field)
+        if gold is None:
+            if pred is not None:
+                fab += 1
+            continue
+        total += 1
+        if pred is None or not pred.get("quote_verified"):
+            continue
+        [(g_start, g_end)] = locate_quote(raw_text, gold["source_quote"])
+        if not _span_overlaps(
+            pred.get("span_start"), pred.get("span_end"), g_start, g_end
+        ):
+            continue
+        pred_val = (
+            pred.get("text_value")
+            if field == "earliest_start"
+            else pred.get("int_value")
+        )
+        if pred_val == gold["value"]:
+            ok += 1
+    return ok, total, fab
+
+
+def _score_education(
+    ann: dict[str, Any], record: dict[str, Any], raw_text: str
+) -> tuple[int, int, int]:
+    """返回 (教育命中数, 标注教育总数, 编造数)。"""
+    gold_edus = ann.get("education")
+    if gold_edus is None:
+        return 0, 0, 0
+    pred_edus = list(record.get("education", ()))
+    matched_preds: set[int] = set()
+    ok = 0
+    for gold in gold_edus:
+        [(g_start, g_end)] = locate_quote(raw_text, gold["source_quote"])
+        match_idx = next(
+            (
+                idx
+                for idx, pred in enumerate(pred_edus)
+                if idx not in matched_preds
+                and _span_overlaps(
+                    pred.get("span_start"), pred.get("span_end"), g_start, g_end
+                )
+            ),
+            None,
+        )
+        if match_idx is None:
+            continue
+        matched_preds.add(match_idx)
+        pred = pred_edus[match_idx]
+        if (
+            pred.get("quote_verified")
+            and pred.get("school") == gold["school"]
+            and pred.get("major") == gold.get("major")
+            and pred.get("degree") == gold["degree"]
+            and pred.get("status") == gold.get("status")
+        ):
+            ok += 1
+    fab = len(pred_edus) - len(matched_preds)
+    return ok, len(gold_edus), fab
+
+
 def score_record(record: dict[str, Any], raw_text: str) -> dict[str, Any]:
     """一次运行中一份简历的计分明细。"""
+    ann = load_annotation(record["sample_id"])
     golds = load_golds(record["sample_id"], raw_text)
     preds = [Item(f, f["span_start"], f["span_end"]) for f in record["facts"]]
     pairs = match(preds, golds)
     matched_p = {p for p, _, _ in pairs}
     matched_g = {g for _, g, _ in pairs}
 
+    crit_ok, crit_total, crit_fab = _score_criteria(ann, record, raw_text)
+    edu_ok, edu_total, edu_fab = _score_education(ann, record, raw_text)
+
     detail: dict[str, Any] = {
         "gold": len(golds),
         "pred": len(preds),
         "verified": sum(1 for p in preds if p.data["quote_verified"]),
         "matched": len(pairs),
+        "criteria_ok": crit_ok,
+        "criteria_total": crit_total,
+        "criteria_fab": crit_fab,
+        "edu_ok": edu_ok,
+        "edu_total": edu_total,
+        "edu_fab": edu_fab,
+        "qualifier_ok": 0,
+        "qualifier_total": 0,
         "missed": [golds[g].text for g in range(len(golds)) if g not in matched_g],
         "extra": [
             {"text": preds[p].text, "verified": preds[p].data["quote_verified"]}
@@ -198,6 +299,14 @@ def score_record(record: dict[str, Any], raw_text: str) -> dict[str, Any]:
         ],
         "pairs": [],
     }
+
+    pair_by_gold = {g: p for p, g, _ in pairs}
+    for g_idx, gold in enumerate(golds):
+        for qualifier in gold.data.get("qualifiers", ()):
+            detail["qualifier_total"] += 1
+            p_idx = pair_by_gold.get(g_idx)
+            if p_idx is not None and _no_ws(qualifier) in _no_ws(preds[p_idx].text):
+                detail["qualifier_ok"] += 1
 
     # 核对原因：程序能判断的「确实有问题」——片段未通过、职责夸大、数字不对、
     # 标注要求确认。没配上且片段通过的预测是否有问题要人工看，不计入。
@@ -285,6 +394,20 @@ def summarize(details: list[dict[str, Any]]) -> dict[str, float | None]:
             sum("responsibility_unstated" in p["reasons"] for p in unstated),
             len(unstated),
         ),
+        "criteria_acc": ratio(
+            sum(d["criteria_ok"] for d in details),
+            sum(d["criteria_total"] for d in details),
+        ),
+        "criteria_fab": float(sum(d["criteria_fab"] for d in details)),
+        "education_acc": ratio(
+            sum(d["edu_ok"] for d in details),
+            sum(d["edu_total"] for d in details),
+        ),
+        "education_fab": float(sum(d["edu_fab"] for d in details)),
+        "qualifier_retention": ratio(
+            sum(d["qualifier_ok"] for d in details),
+            sum(d["qualifier_total"] for d in details),
+        ),
     }
 
 
@@ -304,11 +427,24 @@ LABELS = {
     "flag_precision": "核对原因精确率",
     "risk_flag_recall": "其中：夸大与数字问题的标出率",
     "unstated_recall": "其中：职责未写明的提示率",
+    "criteria_acc": "求职条件准确率",
+    "criteria_fab": "求职条件编造数",
+    "education_acc": "教育经历逐条准确率",
+    "education_fab": "教育经历编造数",
+    "qualifier_retention": "限定语保留率",
 }
 
 
 def pct(value: float | None) -> str:
     return "—" if value is None else f"{value:.0%}"
+
+
+def fmt_metric(key: str, value: float | None) -> str:
+    if value is None:
+        return "—"
+    if key in ("criteria_fab", "education_fab"):
+        return f"{value:.1f}".rstrip("0").rstrip(".")
+    return pct(value)
 
 
 def render(result: dict[str, Any], runs: list[list[dict[str, Any]]]) -> str:
@@ -331,9 +467,13 @@ def render(result: dict[str, Any], runs: list[list[dict[str, Any]]]) -> str:
     for key, label in LABELS.items():
         values = [s[key] for s in summaries if s[key] is not None]
         avg = mean(values) if values else None
-        low_high = f"{pct(min(values))}～{pct(max(values))}" if values else "—"
+        low_high = (
+            f"{fmt_metric(key, min(values))}～{fmt_metric(key, max(values))}"
+            if values
+            else "—"
+        )
         expected = f"≥ {EXPECTATIONS[key]:.0%}" if key in EXPECTATIONS else ""
-        lines.append(f"| {label} | {pct(avg)} | {low_high} | {expected} |")
+        lines.append(f"| {label} | {fmt_metric(key, avg)} | {low_high} | {expected} |")
 
     def tally(entries: list[str]) -> list[str]:
         counts = Counter(entries)

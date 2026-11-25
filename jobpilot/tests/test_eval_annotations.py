@@ -7,7 +7,13 @@ from typing import Any
 import pytest
 
 from jobpilot.config import REPO_ROOT
-from jobpilot.db.models import FactKind, Responsibility
+from jobpilot.db.models import (
+    CriterionField,
+    DegreeLevel,
+    EducationStatus,
+    FactKind,
+    Responsibility,
+)
 from jobpilot.services.facts import (
     contains_number,
     locate_quote,
@@ -68,3 +74,27 @@ def test_annotated_facts_follow_extraction_rules(path: Path) -> None:
             assert fact["has_number"], fact["text"]
         if fact["needs_confirmation"]:
             assert responsibility is Responsibility.PARTICIPATE, fact["text"]
+        for qualifier in fact.get("qualifiers", ()):
+            q = "".join(ch for ch in qualifier if not ch.isspace())
+            assert q and q in "".join(ch for ch in fact["text"] if not ch.isspace()), (
+                qualifier
+            )
+            assert q in "".join(ch for ch in quote if not ch.isspace()), qualifier
+
+    if "criteria" in annotation:
+        criteria = annotation["criteria"]
+        assert set(criteria) <= {f.value for f in CriterionField}
+        for field_name, entry in criteria.items():
+            if entry is None:
+                continue
+            spans = locate_quote(raw_text, entry["source_quote"])
+            assert len(spans) == 1, f"{field_name}: {entry['source_quote']}"
+
+    if "education" in annotation:
+        for edu in annotation["education"]:
+            assert edu["school"].strip()
+            DegreeLevel(edu["degree"])
+            if edu["status"] is not None:
+                EducationStatus(edu["status"])
+            spans = locate_quote(raw_text, edu["source_quote"])
+            assert len(spans) == 1, edu["source_quote"]

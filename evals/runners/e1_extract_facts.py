@@ -113,11 +113,15 @@ async def run_sample(
         record["error"] = None
         record["sections"] = [s.model_dump(mode="json") for s in result.sections]
         record["facts"] = [f.model_dump(mode="json") for f in result.facts]
+        record["criteria"] = [c.model_dump(mode="json") for c in result.criteria]
+        record["education"] = [e.model_dump(mode="json") for e in result.education]
         status = RunStatus.SUCCEEDED
     except Exception as error:  # 评测要记下任何失败原因，再继续跑下一份
         record["error"] = f"{type(error).__name__}: {error}"
         record["sections"] = []
         record["facts"] = []
+        record["criteria"] = []
+        record["education"] = []
 
     async with session_factory.begin() as session:
         await set_run_status(session, user_id, run.run_id, status)
