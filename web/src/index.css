@@ -331,3 +331,103 @@ textarea {
   flex-wrap: wrap;
   gap: 4px 0;
 }
+
+/* ---------- 岗位详情（岗位信息 + 匹配报告 | 定制简历面板） ---------- */
+
+.page-wide {
+  max-width: none;
+}
+
+.back-link {
+  padding-inline: 0;
+}
+
+.job-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.job-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.job-detail-panel {
+  position: sticky;
+  top: 16px;
+  min-width: 0;
+}
+
+.job-requirements {
+  margin-top: 12px;
+}
+
+.job-keywords {
+  margin: 12px 0 4px;
+}
+
+.job-raw {
+  white-space: pre-wrap;
+}
+
+.coverage-stat .ant-statistic-content {
+  font-variant-numeric: tabular-nums;
+}
+
+.report-meta {
+  margin: 4px 0 12px;
+}
+
+.report-gaps {
+  margin: 0 0 8px;
+  padding-left: 1.2em;
+}
+
+.report-reason,
+.report-facts {
+  margin: 6px 0 2px !important; /* antd 段落自带下边距 */
+}
+
+.resume-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.resume-preview-actions > :first-child {
+  margin-right: auto;
+}
+
+.resume-frame {
+  width: 100%;
+  height: calc(100dvh - 220px);
+  min-height: 480px;
+  border: 1px solid #e6e6e2;
+  border-radius: 8px;
+}
+
+.partial-bullets {
+  margin-top: 12px;
+}
+
+.tailor-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 991px) {
+  .job-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .job-detail-panel {
+    position: static;
+  }
+}

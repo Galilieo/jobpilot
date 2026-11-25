@@ -3,10 +3,11 @@ import type { ReactElement } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 import { AppShell } from './layouts/AppShell'
 import { ConversationPage } from './pages/ConversationPage'
+import { JobDetailPage } from './pages/job/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
 import { LoginPage } from './pages/LoginPage'
 import { ProfilePage } from './pages/ProfilePage'
-import { AccountPage, JobDetailPage, NotFoundPage, WorkspacePage } from './pages/PlaceholderPages'
+import { AccountPage, NotFoundPage, WorkspacePage } from './pages/PlaceholderPages'
 
 export default function App(): ReactElement {
   return (

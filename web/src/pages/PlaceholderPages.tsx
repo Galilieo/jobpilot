@@ -34,19 +34,6 @@ export function WorkspacePage(): ReactElement {
   )
 }
 
-export function JobDetailPage(): ReactElement {
-  return (
-    <PagePlaceholder
-      title="岗位详情"
-      description={
-        <>
-          岗位详情准备中。<Link to="/jobs">返回岗位库</Link>
-        </>
-      }
-    />
-  )
-}
-
 export function AccountPage(): ReactElement {
   return <PagePlaceholder title="账号设置" description="登录与账号管理准备中。" />
 }
