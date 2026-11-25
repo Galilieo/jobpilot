@@ -54,11 +54,14 @@ function fileForm(field: string, files: File[]): FormData {
   return form
 }
 
-export const resumes = {
+export const textImport = {
   // 文件只提取文字、不保存；截图走本机文字识别。两者都要用户核对后再提交。
   extract: (file: File) =>
     request<{ text: string }>('/api/extract-text', { form: fileForm('file', [file]) }),
   ocr: (files: File[]) => request<{ text: string }>('/api/ocr', { form: fileForm('files', files) }),
+}
+
+export const resumes = {
   upload: (rawText: string, filename: string | null, idempotencyKey: string) =>
     request<UploadedResume>('/api/resumes', {
       json: { raw_text: rawText, filename },
