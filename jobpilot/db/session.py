@@ -15,11 +15,15 @@ from sqlalchemy.ext.asyncio import (
 def create_database_engine(
     database_url: URL, *, connect_timeout_seconds: int
 ) -> AsyncEngine:
-    """创建连接池；实际数据库连接在执行查询时获取。"""
+    """创建连接池；实际数据库连接在执行查询时获取。
+
+    出错时不回显语句参数（hide_parameters）：参数里可能有简历正文，它会跟着异常进日志。
+    """
     return create_async_engine(
         database_url,
         pool_pre_ping=True,
         connect_args={"connect_timeout": connect_timeout_seconds},
+        hide_parameters=True,
     )
 
 
