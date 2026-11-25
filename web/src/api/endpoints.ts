@@ -25,10 +25,16 @@ import type {
 export const auth = {
   me: (signal?: AbortSignal) => request<User>('/api/me', { signal }),
   register: (email: string, password: string) =>
-    request<User>('/api/auth/register', { json: { email, password } }),
+    request<Pick<User, 'user_id' | 'email'>>('/api/auth/register', { json: { email, password } }),
   login: (email: string, password: string) =>
     request<void>('/api/auth/login', { json: { email, password } }),
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+}
+
+export const account = {
+  requestDeletion: () => request<void>('/api/account', { method: 'DELETE' }),
+  restore: () => request<void>('/api/account/restore', { method: 'POST' }),
+  exportUrl: '/api/account/export',
 }
 
 export const overview = {

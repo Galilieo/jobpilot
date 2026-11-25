@@ -3,6 +3,8 @@
 export interface User {
   user_id: string
   email: string
+  deletion_requested_at: string | null
+  deletion_deadline: string | null
 }
 
 // ---------- 工作台汇总 ----------

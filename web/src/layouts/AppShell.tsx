@@ -4,6 +4,7 @@ import { Button, Drawer, Grid, Layout, Result, Spin, theme } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { isUnauthorized, useCurrentUser } from '../auth'
+import { AccountRecoveryPage } from '../pages/AccountPage'
 import { SideNavigation } from './SideNavigation'
 
 export function AppShell(): ReactElement {
@@ -29,6 +30,10 @@ export function AppShell(): ReactElement {
         extra={<Button onClick={() => void user.refetch()}>重新连接</Button>}
       />
     )
+  }
+
+  if (user.data?.deletion_deadline) {
+    return <AccountRecoveryPage deadline={user.data.deletion_deadline} />
   }
 
   return (

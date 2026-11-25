@@ -11,6 +11,7 @@ export function useCurrentUser() {
     queryFn: ({ signal }) => auth.me(signal),
     retry: (count, error) => !(error instanceof ApiError && error.status === 401) && count < 2,
     staleTime: Infinity,
+    refetchOnWindowFocus: 'always',
   })
 }
 

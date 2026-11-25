@@ -21,9 +21,7 @@ function PagePlaceholder({ title, description }: PlaceholderProps): ReactElement
   )
 }
 
-export function AccountPage(): ReactElement {
-  return <PagePlaceholder title="账号设置" description="登录与账号管理准备中。" />
-}
+export { AccountPage } from './AccountPage'
 
 export function NotFoundPage(): ReactElement {
   return (
