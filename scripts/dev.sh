@@ -46,7 +46,7 @@ backend_pid=$!
 (cd web && exec pnpm dev) </dev/null &
 frontend_pid=$!
 
-printf 'JobPilot 前端 http://127.0.0.1:5174（Ctrl+C 停止前后端）\n'
+printf 'JobPilot 前端 http://127.0.0.1:%s（Ctrl+C 停止前后端）\n' "${JOBPILOT_WEB_PORT:-5174}"
 
 # macOS 自带的 Bash 3.2 没有 wait -n，轮询以便任一服务退出时回收另一侧。
 while kill -0 "$backend_pid" 2>/dev/null && kill -0 "$frontend_pid" 2>/dev/null; do

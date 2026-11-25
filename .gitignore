@@ -26,3 +26,6 @@ htmlcov/
 
 # Local resume editor preview (generated sample pages)
 .cache/resume-preview/
+
+# 本地账号删除与备份演练（合成凭据、备份和删除记录）
+/.cache/account-recovery/
