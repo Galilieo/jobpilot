@@ -307,9 +307,15 @@ async def test_snapshot_failure_rolls_back_product_and_success(
             assert await db.scalar(select(JobPosting)) is None
 
 
-async def test_cancelled_model_request_keeps_call_unknown(
+async def test_cancelled_request_frees_its_key_and_keeps_the_call_unknown(
     async_client, model_outputs, session_factory, monkeypatch
 ):
+    """等模型时请求协程被取消：这次尝试已经退出，键标为失败，同一个键可以重送。
+
+    这条测试原来断言键停在 processing、重送回 409。那样键一直占着，同一个键
+    要等服务重启才回收（重启时 fail_interrupted_keys 做的也是标为失败）。
+    模型调用可能已经计费，所以结论保持 unknown：明确重试会再调一次模型。
+    """
     await sign_in(async_client, "key-interrupted@example.invalid")
     entered = asyncio.Event()
 
@@ -317,6 +323,7 @@ async def test_cancelled_model_request_keeps_call_unknown(
         entered.set()
         await asyncio.Future()
 
+    create_completion = llm_gateway._create_completion
     monkeypatch.setattr(llm_gateway, "_create_completion", interrupted)
     body = {"raw_text": JD}
     task = asyncio.create_task(
@@ -328,15 +335,27 @@ async def test_cancelled_model_request_keeps_call_unknown(
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-    replay = await async_client.post("/api/jobs", json=body, headers=_headers())
-    assert replay.status_code == 409
     async with session_factory() as db:
         reservation = (await db.scalars(select(IdempotencyKey))).one()
         call = (await db.scalars(select(ModelCall))).one()
-        assert reservation.status == "processing"
-        assert reservation.run_id == call.run_id
+        run = await db.get(AiRun, reservation.run_id)
+        assert reservation.status == "failed"
+        assert reservation.run_id == call.run_id == run.run_id
+        assert run.status == RunStatus.FAILED
         assert call.outcome == CallOutcome.UNKNOWN
         assert call.prompt_tokens is None and call.completion_tokens is None
+
+    monkeypatch.setattr(llm_gateway, "_create_completion", create_completion)
+    model_outputs.append(json.dumps(OUTPUT))
+    retried = await async_client.post("/api/jobs", json=body, headers=_headers())
+    assert retried.status_code == 201, retried.text
+    async with session_factory() as db:
+        reservation = (await db.scalars(select(IdempotencyKey))).one()
+        assert reservation.status == "succeeded"  # 重送用的是同一个键
+        assert reservation.run_id != run.run_id  # 但是新的一次运行
+        outcomes = (await db.scalars(select(ModelCall.outcome))).all()
+        assert outcomes.count(CallOutcome.SUCCESS) == 1
+        assert await db.scalar(select(func.count()).select_from(JobPosting)) == 1
 
 
 async def test_service_restart_recovers_processing_without_touching_success(

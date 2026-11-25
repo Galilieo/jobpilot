@@ -99,7 +99,10 @@ async def idempotent_request(
                 status.HTTP_403_FORBIDDEN, detail="账号当前无法发起运行"
             )
         yield outcome
-    except Exception:
+    except BaseException:
+        # 也接住取消：请求协程在等模型时被取消（CancelledError 不是 Exception 的子类），
+        # 这次尝试同样已经退出。不收尾的话，键一直停在「处理中」，同一个键重送总是 409，
+        # 直到服务重启。model_call 保持 unknown：可能已经计费，明确重试会再计费。
         await db.rollback()
         async with session_factory.begin() as reservation:
             await outcome.fail(reservation)
