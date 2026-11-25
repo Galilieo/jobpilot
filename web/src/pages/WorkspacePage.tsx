@@ -1,4 +1,5 @@
 // 工作台（首页）：问候语、三张核心状态卡（事实库 / 不编造记录 / 偏好记忆）和四列岗位进度看板。
+import { BookOutlined, BulbOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Empty, Skeleton, Space, Tag, Typography, theme } from 'antd'
 import type { ReactElement } from 'react'
@@ -26,7 +27,7 @@ export function WorkspacePage(): ReactElement {
   })
 
   return (
-    <section className="page">
+    <section className="page workspace-page">
       <header className="page-heading page-heading-actions">
         <div>
           <Typography.Title level={1}>{greeting}</Typography.Title>
@@ -67,11 +68,20 @@ function StatusCards({
   facts: FactsOverview
   grounding: GroundingOverview
 }): ReactElement {
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   return (
     <div className="workspace-cards">
       <Card size="small" className="workspace-card">
-        <Typography.Text type="secondary">经历事实库</Typography.Text>
+        <Typography.Text type="secondary" className="workspace-card-label">
+          <span
+            className="workspace-card-icon"
+            style={{ background: token.colorPrimaryBg, color: token.colorPrimaryText }}
+          >
+            <BookOutlined />
+          </span>
+          经历事实库
+        </Typography.Text>
         <div className="workspace-metric">
           <span>{facts.published_count}</span>
           <Typography.Text type="secondary" className="workspace-metric-sub">
@@ -83,13 +93,21 @@ function StatusCards({
             ? `${facts.pending_count} 条待确认，确认并发布后才会用于匹配和改写`
             : '当前没有待确认的条目'}
         </Typography.Paragraph>
-        <Button size="small" onClick={() => void navigate('/me')}>
+        <Button size="small" className="workspace-card-action" onClick={() => void navigate('/me')}>
           {facts.pending_count > 0 ? '去确认' : '查看经历'}
         </Button>
       </Card>
 
       <Card size="small" className="workspace-card">
-        <Typography.Text type="secondary">不编造记录</Typography.Text>
+        <Typography.Text type="secondary" className="workspace-card-label">
+          <span
+            className="workspace-card-icon"
+            style={{ background: token.colorSuccessBg, color: token.colorSuccessText }}
+          >
+            <SafetyCertificateOutlined />
+          </span>
+          不编造记录
+        </Typography.Text>
         <div className="workspace-metric">
           <span>{grounding.total}</span>
           <Typography.Text type="secondary" className="workspace-metric-sub">
@@ -100,13 +118,25 @@ function StatusCards({
           通过 {grounding.passed} 条 · 回退原文 {grounding.fallback} 条 · 待处理 {grounding.pending}{' '}
           条
         </Typography.Paragraph>
-        <Button size="small" onClick={() => void navigate('/me?tab=resumes')}>
+        <Button
+          size="small"
+          className="workspace-card-action"
+          onClick={() => void navigate('/me?tab=resumes')}
+        >
           查看定制简历
         </Button>
       </Card>
 
       <Card size="small" className="workspace-card">
-        <Typography.Text type="secondary">记住的偏好</Typography.Text>
+        <Typography.Text type="secondary" className="workspace-card-label">
+          <span
+            className="workspace-card-icon"
+            style={{ background: token.colorFillTertiary, color: token.colorTextSecondary }}
+          >
+            <BulbOutlined />
+          </span>
+          记住的偏好
+        </Typography.Text>
         <div className="workspace-metric">
           <Typography.Text type="secondary">之后开放</Typography.Text>
         </div>
@@ -118,16 +148,26 @@ function StatusCards({
   )
 }
 
-const BOARD_COLUMNS: { key: keyof JobBoard; title: string }[] = [
-  { key: 'unmatched', title: '未匹配' },
-  { key: 'matched', title: '已匹配' },
-  { key: 'tailored', title: '已生成简历' },
-  { key: 'applied', title: '已投递' },
+const BOARD_COLUMNS: {
+  key: keyof JobBoard
+  title: string
+  dot: 'muted' | 'primary' | 'success' | 'warning'
+}[] = [
+  { key: 'unmatched', title: '未匹配', dot: 'muted' },
+  { key: 'matched', title: '已匹配', dot: 'primary' },
+  { key: 'tailored', title: '已生成简历', dot: 'success' },
+  { key: 'applied', title: '已投递', dot: 'warning' },
 ]
 
 function BoardSection({ board }: { board: JobBoard }): ReactElement {
   const { token } = theme.useToken()
   const navigate = useNavigate()
+  const dotColors = {
+    muted: token.colorTextTertiary,
+    primary: token.colorPrimary,
+    success: token.colorSuccess,
+    warning: token.colorWarning,
+  }
   const total =
     board.unmatched.length + board.matched.length + board.tailored.length + board.applied.length
 
@@ -145,7 +185,7 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
         </Card>
       ) : (
         <div className="workspace-board">
-          {BOARD_COLUMNS.map(({ key, title }) => {
+          {BOARD_COLUMNS.map(({ key, title, dot }) => {
             const items = board[key]
             return (
               <div
@@ -154,8 +194,11 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
                 style={{ background: token.colorFillQuaternary }}
               >
                 <div className="board-column-head">
-                  <Typography.Text strong>{title}</Typography.Text>
-                  <Typography.Text type="secondary" className="tabular-num">
+                  <span className="board-column-title">
+                    <span className="board-dot" style={{ background: dotColors[dot] }} />
+                    <Typography.Text strong>{title}</Typography.Text>
+                  </span>
+                  <Typography.Text type="secondary" className="board-count tabular-num">
                     {items.length}
                   </Typography.Text>
                 </div>
@@ -191,6 +234,7 @@ function BoardCard({
   showStage: boolean
   onOpen: () => void
 }): ReactElement {
+  const { token } = theme.useToken()
   const subtitle = [card.company, card.location].filter(Boolean).join(' · ') || '公司未填写'
   return (
     <Card size="small" hoverable className="board-card" onClick={onOpen}>
@@ -198,10 +242,15 @@ function BoardCard({
       <Typography.Paragraph type="secondary" className="board-card-sub">
         {subtitle}
       </Typography.Paragraph>
-      <Space size={4} wrap>
-        {showStage && <Tag color="blue">{JOB_STAGE[card.stage]}</Tag>}
-        {card.resume_stale && <Tag color="warning">事实库已更新</Tag>}
-      </Space>
+      <div className="board-card-footer">
+        <Space size={4} wrap>
+          {showStage && <Tag color="processing">{JOB_STAGE[card.stage]}</Tag>}
+          {card.resume_stale && <Tag color="warning">事实库已更新</Tag>}
+        </Space>
+        <Typography.Text style={{ color: token.colorPrimary, fontSize: 12 }}>
+          查看 →
+        </Typography.Text>
+      </div>
     </Card>
   )
 }

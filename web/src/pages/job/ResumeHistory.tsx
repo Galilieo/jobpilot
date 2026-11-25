@@ -49,7 +49,7 @@ export function ResumeHistory({
                       <Typography.Text strong className="tabular-num">
                         第 {item.version} 版
                       </Typography.Text>
-                      {isCurrent && <Tag color="blue">当前版本</Tag>}
+                      {isCurrent && <Tag color="processing">当前版本</Tag>}
                       {isPreviewing && !isCurrent && <Tag color="processing">正在只读预览</Tag>}
                     </Space>
                     <Typography.Text type="secondary" className="tabular-num">

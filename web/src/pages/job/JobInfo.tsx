@@ -173,7 +173,9 @@ function BasicFieldCell({
       <div className="job-field-label">
         <Typography.Text type="secondary">{label}</Typography.Text>
         {value && (
-          <Tag color={overridden ? 'blue' : undefined}>{overridden ? '你填写' : 'AI 提取'}</Tag>
+          <Tag color={overridden ? 'processing' : undefined}>
+            {overridden ? '你填写' : 'AI 提取'}
+          </Tag>
         )}
       </div>
       {editing ? (
@@ -351,7 +353,7 @@ function RequirementGroup({
                   {item.text}
                 </Typography.Paragraph>
                 <Space size={4} wrap>
-                  <Tag color={item.source_quote ? undefined : 'blue'}>
+                  <Tag color={item.source_quote ? undefined : 'processing'}>
                     {item.source_quote ? 'AI 提取' : '你填写'}
                   </Tag>
                   {item.source_quote && item.quote_verified === false && (

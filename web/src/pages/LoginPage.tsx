@@ -39,7 +39,7 @@ export function LoginPage(): ReactElement {
   }
 
   return (
-    <main className="login-page" style={{ background: token.colorBgLayout }}>
+    <main className="login-page">
       <Card className="login-card">
         <div className="brand login-brand">
           Job<span style={{ color: token.colorPrimary }}>Pilot</span>

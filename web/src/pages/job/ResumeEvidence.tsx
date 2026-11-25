@@ -49,6 +49,16 @@ function originTag(bullet: ResumeBullet): ReactElement {
   )
 }
 
+function bulletTriggerClass(bullet: ResumeBullet, isSelected: boolean): string {
+  const classes = ['evidence-trigger']
+  if (bullet.origin === 'pending') classes.push('evidence-trigger-error')
+  else if (bullet.origin === 'fallback' || bullet.check.issues.length > 0) {
+    classes.push('evidence-trigger-warn')
+  }
+  if (isSelected) classes.push('evidence-trigger-active')
+  return classes.join(' ')
+}
+
 export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): ReactElement {
   const entries = collectBullets(resume)
   const [selectedId, setSelectedId] = useState<string | null>(entries[0]?.bullet.bullet_id ?? null)
@@ -72,7 +82,7 @@ export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): Reac
             <li key={bullet.bullet_id} className="evidence-item">
               <button
                 type="button"
-                className="evidence-trigger"
+                className={bulletTriggerClass(bullet, isSelected)}
                 aria-expanded={isSelected}
                 onClick={() => setSelectedId(isSelected ? null : bullet.bullet_id)}
               >
@@ -80,7 +90,7 @@ export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): Reac
                   <Space size={6} wrap>
                     {originTag(bullet)}
                     <Typography.Text type="secondary">{experienceTitle}</Typography.Text>
-                    {bullet.edited && <Tag color="blue">已手动修改</Tag>}
+                    {bullet.edited && <Tag color="processing">已手动修改</Tag>}
                   </Space>
                 </div>
                 <Typography.Text>{bullet.text}</Typography.Text>
@@ -209,7 +219,7 @@ export function SuggestAddList({ blocks }: { blocks: PlanBlock[] }): ReactElemen
             {group.items.map((item, index) => (
               <li key={`${item.text}-${index}`}>
                 <Space size={6} wrap>
-                  <Tag color={item.type === 'hard' ? 'blue' : undefined}>
+                  <Tag color={item.type === 'hard' ? 'processing' : undefined}>
                     {item.type === 'hard' ? '硬性要求' : '加分项'}
                   </Tag>
                   <span>{item.text}</span>

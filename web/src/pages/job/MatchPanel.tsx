@@ -126,7 +126,7 @@ function MatchHistory({
                     {formatDateTime(item.created_at)}
                   </Typography.Text>
                   <Tag>v{item.fact_set_version}</Tag>
-                  {item.report_id === latestId && <Tag color="blue">最新</Tag>}
+                  {item.report_id === latestId && <Tag color="processing">最新</Tag>}
                 </Space>
                 <Typography.Text type="secondary" className="tabular-num">
                   硬性 {hardDone}/{item.hard_summary.total} · 加分 {prefDone}/

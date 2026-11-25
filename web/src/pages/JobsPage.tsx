@@ -1,7 +1,7 @@
 // 岗位库：岗位卡片列表；「添加岗位」粘贴 JD，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Empty, Input, Modal, Skeleton, Tag, Typography } from 'antd'
+import { App, Button, Card, Empty, Input, Modal, Skeleton, Tag, Typography, theme } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
@@ -10,6 +10,7 @@ import { JOB_STAGE } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
 
 export function JobsPage(): ReactElement {
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
   const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
@@ -55,7 +56,7 @@ export function JobsPage(): ReactElement {
                 {job.company ?? '公司未填写'}
               </Typography.Paragraph>
               <div className="job-tags">
-                <Tag color="blue">{JOB_STAGE[job.stage]}</Tag>
+                <Tag color="processing">{JOB_STAGE[job.stage]}</Tag>
                 {job.injection_count > 0 && (
                   <Tag color="warning" icon={<WarningOutlined />}>
                     JD 里有可疑指令
@@ -65,6 +66,9 @@ export function JobsPage(): ReactElement {
                   <Tag key={keyword}>{keyword}</Tag>
                 ))}
               </div>
+              <Typography.Text className="job-card-go" style={{ color: token.colorPrimary }}>
+                查看详情 →
+              </Typography.Text>
             </Card>
           ))}
         </div>

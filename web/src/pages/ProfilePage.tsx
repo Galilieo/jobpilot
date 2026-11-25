@@ -48,7 +48,12 @@ export function ProfilePage(): ReactElement {
       </header>
 
       <div className="profile-overview">
-        <Card size="small" hoverable onClick={() => switchTab('facts')}>
+        <Card
+          size="small"
+          hoverable
+          className={`profile-stat-card ${activeTab === 'facts' ? 'profile-stat-card-active' : ''}`}
+          onClick={() => switchTab('facts')}
+        >
           <Typography.Text type="secondary">经历事实</Typography.Text>
           <div className="workspace-metric">
             <span>{library.isPending ? '—' : publishedCount}</span>
@@ -58,7 +63,12 @@ export function ProfilePage(): ReactElement {
             </Typography.Text>
           </div>
         </Card>
-        <Card size="small" hoverable onClick={() => switchTab('resumes')}>
+        <Card
+          size="small"
+          hoverable
+          className={`profile-stat-card ${activeTab === 'resumes' ? 'profile-stat-card-active' : ''}`}
+          onClick={() => switchTab('resumes')}
+        >
           <Typography.Text type="secondary">定制简历</Typography.Text>
           <div className="workspace-metric">
             <span>{resumes.isPending ? '—' : resumeCount}</span>
@@ -67,7 +77,12 @@ export function ProfilePage(): ReactElement {
             </Typography.Text>
           </div>
         </Card>
-        <Card size="small" hoverable onClick={() => switchTab('memories')}>
+        <Card
+          size="small"
+          hoverable
+          className={`profile-stat-card ${activeTab === 'memories' ? 'profile-stat-card-active' : ''}`}
+          onClick={() => switchTab('memories')}
+        >
           <Typography.Text type="secondary">记忆</Typography.Text>
           <div className="workspace-metric">
             <Typography.Text type="secondary">之后开放</Typography.Text>

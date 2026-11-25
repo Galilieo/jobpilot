@@ -324,7 +324,7 @@ function PublishedRow({
               label: RESPONSIBILITY[value],
             }))}
           />
-          {fact.source === 'user' && <Tag color="blue">你补充的</Tag>}
+          {fact.source === 'user' && <Tag color="processing">你补充的</Tag>}
           {draftItem && (
             <Tag color={draftItem.status === 'deleted' ? 'error' : 'processing'}>
               {draftItem.status === 'deleted' ? '草稿中待删除' : '草稿中已修改'}
@@ -371,8 +371,9 @@ interface DraftRowProps {
 
 function DraftRow({ item, busy, onChange, onRemove }: DraftRowProps): ReactElement {
   const blocked = item.review_reasons.includes('quote_not_found')
+  const needsCheck = item.status === 'pending' && item.review_reasons.length > 0
   return (
-    <li className="fact-item">
+    <li className={needsCheck ? 'fact-item fact-item-warn' : 'fact-item'}>
       <FactBody item={item} busy={busy} onChange={onChange} />
       <div className="fact-actions">
         {[
@@ -462,7 +463,7 @@ function FactBody({ item, busy, onChange }: Omit<DraftRowProps, 'onRemove'>): Re
             }))}
           />
         )}
-        {item.source === 'user' && <Tag color="blue">你补充的</Tag>}
+        {item.source === 'user' && <Tag color="processing">你补充的</Tag>}
         {item.review_reasons.map((reason) => (
           <Tag key={reason} color="warning" icon={<WarningOutlined />}>
             {REVIEW_REASON[reason] ?? reason}
