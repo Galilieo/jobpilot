@@ -260,6 +260,72 @@ class FactSource(StrEnum):
     USER = "user"
 
 
+class CriterionField(StrEnum):
+    """求职条件字段：每周到岗天数、实习月数、最早到岗时间。"""
+
+    ONSITE_DAYS_PER_WEEK = "onsite_days_per_week"
+    INTERNSHIP_MONTHS = "internship_months"
+    EARLIEST_START = "earliest_start"
+
+
+class DegreeLevel(StrEnum):
+    """学历等级，顺序从低到高。"""
+
+    ASSOCIATE = "associate"
+    BACHELOR = "bachelor"
+    MASTER = "master"
+    PHD = "phd"
+
+
+class EducationStatus(StrEnum):
+    """教育经历的就读状态。"""
+
+    ENROLLED = "enrolled"
+    COMPLETED = "completed"
+
+
+ONSITE_DAYS_MIN = 1
+ONSITE_DAYS_MAX = 7
+INTERNSHIP_MONTHS_MIN = 1
+INTERNSHIP_MONTHS_MAX = 24
+
+
+def _provenance_constraints(
+    table_name: str,
+) -> tuple[
+    ForeignKeyConstraint, ForeignKeyConstraint, CheckConstraint, CheckConstraint
+]:
+    """事实、求职条件、教育共用的版本归属与原文出处约束。"""
+    return (
+        # 组合外键：与版本必须属于同一用户。没有 SET NULL，因为它会变成 UPDATE。
+        ForeignKeyConstraint(
+            ["fact_set_id", "user_id"],
+            ["fact_set.fact_set_id", "fact_set.user_id"],
+            ondelete="CASCADE",
+        ),
+        # 引用原文的外键延迟到提交时检查：删除账号时原文和记录在同一事务里被级联删除，
+        # 立即检查会先看到「原文仍被引用」而失败；单独删除仍被引用的原文依然会被拒绝。
+        ForeignKeyConstraint(
+            ["source_doc_id", "user_id"],
+            ["resume_document.doc_id", "resume_document.user_id"],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        CheckConstraint(
+            "(source = 'resume' AND source_doc_id IS NOT NULL "
+            "AND source_quote IS NOT NULL AND span_start IS NOT NULL "
+            "AND span_end IS NOT NULL AND quote_verified) "
+            "OR (source = 'user' AND source_doc_id IS NULL "
+            "AND source_quote IS NULL AND span_start IS NULL AND span_end IS NULL)",
+            name=f"ck_{table_name}_source",
+        ),
+        CheckConstraint(
+            "span_start IS NULL OR (span_start >= 0 AND span_start < span_end)",
+            name=f"ck_{table_name}_span",
+        ),
+    )
+
+
 class ResumeDocument(Base):
     """用户核对后的简历全文；事实的原文片段和位置都以这里的 raw_text 为准。
 
@@ -311,20 +377,7 @@ class Fact(Base):
 
     __tablename__ = "fact"
     __table_args__ = (
-        # 组合外键：事实与版本必须属于同一用户。没有 SET NULL，因为它会变成 UPDATE。
-        ForeignKeyConstraint(
-            ["fact_set_id", "user_id"],
-            ["fact_set.fact_set_id", "fact_set.user_id"],
-            ondelete="CASCADE",
-        ),
-        # 引用原文的外键延迟到提交时检查：删除账号时原文和事实在同一事务里被级联删除，
-        # 立即检查会先看到「原文仍被引用」而失败；单独删除仍被引用的原文依然会被拒绝。
-        ForeignKeyConstraint(
-            ["source_doc_id", "user_id"],
-            ["resume_document.doc_id", "resume_document.user_id"],
-            deferrable=True,
-            initially="DEFERRED",
-        ),
+        *_provenance_constraints("fact"),
         UniqueConstraint("user_id", "fact_set_id", "lineage_id"),
         # 供改写条目用 (fact_id, user_id, fact_set_id) 引用同一用户、同一版本的事实。
         UniqueConstraint("fact_id", "user_id", "fact_set_id"),
@@ -339,18 +392,6 @@ class Fact(Base):
         CheckConstraint(
             "responsibility IN ('lead', 'own', 'participate', 'na')",
             name="ck_fact_responsibility",
-        ),
-        CheckConstraint(
-            "(source = 'resume' AND source_doc_id IS NOT NULL "
-            "AND source_quote IS NOT NULL AND span_start IS NOT NULL "
-            "AND span_end IS NOT NULL AND quote_verified) "
-            "OR (source = 'user' AND source_doc_id IS NULL "
-            "AND source_quote IS NULL AND span_start IS NULL AND span_end IS NULL)",
-            name="ck_fact_source",
-        ),
-        CheckConstraint(
-            "span_start IS NULL OR (span_start >= 0 AND span_start < span_end)",
-            name="ck_fact_span",
         ),
     )
 
@@ -374,8 +415,84 @@ class Fact(Base):
     quote_verified: Mapped[bool] = mapped_column(server_default=sql_text("false"))
 
 
+class FactSetCriterion(Base):
+    """已发布的求职条件，每个事实库版本每项至多一行，只追加。"""
+
+    __tablename__ = "fact_set_criterion"
+    __table_args__ = (
+        *_provenance_constraints("fact_set_criterion"),
+        UniqueConstraint("fact_set_id", "field"),
+        CheckConstraint(
+            "field IN ('onsite_days_per_week', 'internship_months', 'earliest_start')",
+            name="ck_fact_set_criterion_field",
+        ),
+        CheckConstraint(
+            f"(field = 'onsite_days_per_week' "
+            f"AND int_value BETWEEN {ONSITE_DAYS_MIN} AND {ONSITE_DAYS_MAX} "
+            f"AND text_value IS NULL) OR "
+            "(field = 'internship_months' AND int_value BETWEEN "
+            f"{INTERNSHIP_MONTHS_MIN} AND {INTERNSHIP_MONTHS_MAX} "
+            "AND text_value IS NULL) OR "
+            "(field = 'earliest_start' AND int_value IS NULL "
+            "AND text_value IS NOT NULL AND length(btrim(text_value)) > 0)",
+            name="ck_fact_set_criterion_value",
+        ),
+    )
+
+    criterion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    fact_set_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    field: Mapped[str] = mapped_column(String(32))
+    int_value: Mapped[int | None]
+    text_value: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16))
+    source_doc_id: Mapped[UUID | None] = mapped_column(Uuid)
+    source_quote: Mapped[str | None] = mapped_column(Text)
+    span_start: Mapped[int | None]
+    span_end: Mapped[int | None]
+    quote_verified: Mapped[bool] = mapped_column(server_default=sql_text("false"))
+
+
+class FactSetEducation(Base):
+    """已发布的教育经历，每个事实库版本可有多条，每条是一段完整教育经历，只追加。"""
+
+    __tablename__ = "fact_set_education"
+    __table_args__ = (
+        *_provenance_constraints("fact_set_education"),
+        UniqueConstraint("user_id", "fact_set_id", "education_id"),
+        CheckConstraint(
+            "length(btrim(school)) > 0", name="ck_fact_set_education_school"
+        ),
+        CheckConstraint(
+            "degree IN ('associate', 'bachelor', 'master', 'phd')",
+            name="ck_fact_set_education_degree",
+        ),
+        CheckConstraint(
+            "status IN ('enrolled', 'completed')",
+            name="ck_fact_set_education_status",
+        ),
+    )
+
+    record_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    fact_set_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    education_id: Mapped[UUID] = mapped_column(Uuid)
+    school: Mapped[str] = mapped_column(Text)
+    major: Mapped[str | None] = mapped_column(Text)
+    degree: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16))
+    start_text: Mapped[str | None] = mapped_column(Text)
+    end_text: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16))
+    source_doc_id: Mapped[UUID | None] = mapped_column(Uuid)
+    source_quote: Mapped[str | None] = mapped_column(Text)
+    span_start: Mapped[int | None]
+    span_end: Mapped[int | None]
+    quote_verified: Mapped[bool] = mapped_column(server_default=sql_text("false"))
+
+
 class FactDraft(Base):
-    """每个用户一份发布前的草稿：待确认、修改和删除的事实都放在 items_json。
+    """每个用户一份发布前的草稿：待确认、修改和删除的事实、求职条件和教育都放在这里。
 
     base_fact_set_id 记录草稿基于哪个版本；发布时若最新版本已不是它，返回冲突。
     """
@@ -396,6 +513,12 @@ class FactDraft(Base):
     base_fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)  # 首次发布前为空
     revision: Mapped[int] = mapped_column(server_default=sql_text("0"))
     items_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+    criteria_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+    education_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )
     updated_at: Mapped[datetime] = mapped_column(

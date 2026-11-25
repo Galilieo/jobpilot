@@ -11,7 +11,13 @@ from sqlalchemy.engine import Connection
 
 from jobpilot.api.tailoring import RunLauncher
 from jobpilot.config import settings
-from jobpilot.db.models import Base, ModelCall, User
+from jobpilot.db.models import (
+    Base,
+    FactSetCriterion,
+    FactSetEducation,
+    ModelCall,
+    User,
+)
 from jobpilot.services.accounts import PurgeResult, purge_accounts
 from jobpilot.tests.test_account_lifecycle import EMAIL, _sign_in
 from jobpilot.tests.test_auth import login
@@ -52,7 +58,37 @@ async def portfolio(
     await launcher.wait_all()
     await _save_new_resume_version(async_client, run_id)
     await _create_fact_history(async_client, inputs.fact_set_id)
+    await _seed_criteria_and_education(session_factory, user_id, inputs.fact_set_id)
     return Portfolio(user_id, inputs, run_id)
+
+
+async def _seed_criteria_and_education(
+    session_factory: Factory, user_id: UUID, fact_set_id: UUID
+) -> None:
+    from uuid import uuid4
+
+    async with session_factory.begin() as session:
+        session.add_all(
+            [
+                FactSetCriterion(
+                    user_id=user_id,
+                    fact_set_id=fact_set_id,
+                    field="onsite_days_per_week",
+                    int_value=4,
+                    source="user",
+                ),
+                FactSetEducation(
+                    user_id=user_id,
+                    fact_set_id=fact_set_id,
+                    education_id=uuid4(),
+                    school="澄湖大学",
+                    major="计算机科学与技术",
+                    degree="bachelor",
+                    status="completed",
+                    source="user",
+                ),
+            ]
+        )
 
 
 async def _save_new_resume_version(client: httpx.AsyncClient, run_id: str) -> None:
@@ -122,6 +158,8 @@ async def test_export_has_all_versions_and_only_the_signed_in_owners_data(
     assert all(archive[name] for name in archive.keys() - {"account", "format_version"})
     assert str(other_id) not in str(archive)
     assert [item["version"] for item in archive["fact_sets"]] == [1, 2]
+    assert len(archive["fact_set_criteria"]) == 1
+    assert len(archive["fact_set_educations"]) == 1
     assert {fact["fact_set_id"] for fact in archive["facts"]} == {
         fact_set["fact_set_id"] for fact_set in archive["fact_sets"]
     }
@@ -237,6 +275,8 @@ async def test_account_foreign_keys_in_migrated_database(
     async with session_factory() as session:
         foreign_keys = await (await session.connection()).run_sync(rules)
     assert foreign_keys.pop("fact")["fact_set"] == "CASCADE"
+    assert foreign_keys.pop("fact_set_criterion")["fact_set"] == "CASCADE"
+    assert foreign_keys.pop("fact_set_education")["fact_set"] == "CASCADE"
     assert foreign_keys.pop("model_call")["ai_run"] == "SET NULL"
     foreign_keys.pop("user_account")
     assert {

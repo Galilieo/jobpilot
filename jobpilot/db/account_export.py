@@ -12,6 +12,8 @@ from jobpilot.db.models import (
     Fact,
     FactDraft,
     FactSet,
+    FactSetCriterion,
+    FactSetEducation,
     JobPosting,
     MatchReport,
     ResumeDocument,
@@ -26,6 +28,8 @@ from jobpilot.db.models import (
 _EXPORT_TABLES = {
     "fact_sets": FactSet.__table__,
     "facts": Fact.__table__,
+    "fact_set_criteria": FactSetCriterion.__table__,
+    "fact_set_educations": FactSetEducation.__table__,
     "fact_drafts": FactDraft.__table__,
     "resume_documents": ResumeDocument.__table__,
     "job_postings": JobPosting.__table__,
