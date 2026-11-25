@@ -132,12 +132,7 @@ export type MatchSummary = Omit<MatchReport, 'items'>
 // ---------- 改写 ----------
 
 export type RunStatus =
-  | 'running'
-  | 'waiting_confirmation'
-  | 'succeeded'
-  | 'failed'
-  | 'cancelled'
-  | 'budget_exhausted'
+  'running' | 'waiting_confirmation' | 'succeeded' | 'failed' | 'cancelled' | 'budget_exhausted'
 
 export interface TailorRunSummary {
   run_id: string
@@ -152,7 +147,11 @@ export interface PlanBlock {
   key: string
   experience: string | null
   status: 'done' | 'interrupted' | 'failed' | 'not_started'
-  focus: { text: string; type: RequirementType; base_status: 'written' | 'suggest_add' | 'to_check' }[]
+  focus: {
+    text: string
+    type: RequirementType
+    base_status: 'written' | 'suggest_add' | 'to_check'
+  }[]
 }
 
 export interface TailorRun {
