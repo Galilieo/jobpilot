@@ -1,8 +1,9 @@
-// 依据追溯与建议补入：展示改写条目引用的事实、原文片段和检查结论，以及计划中建议补入的要求。
+// 依据追溯与底稿没写到的要求：展示改写条目引用的事实、原文片段和检查结论，以及底稿没写到、可以写进去的岗位要求。
 import { CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined } from '@ant-design/icons'
 import { Card, Empty, Space, Tag, Typography, theme } from 'antd'
 import { useState, type ReactElement } from 'react'
 import type { CitedFact, PlanBlock, ResumeBullet, TailoredResumeData } from '../../api/types'
+import { isUnwritten, UNWRITTEN_LABEL } from './unwritten'
 
 interface BulletEntry {
   experienceTitle: string
@@ -189,28 +190,31 @@ function CheckSummary({ bullet }: { bullet: ResumeBullet }): ReactElement {
   return <Typography.Text type="success">检查结论：{layersText}。</Typography.Text>
 }
 
-export function SuggestAddList({ blocks }: { blocks: PlanBlock[] }): ReactElement {
+const MATCH_REPORT_HINT =
+  '部分覆盖、未覆盖的要求见匹配报告：先在「我的 · 经历」补充真实做过的事并发布，再重新生成。'
+
+export function UnwrittenRequirements({ blocks }: { blocks: PlanBlock[] }): ReactElement {
   const groups = blocks
     .map((block) => ({
       key: block.key,
       experience: block.experience ?? '专业技能',
-      items: block.focus.filter((item) => item.base_status === 'suggest_add'),
+      items: block.focus.filter(isUnwritten),
     }))
     .filter((group) => group.items.length > 0)
 
   if (groups.length === 0) {
     return (
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description="所选底稿已涵盖可写的重点要求，没有需要额外补入的条目。"
-      />
+      <Typography.Paragraph type="secondary">
+        你确认过的经历能支撑的岗位要求，这次所选的底稿都已写到。{MATCH_REPORT_HINT}
+      </Typography.Paragraph>
     )
   }
 
   return (
     <Space orientation="vertical" size={12} className="full-width">
       <Typography.Text type="secondary">
-        以下要求在所选底稿中没写到、建议补入（改写或手改时请只使用你确认过的经历）。
+        这些要求你确认过的经历能支撑，但这次所选的底稿里没写到。改写会用这些事实；你补充的事实在底稿里找不到原样文字，可能换了说法，请在预览里确认。
+        {MATCH_REPORT_HINT}
       </Typography.Text>
       {groups.map((group) => (
         <section key={group.key}>
@@ -223,6 +227,9 @@ export function SuggestAddList({ blocks }: { blocks: PlanBlock[] }): ReactElemen
                     {item.type === 'hard' ? '硬性要求' : '加分项'}
                   </Tag>
                   <span>{item.text}</span>
+                  <Typography.Text type="secondary">
+                    {UNWRITTEN_LABEL[item.base_status]}
+                  </Typography.Text>
                 </Space>
               </li>
             ))}

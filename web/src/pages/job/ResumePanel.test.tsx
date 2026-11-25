@@ -46,6 +46,7 @@ const RUN_SUCCEEDED: TailorRun = {
       focus: [
         { text: '熟悉 FastAPI 接口开发', type: 'hard', base_status: 'written' },
         { text: '补充 pgvector 混合检索指标', type: 'hard', base_status: 'suggest_add' },
+        { text: '有 LangGraph 项目经验', type: 'preferred', base_status: 'to_check' },
       ],
     },
   ],
@@ -142,7 +143,7 @@ const LIBRARY: Library = {
   draft: { base_fact_set_id: 'set-1', items: [], criteria: [], education: [], revision: 0 },
 }
 
-describe('ResumePanel 轮询停止、依据追溯与建议补入', () => {
+describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -204,7 +205,7 @@ describe('ResumePanel 轮询停止、依据追溯与建议补入', () => {
     expect(runCalls).toBe(3)
   })
 
-  it('支持依据追溯切换条目与展示计划里的「建议补入」', async () => {
+  it('支持依据追溯切换条目，并列出底稿没写到的要求（含你补充的事实）', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
@@ -241,9 +242,14 @@ describe('ResumePanel 轮询停止、依据追溯与建议补入', () => {
     expect(await screen.findByText(/需要你手动修改或删除/)).toBeInTheDocument()
     expect(screen.getByText('数字「10 倍」找不到依据')).toBeInTheDocument()
 
-    // 进入建议补入
-    await user.click(screen.getByRole('tab', { name: '建议补入 (1)' }))
+    // 底稿没写到：别的简历写过的、你补充的都列出；底稿已写到的不列
+    await user.click(screen.getByRole('tab', { name: '底稿没写到 (2)' }))
     expect(await screen.findByText('补充 pgvector 混合检索指标')).toBeInTheDocument()
+    expect(screen.getByText('别的简历写过')).toBeInTheDocument()
+    expect(screen.getByText('有 LangGraph 项目经验')).toBeInTheDocument()
+    expect(screen.getByText('你补充的，待核对')).toBeInTheDocument()
     expect(screen.queryByText('熟悉 FastAPI 接口开发')).not.toBeInTheDocument()
+    // 说明部分覆盖、未覆盖去哪里看
+    expect(screen.getByText(/部分覆盖、未覆盖的要求见匹配报告/)).toBeInTheDocument()
   })
 })

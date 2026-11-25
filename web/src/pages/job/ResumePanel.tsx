@@ -1,4 +1,4 @@
-// 定制简历面板：生成进度（后台轮询）、可编辑预览、依据追溯、建议补入、版本与运行历史。
+// 定制简历面板：生成进度（后台轮询）、可编辑预览、依据追溯、底稿没写到的要求、版本与运行历史。
 import { ExpandOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -37,7 +37,8 @@ import {
   tailorRunQuery,
   tailorRunsQuery,
 } from '../../queryKeys'
-import { ResumeEvidence, SuggestAddList } from './ResumeEvidence'
+import { ResumeEvidence, UnwrittenRequirements } from './ResumeEvidence'
+import { countUnwritten } from './unwritten'
 import { ResumeHistory } from './ResumeHistory'
 
 export const POLL_MS = 2000
@@ -235,10 +236,7 @@ function RunView({
     const isStale = Boolean(
       !staleDismissed && latestSet && run.fact_set_id && latestSet.fact_set_id !== run.fact_set_id,
     )
-    const suggestCount = run.blocks.reduce(
-      (sum, block) => sum + block.focus.filter((item) => item.base_status === 'suggest_add').length,
-      0,
-    )
+    const unwrittenCount = countUnwritten(run.blocks)
 
     return (
       <Space orientation="vertical" size={12} className="full-width">
@@ -282,8 +280,8 @@ function RunView({
             },
             {
               key: 'suggest',
-              label: suggestCount > 0 ? `建议补入 (${suggestCount})` : '建议补入',
-              children: <SuggestAddList blocks={run.blocks} />,
+              label: unwrittenCount > 0 ? `底稿没写到 (${unwrittenCount})` : '底稿没写到',
+              children: <UnwrittenRequirements blocks={run.blocks} />,
             },
             {
               key: 'history',
