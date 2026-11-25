@@ -8,8 +8,10 @@
 import asyncio
 import json
 import logging
+import traceback
 from collections.abc import AsyncIterator, Coroutine, Iterable
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
@@ -22,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
+from jobpilot.config import REPO_ROOT
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
@@ -255,10 +258,28 @@ def _describe(error: BaseException) -> str:
     return " · ".join(parts)
 
 
+def _locations(error: BaseException) -> str:
+    """只提取调用栈的文件、行号和函数名；绝不读异常说明、源码行或局部变量。"""
+    frames = []
+    for frame in traceback.extract_tb(error.__traceback__):
+        path = Path(frame.filename)
+        try:
+            display = path.resolve().relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            display = path.name
+        frames.append(f"{display}:{frame.lineno} {frame.name}")
+    return " -> ".join(frames) or "unknown"
+
+
 async def _fail_execution(
     deps: TailorDeps, user_id: UUID, run_id: UUID, error: BaseException
 ) -> None:
-    logger.error("改写运行 %s 出错（%s）", run_id, _describe(error))
+    logger.error(
+        "改写运行 %s 出错（%s），调用栈：%s",
+        run_id,
+        _describe(error),
+        _locations(error),
+    )
     await mark_failed(deps.session_factory, user_id, run_id)
 
 

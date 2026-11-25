@@ -297,7 +297,9 @@ async def test_program_error_in_background_marks_run_failed(
 RESUME_MARK = "ZZ_RESUME_TEXT_MARK"
 
 
-@pytest.mark.parametrize("failure", ["failing-write", "corrupt-snapshot"])
+@pytest.mark.parametrize(
+    "failure", ["failing-write", "corrupt-snapshot", "plain-key-error"]
+)
 async def test_background_error_log_carries_no_resume_text(
     async_client: httpx.AsyncClient,
     session_factory: Factory,
@@ -307,11 +309,11 @@ async def test_background_error_log_carries_no_resume_text(
     caplog: pytest.LogCaptureFixture,
     failure: str,
 ) -> None:
-    """后台改写出错时，日志只留运行 ID、异常类名和错误码。
+    """后台改写出错时，日志只留运行 ID、异常类名、错误码和调用栈位置。
 
     数据库异常的说明带着语句参数，约束错误还会由数据库带出整行内容，校验异常的说明
-    带着输入值：简历正文会跟着进日志。
-    两种真实的出错方式各在数据里放一个独特标记，抓取应用发出的全部日志。"""
+    带着输入值，KeyError 的说明带着缺失的键：简历正文会跟着进日志。
+    三种真实的出错方式各在数据里放一个独特标记，抓取应用发出的全部日志。"""
     graph = tailoring.run_tailoring
 
     async def failing_write(deps, user_id, run_id, **kwargs) -> None:
@@ -349,7 +351,15 @@ async def test_background_error_log_carries_no_resume_text(
             )
         await graph(deps, user_id, run_id, **kwargs)
 
-    broken = failing_write if failure == "failing-write" else corrupt_snapshot
+    async def plain_key_error(deps, user_id, run_id, **kwargs) -> None:
+        """普通程序错误：KeyError 带着简历标记，日志里不能有它，但要看到函数名。"""
+        raise KeyError(RESUME_MARK)
+
+    broken = {
+        "failing-write": failing_write,
+        "corrupt-snapshot": corrupt_snapshot,
+        "plain-key-error": plain_key_error,
+    }[failure]
     monkeypatch.setattr(tailoring, "run_tailoring", broken)
     caplog.set_level(logging.DEBUG, logger="jobpilot")
     user_id = await sign_in(async_client, f"log-{failure}@tailor-api.invalid")
@@ -367,8 +377,19 @@ async def test_background_error_log_carries_no_resume_text(
         for record in caplog.records
         if record.levelno >= logging.ERROR
     ]
-    expected = "IntegrityError" if failure == "failing-write" else "ValidationError"
-    assert any(run_id in message and expected in message for message in errors), errors
+    expected_error, expected_funcs = {
+        "failing-write": ("IntegrityError", ("failing_write",)),
+        "corrupt-snapshot": ("ValidationError", ("corrupt_snapshot", "load_inputs")),
+        "plain-key-error": ("KeyError", ("plain_key_error",)),
+    }[failure]
+    assert any(
+        run_id in message
+        and expected_error in message
+        and all(
+            f":{name}" in message or f" {name}" in message for name in expected_funcs
+        )
+        for message in errors
+    ), errors
 
 
 async def test_restart_fails_running_runs_but_keeps_waiting_ones(
