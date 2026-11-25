@@ -1,11 +1,16 @@
 """用真实 PostgreSQL 验证匹配报告的组合外键、唯一约束与级联删除。"""
 
+from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from alembic.config import Config
+from sqlalchemy import delete, select, text
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from alembic import command
 from jobpilot.db.models import (
     AiRun,
     Fact,
@@ -170,3 +175,75 @@ async def test_report_requires_complete_match_run(
         with pytest.raises(ValueError, match="匹配运行"):
             add_match_report(db, run, items=[], main_gaps=[])
         assert await db.scalar(select(MatchReport)) is None
+
+
+async def test_match_report_seq_migration_backfills_and_round_trips(
+    db_engine: AsyncEngine, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """降级插入两条历史报告，升级后按时间与 ID 回填 seq，新插入继续递增。"""
+    owner = await add_user(session_factory, "seq-migration@example.invalid")
+    version = await add_fact_set(session_factory, owner, 1)
+    async with db_engine.connect() as connection:
+        await connection.run_sync(_check_seq_migration, owner, version)
+        await connection.rollback()
+
+
+def _check_seq_migration(connection: Connection, owner, version) -> None:
+    connection.begin()
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.attributes["connection"] = connection
+
+    command.downgrade(config, "20261125_03")
+    t1 = datetime(2026, 11, 25, 10, 0, 0, tzinfo=UTC)
+    t2 = datetime(2026, 11, 25, 10, 1, 0, tzinfo=UTC)
+    r1, r2, r3 = uuid4(), uuid4(), uuid4()
+    rep1, rep2, rep3 = uuid4(), uuid4(), uuid4()
+    for rid in (r1, r2, r3):
+        connection.execute(
+            text(
+                "INSERT INTO ai_run "
+                "(run_id, user_id, kind, fact_set_id, job_snapshot_json) "
+                "VALUES (:run_id, :user_id, 'match', :fact_set_id, '{}'::jsonb)"
+            ),
+            {"run_id": rid, "user_id": owner, "fact_set_id": version},
+        )
+    # 故意先插入较晚时间、后插入较早时间，验证按 created_at ASC, report_id ASC 回填
+    connection.execute(
+        text(
+            "INSERT INTO match_report (report_id, user_id, run_id, created_at) "
+            "VALUES (:rep2, :user_id, :r2, :t2), (:rep1, :user_id, :r1, :t1)"
+        ),
+        {
+            "rep1": rep1,
+            "rep2": rep2,
+            "user_id": owner,
+            "r1": r1,
+            "r2": r2,
+            "t1": t1,
+            "t2": t2,
+        },
+    )
+
+    command.upgrade(config, "head")
+    rows = connection.execute(
+        text("SELECT report_id, seq FROM match_report ORDER BY seq ASC")
+    ).all()
+    assert [(row[0], row[1]) for row in rows] == [(rep1, 1), (rep2, 2)]
+
+    # 升级后再插入新报告，自增序号应紧接着从 3 开始
+    connection.execute(
+        text(
+            "INSERT INTO match_report (report_id, user_id, run_id) "
+            "VALUES (:rep3, :user_id, :r3)"
+        ),
+        {"rep3": rep3, "user_id": owner, "r3": r3},
+    )
+    seq3 = connection.execute(
+        text("SELECT seq FROM match_report WHERE report_id = :rep3"),
+        {"rep3": rep3},
+    ).scalar_one()
+    assert seq3 == 3
+
+    command.downgrade(config, "20261125_03")
+    command.upgrade(config, "head")
+    command.check(config)

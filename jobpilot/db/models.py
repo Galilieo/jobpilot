@@ -6,10 +6,12 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Identity,
     Index,
     Integer,
     String,
@@ -644,6 +646,10 @@ class MatchReport(Base):
         ForeignKey("user_account.user_id", ondelete="CASCADE")
     )
     run_id: Mapped[UUID] = mapped_column(Uuid)
+    # 同一时刻产生的多份匹配报告，按数据库自增序号确定先后顺序。
+    seq: Mapped[int] = mapped_column(
+        BigInteger, Identity(), nullable=False, unique=True
+    )
     items_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )
