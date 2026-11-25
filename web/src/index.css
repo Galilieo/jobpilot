@@ -300,18 +300,6 @@ textarea {
   margin: 0 !important; /* antd 标题自带上下边距 */
 }
 
-/* 窄屏时操作按钮换到文字下面，不挤占经历文字的宽度。 */
-@media (max-width: 767px) {
-  .fact-group .ant-list-item {
-    flex-wrap: wrap;
-  }
-
-  .fact-group .ant-list-item-action {
-    margin-inline-start: 0;
-    margin-top: 8px;
-  }
-}
-
 /* ---------- 岗位库 ---------- */
 
 .page-heading-actions {
@@ -408,7 +396,7 @@ textarea {
   width: 100%;
   height: calc(100dvh - 220px);
   min-height: 480px;
-  border: 1px solid #e6e6e2;
+  border: 1px solid var(--ant-color-border);
   border-radius: 8px;
 }
 
@@ -429,5 +417,51 @@ textarea {
 
   .job-detail-panel {
     position: static;
+  }
+}
+
+/* ---------- 简单列表（代替已弃用的 antd List） ---------- */
+
+.row-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row-list > li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.row-list > li:last-child {
+  border-bottom: none;
+}
+
+.requirement-list > li {
+  padding: 6px 0;
+}
+
+.fact-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.fact-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.job-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* 窄屏时操作按钮换到文字下面，不挤占经历文字的宽度。 */
+@media (max-width: 767px) {
+  .fact-item {
+    flex-wrap: wrap;
   }
 }

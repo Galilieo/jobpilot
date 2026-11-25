@@ -1,5 +1,5 @@
 // 岗位信息：基本字段、硬性要求与加分项、关键词、JD 原文。
-import { Card, Collapse, Descriptions, Empty, List, Tag, Typography } from 'antd'
+import { Card, Collapse, Descriptions, Empty, Tag, Typography } from 'antd'
 import type { ReactElement } from 'react'
 import type { BasicFields, Job } from '../../api/types'
 
@@ -59,11 +59,11 @@ function RequirementList({ title, items }: { title: string; items: string[] }): 
       {items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无" />
       ) : (
-        <List
-          size="small"
-          dataSource={items}
-          renderItem={(item) => <List.Item>{item}</List.Item>}
-        />
+        <ul className="row-list requirement-list">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
       )}
     </section>
   )

@@ -1,7 +1,7 @@
 // 岗位库：岗位卡片列表；「添加岗位」粘贴 JD，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Empty, Input, List, Modal, Skeleton, Tag, Typography } from 'antd'
+import { App, Button, Card, Empty, Input, Modal, Skeleton, Tag, Typography } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
@@ -47,35 +47,32 @@ export function JobsPage(): ReactElement {
           </Empty>
         </Card>
       ) : (
-        <List
-          grid={{ gutter: 16, xs: 1, md: 2, xl: 3 }}
-          dataSource={list.data}
-          renderItem={(job) => (
-            <List.Item>
-              <Card
-                hoverable
-                className="job-card"
-                onClick={() => void navigate(`/jobs/${job.job_id}`)}
-              >
-                <Typography.Text strong>{job.title ?? '未命名岗位'}</Typography.Text>
-                <Typography.Paragraph type="secondary" className="job-company">
-                  {job.company ?? '公司未填写'}
-                </Typography.Paragraph>
-                <div className="job-tags">
-                  <Tag color="blue">{STAGE[job.stage]}</Tag>
-                  {job.injection_count > 0 && (
-                    <Tag color="warning" icon={<WarningOutlined />}>
-                      JD 里有可疑指令
-                    </Tag>
-                  )}
-                  {job.keywords.slice(0, 4).map((keyword) => (
-                    <Tag key={keyword}>{keyword}</Tag>
-                  ))}
-                </div>
-              </Card>
-            </List.Item>
-          )}
-        />
+        <div className="job-grid">
+          {list.data.map((job) => (
+            <Card
+              key={job.job_id}
+              hoverable
+              className="job-card"
+              onClick={() => void navigate(`/jobs/${job.job_id}`)}
+            >
+              <Typography.Text strong>{job.title ?? '未命名岗位'}</Typography.Text>
+              <Typography.Paragraph type="secondary" className="job-company">
+                {job.company ?? '公司未填写'}
+              </Typography.Paragraph>
+              <div className="job-tags">
+                <Tag color="blue">{STAGE[job.stage]}</Tag>
+                {job.injection_count > 0 && (
+                  <Tag color="warning" icon={<WarningOutlined />}>
+                    JD 里有可疑指令
+                  </Tag>
+                )}
+                {job.keywords.slice(0, 4).map((keyword) => (
+                  <Tag key={keyword}>{keyword}</Tag>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
       <AddJobModal open={adding} onClose={() => setAdding(false)} />
     </section>

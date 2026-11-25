@@ -134,12 +134,12 @@ function Progress({ blocks }: { blocks: PlanBlock[] }): ReactElement {
   return (
     <div className="tailor-progress">
       <Steps
-        direction="vertical"
+        orientation="vertical"
         size="small"
         current={1}
         items={[
-          { title: '对照岗位要求', description: '读取事实库和岗位，分析匹配' },
-          { title: '逐段改写并检查', description: '每条都核对引用的事实，不过就修订或退回原文' },
+          { title: '对照岗位要求', content: '读取事实库和岗位，分析匹配' },
+          { title: '逐段改写并检查', content: '每条都核对引用的事实，不过就修订或退回原文' },
           { title: '组装完整简历' },
         ]}
       />

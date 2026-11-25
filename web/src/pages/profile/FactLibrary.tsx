@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Empty,
-  List,
   Popconfirm,
   Select,
   Skeleton,
@@ -156,17 +155,17 @@ export function FactLibrary(): ReactElement {
                     />
                   )}
                 </div>
-                <List
-                  dataSource={items}
-                  renderItem={(item) => (
+                <ul className="row-list">
+                  {items.map((item) => (
                     <DraftRow
+                      key={item.lineage_id}
                       item={item}
                       busy={change.isPending || remove.isPending}
                       onChange={(changes) => change.mutate({ item, changes })}
                       onRemove={() => remove.mutate(item)}
                     />
-                  )}
-                />
+                  ))}
+                </ul>
               </section>
             ))}
           </>
@@ -232,79 +231,87 @@ interface DraftRowProps {
 function DraftRow({ item, busy, onChange, onRemove }: DraftRowProps): ReactElement {
   const blocked = item.review_reasons.includes('quote_not_found')
   return (
-    <List.Item
-      actions={[
-        item.status === 'pending' && (
-          <Tooltip key="confirm" title={blocked ? '原文里找不到，请先修改文字或删除' : undefined}>
+    <li className="fact-item">
+      {/* 文字和标签在前，操作在后；窄屏时操作换到下一行。 */}
+      <FactBody item={item} busy={busy} onChange={onChange} />
+      <div className="fact-actions">
+        {[
+          item.status === 'pending' && (
+            <Tooltip key="confirm" title={blocked ? '原文里找不到，请先修改文字或删除' : undefined}>
+              <Button
+                size="small"
+                icon={<CheckOutlined />}
+                disabled={busy || blocked}
+                onClick={() => onChange({ confirmed: true })}
+              >
+                确认
+              </Button>
+            </Tooltip>
+          ),
+          <Popconfirm
+            key="remove"
+            title="删除这条经历？"
+            okText="删除"
+            cancelText="保留"
+            onConfirm={onRemove}
+          >
             <Button
               size="small"
-              icon={<CheckOutlined />}
-              disabled={busy || blocked}
-              onClick={() => onChange({ confirmed: true })}
-            >
-              确认
-            </Button>
-          </Tooltip>
-        ),
-        <Popconfirm
-          key="remove"
-          title="删除这条经历？"
-          okText="删除"
-          cancelText="保留"
-          onConfirm={onRemove}
-        >
-          <Button
-            size="small"
-            type="text"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={busy}
-            aria-label="删除"
-          />
-        </Popconfirm>,
-      ].filter(Boolean)}
-    >
-      <div className="fact-row">
-        <Typography.Paragraph
-          className="fact-text"
-          delete={item.status === 'deleted'}
-          editable={{
-            tooltip: '修改文字',
-            onChange: (text) => text.trim() && text !== item.text && onChange({ text }),
-          }}
-        >
-          {item.text}
-        </Typography.Paragraph>
-        <Space size={6} wrap>
-          <Tag color={item.status === 'confirmed' ? 'success' : undefined}>
-            {ITEM_STATUS[item.status]}
-          </Tag>
-          {item.responsibility !== 'na' && (
-            <Select<Responsibility>
-              size="small"
-              value={item.responsibility}
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
               disabled={busy}
-              aria-label="职责程度"
-              onChange={(responsibility) => onChange({ responsibility })}
-              options={(['lead', 'own', 'participate'] as const).map((value) => ({
-                value,
-                label: RESPONSIBILITY[value],
-              }))}
+              aria-label="删除"
             />
-          )}
-          {item.source === 'user' && <Tag>你补充的</Tag>}
-          {item.review_reasons.map((reason) => (
-            <Tag key={reason} color="warning" icon={<WarningOutlined />}>
-              {REVIEW_REASON[reason] ?? reason}
-            </Tag>
-          ))}
-        </Space>
-        {item.source_quote && item.source_quote !== item.text && (
-          <Typography.Text type="secondary" className="fact-quote">
-            原文：{item.source_quote}
-          </Typography.Text>
-        )}
+          </Popconfirm>,
+        ].filter(Boolean)}
       </div>
-    </List.Item>
+    </li>
+  )
+}
+
+function FactBody({ item, busy, onChange }: Omit<DraftRowProps, 'onRemove'>): ReactElement {
+  return (
+    <div className="fact-row">
+      <Typography.Paragraph
+        className="fact-text"
+        delete={item.status === 'deleted'}
+        editable={{
+          tooltip: '修改文字',
+          onChange: (text) => text.trim() && text !== item.text && onChange({ text }),
+        }}
+      >
+        {item.text}
+      </Typography.Paragraph>
+      <Space size={6} wrap>
+        <Tag color={item.status === 'confirmed' ? 'success' : undefined}>
+          {ITEM_STATUS[item.status]}
+        </Tag>
+        {item.responsibility !== 'na' && (
+          <Select<Responsibility>
+            size="small"
+            value={item.responsibility}
+            disabled={busy}
+            aria-label="职责程度"
+            onChange={(responsibility) => onChange({ responsibility })}
+            options={(['lead', 'own', 'participate'] as const).map((value) => ({
+              value,
+              label: RESPONSIBILITY[value],
+            }))}
+          />
+        )}
+        {item.source === 'user' && <Tag>你补充的</Tag>}
+        {item.review_reasons.map((reason) => (
+          <Tag key={reason} color="warning" icon={<WarningOutlined />}>
+            {REVIEW_REASON[reason] ?? reason}
+          </Tag>
+        ))}
+      </Space>
+      {item.source_quote && item.source_quote !== item.text && (
+        <Typography.Text type="secondary" className="fact-quote">
+          原文：{item.source_quote}
+        </Typography.Text>
+      )}
+    </div>
   )
 }

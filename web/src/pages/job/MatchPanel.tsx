@@ -1,6 +1,6 @@
 // 匹配报告：逐条要求的结论、依据和建议；硬性要求和加分项分开计数，不给笼统的匹配度分数。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Empty, List, Skeleton, Space, Statistic, Tag, Typography } from 'antd'
+import { App, Button, Card, Empty, Skeleton, Space, Statistic, Tag, Typography } from 'antd'
 import { useRef, type ReactElement } from 'react'
 import { jobs } from '../../api/endpoints'
 import { newIdempotencyKey } from '../../api/http'
@@ -83,11 +83,9 @@ function ReportBody({ report }: { report: MatchReport }): ReactElement {
           </ul>
         </section>
       )}
-      <List
-        itemLayout="vertical"
-        dataSource={report.items}
-        renderItem={(item) => (
-          <List.Item key={item.requirement_id}>
+      <ul className="row-list">
+        {report.items.map((item) => (
+          <li key={item.requirement_id}>
             <Space size={8} wrap>
               <Tag color={VERDICT[item.verdict].color}>{VERDICT[item.verdict].text}</Tag>
               <Typography.Text strong>{item.requirement_text}</Typography.Text>
@@ -100,9 +98,9 @@ function ReportBody({ report }: { report: MatchReport }): ReactElement {
               </Typography.Paragraph>
             )}
             <Typography.Text type="secondary">建议：{item.suggestion}</Typography.Text>
-          </List.Item>
-        )}
-      />
+          </li>
+        ))}
+      </ul>
     </>
   )
 }
