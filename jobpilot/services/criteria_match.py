@@ -386,6 +386,18 @@ def _basic_field_conflict(
     return None
 
 
+_SENTENCE_END = "。！？"
+
+
+def _join_sentences(parts: Sequence[str]) -> str:
+    """逐句接起来：每句以句号结尾，不用「；」再连（各子句的说明本身就是完整的句子）。"""
+    return "".join(
+        part if part.endswith(tuple(_SENTENCE_END)) else f"{part}。"
+        for part in (p.strip() for p in parts)
+        if part
+    )
+
+
 def _parse_text_clauses(
     text: str, base_type: RequirementType, rules: CriteriaRules
 ) -> list[ParsedClause]:
@@ -632,7 +644,7 @@ def evaluate_requirement(
                 pv, _, preason, _ = _match_education_clause(pref, education, rules)
                 if pv != "covered":
                     pref_notes.append(
-                        f"优先条件未满足（{pref.source_text}：{preason}）"
+                        f"优先条件未满足（{pref.source_text}：{preason.rstrip(_SENTENCE_END)}）"
                     )
             elif pref.dimension == "onsite_days":
                 cand = crit_by_field.get(CriterionField.ONSITE_DAYS_PER_WEEK)
@@ -644,7 +656,9 @@ def evaluate_requirement(
                     "每周可到岗天数",
                 )
                 if pv != "covered":
-                    pref_notes.append(f"优先条件未满足（{preason}）")
+                    pref_notes.append(
+                        f"优先条件未满足（{preason.rstrip(_SENTENCE_END)}）"
+                    )
             elif pref.dimension == "internship_months":
                 cand = crit_by_field.get(CriterionField.INTERNSHIP_MONTHS)
                 pv, _, preason, _ = _match_int_clause(
@@ -655,17 +669,19 @@ def evaluate_requirement(
                     "可实习月数",
                 )
                 if pv != "covered":
-                    pref_notes.append(f"优先条件未满足（{preason}）")
+                    pref_notes.append(
+                        f"优先条件未满足（{preason.rstrip(_SENTENCE_END)}）"
+                    )
         if pref_notes:
-            reasons.append("；".join(pref_notes))
+            reasons.extend(pref_notes)
 
     hardness = RequirementType.HARD if hard_clauses else RequirementType.PREFERRED
     return (
         ProgramDecision(
             verdict=final_verdict,
             criteria_refs=tuple(refs),
-            reason="；".join(reasons),
-            suggestion="；".join(dict.fromkeys(suggestions)),
+            reason=_join_sentences(reasons),
+            suggestion=_join_sentences(list(dict.fromkeys(suggestions))),
             hardness=hardness,
         ),
         None,

@@ -83,6 +83,26 @@ def test_internship_months_range_preserves_bounds() -> None:
     assert too_long is not None and too_long.verdict == "partial"
 
 
+def test_compound_requirement_reads_as_sentences() -> None:
+    """多个子句的理由和建议逐句接起来，不出现「。；」或括号里带句号。"""
+    req = Requirement(
+        type=RequirementType.HARD, text="每周至少到岗 4 天，可实习至少 3 个月"
+    )
+    both, _ = evaluate_requirement(req, [_days(4), _months(4)], [])
+    assert both is not None and both.verdict == "covered"
+    assert both.reason == (
+        "已确认每周可到岗天数为 4 天/周，满足岗位要求。"
+        "已确认可实习月数为 4 个月，满足岗位要求。"
+    )
+
+    edu_req = Requirement(type=RequirementType.HARD, text="本科及以上，硕士优先")
+    bachelor = _edu("甲大学", DegreeLevel.BACHELOR, EducationStatus.ENROLLED)
+    with_note, _ = evaluate_requirement(edu_req, [], [bachelor])
+    assert with_note is not None
+    for text in (with_note.reason, with_note.suggestion):
+        assert "。；" not in text and "。）" not in text
+
+
 def test_bachelor_required_master_preferred() -> None:
     """「本科及以上，硕士优先」：本科用户硬性满足，同时写明优先条件未满足。"""
     req = Requirement(type=RequirementType.HARD, text="本科及以上，硕士优先")
