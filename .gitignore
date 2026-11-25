@@ -15,17 +15,11 @@ htmlcov/
 *.db
 *.sqlite3
 
-# Local vector index (vectors, original text and metadata)
-.cache/chroma/
-
 # Local evaluation sources, including original job descriptions and real resumes
 /evals/private/
 
 # macOS
 .DS_Store
 
-# Local resume editor preview (generated sample pages)
-.cache/resume-preview/
-
-# 本地账号删除与备份演练（合成凭据、备份和删除记录）
-/.cache/account-recovery/
+# 本地缓存：向量索引、简历预览、测试账号与备份演练（含原文和凭据）
+/.cache/
