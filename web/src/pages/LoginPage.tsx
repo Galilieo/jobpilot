@@ -44,7 +44,7 @@ export function LoginPage(): ReactElement {
         <div className="brand login-brand">
           Job<span style={{ color: token.colorPrimary }}>Pilot</span>
         </div>
-        <Typography.Paragraph type="secondary">
+        <Typography.Paragraph type="secondary" className="login-subtitle">
           用你确认过的经历，为每个岗位生成不编造的定制简历。
         </Typography.Paragraph>
         <Segmented<Mode>
@@ -84,7 +84,7 @@ export function LoginPage(): ReactElement {
           </Form.Item>
           {error && <Alert type="error" showIcon title={error} className="login-error" />}
           <Button type="primary" htmlType="submit" block loading={submitting}>
-            {mode === 'login' ? '登录' : '注册并登录'}
+            {mode === 'login' ? '登录' : '注册'}
           </Button>
         </Form>
       </Card>

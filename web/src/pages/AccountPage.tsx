@@ -1,10 +1,11 @@
 // 账号设置和待删除时的恢复入口，共用导出与结束会话的操作。
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Card, Flex, Modal, Typography, theme } from 'antd'
+import { Alert, Button, Card, Divider, Flex, Modal, Typography, theme } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { account, auth } from '../api/endpoints'
 import { isUnauthorized, ME_QUERY, useCurrentUser } from '../auth'
+import { PageHeader } from '../components/PageHeader'
 
 const DELETION_NOTICE = '申请后 7 天内可重新登录并恢复。到期后数据会彻底删除，无法找回。'
 
@@ -42,29 +43,30 @@ export function AccountPage(): ReactElement {
 
   return (
     <section className="page">
-      <header className="page-heading">
-        <Typography.Title level={1}>账号设置</Typography.Title>
-      </header>
-      <Flex vertical gap="middle">
-        <Card title="登录信息">
-          <Flex vertical align="start" gap="small">
-            <Typography.Text>{user.data?.email}</Typography.Text>
-            <Button onClick={() => logout.mutate()} loading={logout.isPending}>
-              退出登录
-            </Button>
-            {logout.error && <Alert type="error" showIcon title={logout.error.message} />}
-          </Flex>
-        </Card>
-        <Card title="个人数据">
+      <PageHeader title="账号设置" />
+      <Card>
+        <Flex vertical align="start" gap={12}>
+          <Typography.Title level={3}>登录信息</Typography.Title>
+          <Typography.Text>{user.data?.email}</Typography.Text>
+          <Button onClick={() => logout.mutate()} loading={logout.isPending}>
+            退出登录
+          </Button>
+          {logout.error && <Alert type="error" showIcon title={logout.error.message} />}
+        </Flex>
+        <Divider />
+        <Flex vertical align="start" gap={12}>
+          <Typography.Title level={3}>个人数据</Typography.Title>
           <ExportButton />
-        </Card>
-        <Card title="删除账号">
-          <Typography.Paragraph>{DELETION_NOTICE}</Typography.Paragraph>
+        </Flex>
+        <Divider />
+        <Flex vertical align="start" gap={12}>
+          <Typography.Title level={3}>删除账号</Typography.Title>
+          <Typography.Paragraph className="account-notice">{DELETION_NOTICE}</Typography.Paragraph>
           <Button danger onClick={() => setConfirmOpen(true)} disabled={logout.isPending}>
             删除账号
           </Button>
-        </Card>
-      </Flex>
+        </Flex>
+      </Card>
       <Modal
         title="确认删除账号？"
         open={confirmOpen}
@@ -106,10 +108,8 @@ export function AccountRecoveryPage({ deadline }: { deadline: string }): ReactEl
   return (
     <main className="login-page" style={{ background: token.colorBgLayout }}>
       <Card className="login-card">
-        <Flex vertical align="start" gap="middle">
-          <Typography.Title level={1} style={{ margin: 0, fontSize: 24 }}>
-            账号待删除
-          </Typography.Title>
+        <Flex vertical align="start" gap={16}>
+          <Typography.Title level={1}>账号待删除</Typography.Title>
           <Typography.Text>
             恢复截止时间为 <time dateTime={deadline}>{deadlineLabel}</time>。
           </Typography.Text>

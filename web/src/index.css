@@ -1,82 +1,116 @@
-/*
- * 全局结构、疏密与视觉细节。颜色、字体族与组件默认外观集中在 theme.ts；
- * 这里只写布局、过渡与基于 var(--ant-*) 的边框/底色修饰，不写零散色值。
- */
-
-/* ---------- 基础重置 ---------- */
+/* 全局结构、疏密与布局。颜色、字号档位、圆角与组件默认外观集中在 theme.ts；
+ * 这里只写布局、过渡与基于 var(--ant-*) 的边框/底色修饰，不写零散色值或强制覆盖。 */
 
 * {
   box-sizing: border-box;
 }
-
 body {
   margin: 0;
   min-width: 320px;
   -webkit-font-smoothing: antialiased;
 }
-
-/* 表单控件默认不继承字体，统一跟随页面。 */
 button,
 input,
 textarea {
   font: inherit;
 }
-
-/* ---------- 应用外壳（AppShell） ---------- */
-
 #root {
   min-height: 100dvh;
 }
+.full-width {
+  width: 100%;
+}
+.tabular-num {
+  font-variant-numeric: tabular-nums;
+}
 
+/* 共享字号、Flex 与边框底色 */
+.recent-conversations > .ant-typography,
+.recent-empty,
+.page-header-sub,
+.empty-hint-text,
+.workspace-card-label,
+.workspace-metric-sub,
+.board-head-sub,
+.ant-typography.workspace-card-note,
+.board-column-title,
+.board-column-empty,
+.ant-typography.board-card-sub,
+.board-card-footer,
+.ant-typography.login-subtitle,
+.import-hint,
+.fact-group-intro,
+.fact-group-note,
+.fact-quote,
+.ant-typography.job-company,
+.job-card-foot,
+.job-raw,
+.job-field-label,
+.job-fields-hint,
+.ant-typography.report-meta,
+.ant-typography.report-reason,
+.ant-typography.report-facts,
+.resume-guarantee {
+  font-size: 13px;
+}
+
+.workspace-card,
+.board-column,
+.board-card,
+.login-card,
+.profile-stat-card,
+.job-card,
+.evidence-trigger,
+.resume-frame {
+  border-color: var(--ant-color-border-secondary);
+}
+
+.workspace-card,
+.profile-stat-card,
+.resume-panel,
+.login-page,
+.job-raw {
+  background: var(--ant-color-fill-quaternary);
+}
+
+/* 应用外壳与侧栏 */
 .app-shell {
   height: 100dvh;
 }
-
 .app-shell .ant-layout-sider {
   border-right: 1px solid var(--ant-color-border-secondary);
 }
-
-/* flex 子项默认 min-size 为 auto，会被长内容撑开；归零后内部滚动才生效。 */
 .app-main,
 .app-content {
   min-width: 0;
   min-height: 0;
 }
-
 .app-content {
   overflow: auto;
 }
-
 .mobile-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 12px 16px;
 }
-
 .mobile-header .brand {
   padding: 0;
   font-size: 17px;
 }
-
-/* ---------- 侧栏（SideNavigation） ---------- */
-
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 12px;
   height: 100%;
-  padding: 16px 10px 10px;
+  padding: 16px 12px 12px;
 }
-
 .brand {
-  padding: 2px 10px 4px;
+  padding: 4px 8px;
   font-size: 18px;
   font-weight: 650;
   letter-spacing: -0.4px;
 }
-
-/* 占满中间剩余高度，对话变多时只滚动这一段。 */
 .recent-conversations {
   display: flex;
   flex: 1;
@@ -84,36 +118,27 @@ textarea {
   gap: 8px;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 10px 4px;
+  padding: 12px 8px 4px;
   border-top: 1px solid var(--ant-color-border-secondary);
 }
-
-.recent-conversations > .ant-typography {
-  font-size: 13px;
-}
-
 .recent-empty {
-  padding: 12px 0;
-  font-size: 13px;
+  padding: 8px 0;
 }
-
 .account-menu {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   height: auto;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-top: 1px solid var(--ant-color-border-secondary);
   border-radius: 10px;
   text-align: left;
 }
-
 .account-menu .ant-avatar {
   flex-shrink: 0;
 }
-
 .account-copy {
   display: flex;
   flex: 1;
@@ -122,52 +147,96 @@ textarea {
   flex-direction: column;
   line-height: 1.35;
 }
-
 .account-copy .ant-typography:last-child {
   font-size: 12px;
 }
 
-/* ---------- 工作台（WorkspacePage） ---------- */
-
-.tabular-num {
-  font-variant-numeric: tabular-nums;
+/* 通用页面与公共组件 */
+.page {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+}
+.page-wide {
+  max-width: 1440px;
+}
+.page-header {
+  margin-bottom: 24px;
+}
+.back-link {
+  padding-inline: 0;
+  margin-bottom: 4px;
+}
+.page-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.page-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.page-header-copy h1.ant-typography {
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+.page-header-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.empty-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+}
+.empty-hint-compact {
+  align-items: flex-start;
+  padding: 8px 0;
+  text-align: left;
 }
 
+/* 工作台 */
 .workspace-page {
   max-width: 1040px;
 }
-
 .workspace-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
 }
-
-.workspace-card {
-  background: var(--ant-color-fill-quaternary);
-  border-color: var(--ant-color-border-secondary);
+.workspace-card,
+.board-card,
+.job-card {
   transition: border-color 0.2s ease;
 }
-
-.workspace-card:hover {
+.workspace-card:hover,
+.board-card:hover,
+.job-card:hover {
   border-color: var(--ant-color-primary-border);
 }
-
-.workspace-card .ant-card-body {
+.workspace-card .ant-card-body,
+.job-card .ant-card-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
   height: 100%;
-  padding: 16px;
 }
-
 .workspace-card-label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
 }
-
 .workspace-card-icon {
   display: inline-flex;
   align-items: center;
@@ -177,7 +246,6 @@ textarea {
   border-radius: 6px;
   font-size: 13px;
 }
-
 .workspace-metric {
   display: flex;
   flex-wrap: wrap;
@@ -189,23 +257,17 @@ textarea {
   line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
-
 .workspace-metric-sub {
-  font-size: 13px;
   font-weight: 400;
 }
-
 .ant-typography.workspace-card-note {
   margin-bottom: 12px;
-  font-size: 13px;
   line-height: 1.55;
 }
-
 .workspace-card-action {
   margin-top: auto;
   align-self: flex-start;
 }
-
 .workspace-board-head {
   display: flex;
   flex-wrap: wrap;
@@ -213,22 +275,12 @@ textarea {
   align-items: baseline;
   margin-bottom: 12px;
 }
-
-.workspace-board-head .ant-typography {
-  margin: 0;
-}
-
-.board-head-sub {
-  font-size: 13px;
-}
-
 .workspace-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
 }
-
 .board-column {
   display: flex;
   flex-direction: column;
@@ -239,28 +291,23 @@ textarea {
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 12px;
 }
-
 .board-column-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 4px 4px;
 }
-
 .board-column-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
 }
-
 .board-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-
 .board-count {
   min-width: 22px;
   padding: 0 8px;
@@ -271,139 +318,51 @@ textarea {
   line-height: 20px;
   text-align: center;
 }
-
 .board-column-empty {
   display: flex;
   flex: 1;
   align-items: center;
   justify-content: center;
   padding: 16px 4px;
-  font-size: 13px;
 }
-
 .board-card {
-  border-color: var(--ant-color-border-secondary);
   border-radius: 10px;
-  transition: border-color 0.2s ease;
 }
-
-.board-card:hover {
-  border-color: var(--ant-color-primary-border);
-}
-
 .board-card .ant-card-body {
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 12px;
 }
-
 .ant-typography.board-card-sub {
   margin: 0;
-  font-size: 13px;
 }
-
 .board-card-footer {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
   margin-top: 4px;
-  font-size: 13px;
 }
-
 @media (max-width: 1199px) {
   .workspace-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 991px) {
-  .workspace-board {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ---------- 通用页面（岗位库、我的、占位页） ---------- */
-
-.page {
-  width: 100%;
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 24px 32px 48px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.page-header-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.page-header-copy h1.ant-typography {
-  margin: 0;
-  letter-spacing: -0.02em;
-  line-height: 1.35;
-}
-
-.page-header-sub {
-  font-size: 13px;
-}
-
-.page-header-extra {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.empty-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 16px;
-  text-align: center;
-}
-
-.empty-hint-compact {
-  align-items: flex-start;
-  padding: 8px 0;
-  text-align: left;
-}
-
-.empty-hint-text {
-  font-size: 13px;
-}
-
-/* ---------- 对话页（ConversationPage） ---------- */
-
+/* 对话页 */
 .conversation-page {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
-
 .conversation-heading {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 14px 24px;
+  padding: 16px 24px;
 }
-
 .conversation-body {
   display: flex;
   flex: 1;
@@ -413,117 +372,71 @@ textarea {
   overflow-y: auto;
   padding: 32px 24px;
 }
-
 .conversation-welcome {
   width: 100%;
   max-width: 600px;
 }
-
 .conversation-welcome .ant-welcome {
   padding: 0;
 }
-
 .conversation-composer {
   width: 100%;
   max-width: 860px;
   margin: 0 auto;
   padding: 16px 24px 24px;
 }
-
 .conversation-composer .ant-sender {
   border-radius: 16px;
 }
-
 .composer-note {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   font-size: 12px;
   text-align: center;
 }
 
-/* ---------- 窄屏 ---------- */
-
-/*
- * 991px 对应 antd 的 lg 断点（≥992px）。AppShell 用 Grid.useBreakpoint() 的 lg
- * 决定是否折叠侧栏，两处必须一起改。
- */
-@media (max-width: 991px) {
-  .page {
-    padding: 20px 16px 36px;
-  }
-
-  .conversation-heading {
-    padding: 12px 16px;
-  }
-
-  .conversation-body {
-    padding: 24px 16px;
-  }
-
-  .conversation-composer {
-    padding: 12px 16px 20px;
-  }
-}
-
-/* ---------- 登录页 ---------- */
-
+/* 登录页与账号设置 */
 .login-page {
   display: grid;
   place-items: center;
   min-height: 100dvh;
   padding: 16px;
-  background: var(--ant-color-fill-quaternary);
 }
-
 .login-card {
   width: min(390px, 100%);
   border-radius: 12px;
-  border-color: var(--ant-color-border-secondary);
 }
-
 .login-brand {
   padding: 0;
   margin-bottom: 4px;
   font-size: 22px;
 }
-
-.login-form {
-  margin-top: 16px;
-}
-
+.ant-typography.login-subtitle,
 .login-error {
   margin-bottom: 16px;
 }
+.login-form {
+  margin-top: 16px;
+}
+.ant-typography.account-notice {
+  margin-bottom: 0;
+}
 
-/* ---------- 我的：经历与简历 ---------- */
-
+/* 我的：经历与简历 */
 .profile-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
-
-.profile-stat-card {
-  background: var(--ant-color-fill-quaternary);
-  border-color: var(--ant-color-border-secondary);
-}
-
-.full-width {
-  width: 100%;
-}
-
 .import-upload {
   display: block;
   margin-top: 12px;
 }
-
 .import-hint {
   display: block;
   margin: 12px 0 8px;
-  font-size: 13px;
 }
-
 .import-actions {
   display: flex;
   flex-wrap: wrap;
@@ -531,18 +444,14 @@ textarea {
   align-items: center;
   margin-top: 12px;
 }
-
 .fact-group-intro {
   margin-bottom: 12px;
-  font-size: 13px;
 }
-
 .fact-section + .fact-section {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--ant-color-border-secondary);
 }
-
 .fact-group-head {
   display: flex;
   flex-wrap: wrap;
@@ -551,15 +460,6 @@ textarea {
   justify-content: space-between;
   margin-bottom: 8px;
 }
-
-.fact-group-head h5.ant-typography {
-  margin: 0;
-}
-
-.fact-group-note {
-  font-size: 13px;
-}
-
 .fact-row {
   display: flex;
   flex: 1;
@@ -567,136 +467,94 @@ textarea {
   gap: 8px;
   min-width: 0;
 }
-
 .ant-typography.fact-text {
   margin-bottom: 0;
 }
 
-.fact-quote {
-  font-size: 13px;
+/* 岗位库 */
+.job-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
-
-/* ---------- 岗位库 ---------- */
-
-.job-card {
-  border-color: var(--ant-color-border-secondary);
-  transition: border-color 0.2s ease;
+@media (min-width: 992px) {
+  .job-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-
-.job-card:hover {
-  border-color: var(--ant-color-primary-border);
+@media (min-width: 1440px) {
+  .job-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
-
-.job-card .ant-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  padding: 16px;
-}
-
 .job-card-title {
   font-size: 14px;
 }
-
 .ant-typography.job-company {
   margin: 0;
-  font-size: 13px;
 }
-
 .job-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
-
 .job-tags .ant-tag {
   margin-inline-end: 0;
 }
-
 .job-card-foot {
   margin-top: auto;
   padding-top: 8px;
-  font-size: 13px;
 }
 
-/* ---------- 岗位详情（岗位信息 + 匹配报告 | 定制简历面板） ---------- */
-
-.page-wide {
-  max-width: 1440px;
-}
-
-.back-link {
-  padding-inline: 0;
-  margin-bottom: 2px;
-}
-
+/* 岗位详情 */
 .job-detail {
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
   gap: 16px;
   align-items: start;
 }
-
 .job-detail-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
 }
-
 .job-detail-panel {
   position: sticky;
   top: 16px;
   min-width: 0;
 }
-
-.resume-panel {
-  background: var(--ant-color-fill-quaternary);
-  border-color: var(--ant-color-border-secondary);
-}
-
 .ant-divider-horizontal.section-divider {
   margin: 4px 0;
 }
-
 .job-requirements {
   margin-top: 4px;
 }
-
 .job-requirements h5.ant-typography {
   margin-bottom: 8px;
 }
-
 .job-keywords {
   margin: 4px 0;
 }
-
 .job-raw {
   white-space: pre-wrap;
   padding: 12px;
   border-radius: 10px;
-  background: var(--ant-color-fill-quaternary);
-  font-size: 13px;
 }
-
 .job-injection-list {
   margin: 4px 0 0;
   padding-left: 1.2em;
 }
-
 .job-fields-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 24px;
 }
-
 @media (max-width: 575px) {
   .job-fields-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-
 .job-field-cell {
   display: flex;
   flex-direction: column;
@@ -705,22 +563,18 @@ textarea {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--ant-color-border-secondary);
 }
-
 .job-field-label {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  font-size: 13px;
 }
-
 .job-field-label .ant-tag {
   margin-inline-end: 0;
   font-size: 12px;
   line-height: 18px;
   padding-inline: 6px;
 }
-
 .job-field-value {
   display: block;
   width: 100%;
@@ -735,17 +589,13 @@ textarea {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
-
 .job-field-value:hover {
   background: var(--ant-color-fill-tertiary);
 }
-
 .job-fields-hint {
   display: block;
   margin-top: 8px;
-  font-size: 13px;
 }
-
 .job-add-row {
   display: flex;
   flex-wrap: wrap;
@@ -753,12 +603,10 @@ textarea {
   align-items: center;
   margin-top: 8px;
 }
-
 .job-add-row > .ant-input {
   flex: 1;
   min-width: 160px;
 }
-
 .keyword-chip {
   display: inline-flex;
   align-items: center;
@@ -766,7 +614,6 @@ textarea {
   margin-inline-end: 0;
   padding: 2px 4px 2px 8px;
 }
-
 .keyword-chip-text {
   padding: 0;
   border: none;
@@ -775,28 +622,18 @@ textarea {
   font: inherit;
   cursor: pointer;
 }
-
 .keyword-chip-remove {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
-
 .keyword-chip:hover .keyword-chip-remove,
 .keyword-chip:focus-within .keyword-chip-remove,
 .keyword-chip:has(.ant-popover-open) .keyword-chip-remove {
   opacity: 1;
 }
-
-@media (max-width: 991px), (hover: none) {
-  .keyword-chip-remove {
-    opacity: 1;
-  }
-}
-
 .keyword-inline-input {
   width: 120px;
 }
-
 .match-bar {
   display: flex;
   flex-wrap: wrap;
@@ -804,38 +641,29 @@ textarea {
   align-items: center;
   justify-content: space-between;
 }
-
 .match-history {
   padding-top: 12px;
   border-top: 1px solid var(--ant-color-border-secondary);
 }
-
 .match-history h5.ant-typography {
   margin-bottom: 4px;
 }
-
 .coverage-stat .ant-statistic-content {
   font-variant-numeric: tabular-nums;
   font-size: 22px;
   font-weight: 600;
 }
-
 .ant-typography.report-meta {
   margin: 0;
-  font-size: 13px;
 }
-
 .report-gaps {
   margin: 0 0 8px;
   padding-left: 1.2em;
 }
-
 .ant-typography.report-reason,
 .ant-typography.report-facts {
   margin: 4px 0;
-  font-size: 13px;
 }
-
 .resume-preview-actions {
   display: flex;
   flex-wrap: wrap;
@@ -843,30 +671,27 @@ textarea {
   align-items: center;
   margin-bottom: 12px;
 }
-
 .resume-preview-actions > :first-child {
   margin-right: auto;
 }
-
 .resume-frame {
   width: 100%;
   height: calc(100dvh - 240px);
   min-height: 480px;
-  border: 1px solid var(--ant-color-border-secondary);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 10px;
   background: var(--ant-color-bg-container);
 }
-
 .partial-bullets {
   margin-top: 12px;
 }
-
-.tailor-progress {
+.tailor-progress,
+.evidence-item {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-
 .resume-guarantee {
   display: flex;
   flex-wrap: wrap;
@@ -875,112 +700,78 @@ textarea {
   justify-content: space-between;
   padding: 8px 12px;
   border-radius: 10px;
-  font-size: 13px;
 }
-
 .resume-readonly-alert {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
-
-.evidence-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .evidence-trigger {
   display: flex;
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--ant-color-border-secondary);
+  padding: 8px 12px;
+  border-width: 1px;
+  border-style: solid;
   border-left-width: 3px;
   border-radius: 8px;
   background: var(--ant-color-bg-container);
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease;
+  transition: border-color 0.15s ease;
 }
-
 .evidence-trigger:hover {
   border-color: var(--ant-color-primary-border);
 }
-
 .evidence-trigger-active {
   border-color: var(--ant-color-primary);
   border-left-color: var(--ant-color-primary);
 }
-
 .evidence-trigger-warn {
   border-left-color: var(--ant-color-warning);
 }
-
 .evidence-trigger-error {
   border-left-color: var(--ant-color-error);
 }
-
 .evidence-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-
 .evidence-detail {
   border-color: var(--ant-color-primary-border);
 }
-
 .ant-typography.evidence-empty-facts {
   margin: 4px 0 0;
 }
-
 .evidence-facts-list,
 .evidence-issues {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   padding-left: 1.2em;
 }
-
 .evidence-facts-list > li {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 6px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
-@media (max-width: 991px) {
-  .job-detail {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .job-detail-panel {
-    position: static;
-  }
-}
-
-/* ---------- 简单列表（代替已弃用的 antd List） ---------- */
-
+/* 列表行与悬停操作 */
 .row-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-
 .row-list > li {
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--ant-color-border-secondary);
 }
-
 .row-list > li:last-child {
   border-bottom: none;
 }
-
 .requirement-list > li {
-  padding: 7px 0;
+  padding: 8px 0;
 }
-
 .hover-row {
   position: relative;
   display: flex;
@@ -990,16 +781,13 @@ textarea {
   outline: none;
   transition: background-color 0.15s ease;
 }
-
 .hover-row:focus-visible {
   box-shadow: 0 0 0 2px var(--ant-color-primary-border);
 }
-
 .hover-row-body {
   flex: 1;
   min-width: 0;
 }
-
 .hover-row-actions {
   display: flex;
   flex-shrink: 0;
@@ -1008,56 +796,55 @@ textarea {
   opacity: 0;
   transition: opacity 0.15s ease;
 }
-
 .hover-row:hover .hover-row-actions,
 .hover-row:focus-within .hover-row-actions,
 .hover-row-actions-open,
 .hover-row:has(.ant-popover-open) .hover-row-actions {
   opacity: 1;
 }
-
 .row-pending {
   border-left: 3px solid var(--ant-color-warning);
   padding-left: 12px;
 }
-
-@media (max-width: 991px), (hover: none) {
-  .hover-row-actions {
-    opacity: 1;
-  }
-}
-
 .fact-item {
   display: flex;
   gap: 12px;
   align-items: flex-start;
 }
-
 .fact-actions {
   display: flex;
   flex-shrink: 0;
   gap: 4px;
 }
 
-.job-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-@media (min-width: 992px) {
-  .job-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+/* 窄屏与触屏（与 AppShell lg 断点 992px 同步） */
+@media (max-width: 991px), (hover: none) {
+  .hover-row-actions,
+  .keyword-chip-remove {
+    opacity: 1;
   }
 }
-
-@media (min-width: 1440px) {
-  .job-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+@media (max-width: 991px) {
+  .workspace-board,
+  .job-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .job-detail-panel {
+    position: static;
+  }
+  .page {
+    padding: 16px 16px 32px;
+  }
+  .conversation-heading {
+    padding: 12px 16px;
+  }
+  .conversation-body {
+    padding: 24px 16px;
+  }
+  .conversation-composer {
+    padding: 12px 16px 16px;
   }
 }
-
-/* 窄屏时操作按钮换到文字下面，不挤占经历文字的宽度。 */
 @media (max-width: 767px) {
   .fact-item {
     flex-wrap: wrap;
