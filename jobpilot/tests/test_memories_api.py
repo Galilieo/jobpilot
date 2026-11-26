@@ -59,3 +59,58 @@ async def test_memory_values_are_validated_and_scoped_to_the_signed_in_user(
         "DELETE", "/api/memories/tone", json={"expected_revision": 1}
     )
     assert wrong_owner.status_code == 409
+
+
+async def test_get_memories_includes_field_metadata_from_schema_and_yaml(
+    async_client: httpx.AsyncClient,
+) -> None:
+    await sign_in(async_client)
+    records = (await async_client.get("/api/memories")).json()
+    assert [item["key"] for item in records] == [
+        "target_direction",
+        "cities",
+        "excluded_types",
+        "job_notes",
+        "tone",
+        "bullet_length",
+        "tech_terms",
+    ]
+    by_key = {item["key"]: item for item in records}
+    assert by_key["target_direction"] == {
+        "key": "target_direction",
+        "value": None,
+        "revision": 0,
+        "deleted": False,
+        "label": "目标方向",
+        "group": "job",
+        "type": "text",
+        "options": [],
+        "max_length": 100,
+        "max_items": None,
+    }
+    assert by_key["cities"] == {
+        "key": "cities",
+        "value": None,
+        "revision": 0,
+        "deleted": False,
+        "label": "城市",
+        "group": "job",
+        "type": "list",
+        "options": [],
+        "max_length": 20,
+        "max_items": 5,
+    }
+    assert by_key["tone"] == {
+        "key": "tone",
+        "value": None,
+        "revision": 0,
+        "deleted": False,
+        "label": "语气",
+        "group": "writing",
+        "type": "enum",
+        "options": ["平实", "简洁有力"],
+        "max_length": None,
+        "max_items": None,
+    }
+    assert by_key["bullet_length"]["options"] == ["尽量一行", "不超过两行", "不限"]
+    assert by_key["tech_terms"]["options"] == ["英文原名", "中文", "中英并列"]

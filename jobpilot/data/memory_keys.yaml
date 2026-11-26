@@ -1,25 +1,31 @@
 keys:
   target_direction:
     label: 目标方向
+    group: job
     aliases: [求职方向, 意向方向, 目标岗位, 求职目标]
   cities:
     label: 城市
+    group: job
     aliases: [地点, 地区, 工作地, 意向城市]
     examples: [北京, 上海, 广州, 深圳, 杭州, 南京, 苏州, 成都, 武汉, 西安, 重庆, 天津, 长沙, 合肥, 宁波]
   excluded_types:
     label: 排除的岗位或公司类型
+    group: job
     aliases: [岗位类型, 公司类型, 排除类型, 排除, 不投, 不考虑]
   job_notes:
     label: 其他求职偏好
+    group: job
     aliases: [求职备注, 求职偏好, 其他偏好]
   tone:
     label: 语气
+    group: writing
     aliases: [文风, 写作语气, 写作风格]
     values:
       平实: [朴实一点, 朴实, 别太花哨, 平实些]
       简洁有力: [简练有力, 写得利落]
   bullet_length:
     label: 每条长度
+    group: writing
     aliases: [条目长度, 简历长度, 行数, 每条]
     values:
       尽量一行: [尽可能一行, 一行内, 一行以内]
@@ -27,6 +33,7 @@ keys:
       不限: [不限制长度, 行数不限]
   tech_terms:
     label: 技术名写法
+    group: writing
     aliases: [技术名, 技术术语, 术语, 技术名称]
     values:
       英文原名: [保留英文, 用英文]

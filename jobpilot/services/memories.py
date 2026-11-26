@@ -1,6 +1,6 @@
 """统一管理接口和确认卡的记忆取值校验、栏目顺序及返回格式。"""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,10 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jobpilot.db.memories import MemoryValue, list_memories
 from jobpilot.db.memory_schema import MEMORY_LIMITS, MemoryKey
 from jobpilot.db.models import Memory
+from jobpilot.services.memory_words import memory_vocabulary
 
 MAX_REVISION = 2**63 - 2
 ExpectedRevision = Annotated[int, Field(strict=True, ge=0, le=MAX_REVISION)]
 MANUAL_SOURCE = {"kind": "manual"}
+MemoryGroup = Literal["job", "writing"]
+MemoryValueType = Literal["text", "list", "enum"]
 
 
 class MemoryValueError(ValueError):
@@ -24,15 +27,36 @@ class MemoryView(BaseModel):
     value: MemoryValue | None = None
     revision: int = 0
     deleted: bool = False
+    label: str
+    group: MemoryGroup
+    type: MemoryValueType
+    options: list[str] = Field(default_factory=list)
+    max_length: int | None = None
+    max_items: int | None = None
+
+    @classmethod
+    def of(cls, key: MemoryKey, record: Memory | None = None) -> "MemoryView":
+        words = memory_vocabulary().keys[key]
+        limit = MEMORY_LIMITS[key]
+        value_type: MemoryValueType = (
+            "enum" if limit.choices else "list" if limit.items else "text"
+        )
+        return cls(
+            key=key,
+            value=record.value_json if record else None,
+            revision=record.revision if record else 0,
+            deleted=record.deleted_at is not None if record else False,
+            label=words.label,
+            group=words.group,
+            type=value_type,
+            options=list(limit.choices),
+            max_length=limit.characters or None,
+            max_items=limit.items or None,
+        )
 
     @classmethod
     def from_record(cls, record: Memory) -> "MemoryView":
-        return cls(
-            key=MemoryKey(record.key),
-            value=record.value_json,
-            revision=record.revision,
-            deleted=record.deleted_at is not None,
-        )
+        return cls.of(MemoryKey(record.key), record)
 
 
 class MemoryDelete(BaseModel):
@@ -73,7 +97,4 @@ def validate_memory_value(key: MemoryKey, value: MemoryValue) -> MemoryValue:
 
 async def memory_views(session: AsyncSession, user_id: UUID) -> list[MemoryView]:
     records = {MemoryKey(row.key): row for row in await list_memories(user_id, session)}
-    return [
-        MemoryView.from_record(records[key]) if key in records else MemoryView(key=key)
-        for key in MemoryKey
-    ]
+    return [MemoryView.of(key, records.get(key)) for key in MemoryKey]

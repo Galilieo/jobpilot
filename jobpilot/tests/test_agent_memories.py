@@ -71,7 +71,12 @@ async def test_two_cards_cannot_both_create_the_same_memory(
     assert stale.status_code == 409
     records = (await async_client.get("/api/memories")).json()
     tone = next(row for row in records if row["key"] == "tone")
-    assert tone == {"key": "tone", "value": None, "revision": 2, "deleted": True}
+    assert {k: tone[k] for k in ("key", "value", "revision", "deleted")} == {
+        "key": "tone",
+        "value": None,
+        "revision": 2,
+        "deleted": True,
+    }
 
 
 @pytest.mark.parametrize(
@@ -130,7 +135,8 @@ async def test_memory_is_recalled_in_a_new_conversation_and_removed_after_forget
     assert undone.is_success
     assert value not in undone.text
     preferences = (await async_client.get("/api/memories")).json()
-    assert next(item for item in preferences if item["key"] == "job_notes") == {
+    job_notes = next(item for item in preferences if item["key"] == "job_notes")
+    assert {k: job_notes[k] for k in ("key", "value", "revision", "deleted")} == {
         "key": "job_notes",
         "value": value,
         "revision": 3,

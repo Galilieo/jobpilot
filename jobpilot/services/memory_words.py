@@ -3,6 +3,7 @@
 import re
 from enum import StrEnum
 from functools import cache
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -24,6 +25,7 @@ class MemoryOperation(StrEnum):
 
 class MemoryWords(BaseModel):
     label: str
+    group: Literal["job", "writing"]
     aliases: list[str]
     examples: list[str] = Field(default_factory=list)
     values: dict[str, list[str]] = Field(default_factory=dict)
