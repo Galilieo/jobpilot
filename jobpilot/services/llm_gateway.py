@@ -27,10 +27,15 @@ from pydantic import ValidationError
 from sqlalchemy import func, insert, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.config import ModelSettings, settings
+from jobpilot.config import ModelSettings, ProtocolAdapter, settings
 from jobpilot.db.accounts import lock_active_account
 from jobpilot.db.models import AiRun, CallOutcome, ModelCall
 from jobpilot.db.runs import ACTIVE_RUN_STATUSES
+from jobpilot.services.model_protocol import (
+    completion_usage,
+    context_overflow,
+    protocol_parameters,
+)
 from jobpilot.services.prompts import Prompt, load_prompt
 
 _DATA_LABEL_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
@@ -91,6 +96,10 @@ class BudgetExhaustedError(RuntimeError):
     """剩余额度不足以发送下一次模型请求。"""
 
 
+class ContextOverflowError(APIStatusError):
+    """服务商拒绝了超出其窗口的请求，不按普通临时错误原样重试。"""
+
+
 class ModelRunInactiveError(RuntimeError):
     """运行已取消或结束，不能再发送模型请求。"""
 
@@ -137,6 +146,7 @@ async def request_completion(
     validate: Callable[[ChatCompletion], None] | None = None,
     tools: Sequence[ChatCompletionToolUnionParam] = (),
     on_text: Callable[[str], None] | None = None,
+    max_output_tokens: int | None = None,
 ) -> ChatCompletion:
     """完成一次逻辑请求，返回通过 validate 的响应。
 
@@ -176,6 +186,7 @@ async def request_completion(
                 validate=validate,
                 tools=tools,
                 on_text=emit_text if on_text is not None else None,
+                max_output_tokens=max_output_tokens,
             )
 
         except ValidationError as error:
@@ -231,6 +242,7 @@ async def _send_once(
     validate: Callable[[ChatCompletion], None] | None,
     tools: Sequence[ChatCompletionToolUnionParam],
     on_text: Callable[[str], None] | None,
+    max_output_tokens: int | None,
 ) -> ChatCompletion:
     """实际发送一次：查配置并脱敏 → 扣额度 → 登记 unknown → 发送并校验 → 结算。
 
@@ -239,7 +251,12 @@ async def _send_once(
     上游错误和校验错误在结算后原样抛出，由 request_completion 决定是否重发。
     """
     model_settings = settings.model_for_purpose(purpose)
-    sanitized_messages = _sanitize_messages(messages)
+    profile = settings.model_profile(purpose)
+    output = min(model_settings.max_tokens, profile.max_output_tokens)
+    if max_output_tokens is not None:
+        output = min(output, max_output_tokens)
+    model_settings = model_settings.model_copy(update={"max_tokens": output})
+    sanitized_messages = request_messages_for_model(messages)
     estimated = _estimate_tokens(sanitized_messages, model_settings.max_tokens)
     if tools:
         estimated += len(dumps(list(tools), ensure_ascii=False).encode("utf-8"))
@@ -262,13 +279,19 @@ async def _send_once(
     try:
         if tools or on_text is not None:
             response = await _tool_completion(
-                client, model_settings, sanitized_messages, json_output, tools, on_text
+                client,
+                model_settings,
+                sanitized_messages,
+                json_output,
+                tools,
+                on_text,
+                profile.adapter,
             )
         else:
             response = await _create_completion(
-                client, model_settings, sanitized_messages, json_output
+                client, model_settings, sanitized_messages, json_output, profile.adapter
             )
-        usage = response.usage
+        usage = completion_usage(profile.adapter, response)
         # 先记为 invalid_output：validate 抛出任何异常都按校验失败结算。
         outcome = CallOutcome.INVALID_OUTPUT
         if not response.choices:
@@ -277,8 +300,12 @@ async def _send_once(
             validate(response)
         outcome = CallOutcome.SUCCESS
         return response
-    except APIStatusError:
+    except APIStatusError as error:
         outcome = CallOutcome.HTTP_ERROR
+        if context_overflow(profile.adapter, error):
+            raise ContextOverflowError(
+                "模型上下文超长", response=error.response, body=None
+            ) from None
         raise
     finally:
         # 进程被杀时 finally 可能不执行，登记行仍保留 unknown 和空用量。
@@ -286,7 +313,7 @@ async def _send_once(
         await _settle_call(session_factory, call_id, outcome, latency_ms, usage)
 
 
-def _sanitize_messages(
+def request_messages_for_model(
     messages: Sequence[ChatCompletionMessageParam],
 ) -> list[ChatCompletionMessageParam]:
     """返回脱敏后的消息副本，不改动调用方传入的列表和字典。"""
@@ -352,10 +379,11 @@ async def _create_completion(
     model_settings: ModelSettings,
     messages: Sequence[ChatCompletionMessageParam],
     json_output: bool,
+    adapter: ProtocolAdapter,
 ) -> ChatCompletion:
     """按用途配置组装参数并发送；关闭 SDK 自带重试，重试只由网关负责。"""
     return await client.with_options(max_retries=0).chat.completions.create(
-        **_completion_args(model_settings, messages, json_output)
+        **_completion_args(model_settings, messages, json_output, adapter)
     )
 
 
@@ -363,17 +391,14 @@ def _completion_args(
     model_settings: ModelSettings,
     messages: Sequence[ChatCompletionMessageParam],
     json_output: bool,
+    adapter: ProtocolAdapter,
 ) -> dict[str, Any]:
     return dict(
         model=model_settings.model_name,
         messages=messages,
         max_tokens=model_settings.max_tokens,
-        # DeepSeek 思考模式下 temperature 不生效，干脆不传。
-        temperature=omit if model_settings.thinking else model_settings.temperature,
         response_format={"type": "json_object"} if json_output else omit,
-        extra_body={
-            "thinking": {"type": "enabled" if model_settings.thinking else "disabled"}
-        },
+        **protocol_parameters(adapter, model_settings),
     )
 
 
@@ -384,9 +409,10 @@ async def _tool_completion(
     json_output: bool,
     tools: Sequence[ChatCompletionToolUnionParam],
     on_text: Callable[[str], None] | None,
+    adapter: ProtocolAdapter,
 ) -> ChatCompletion:
     completions = client.with_options(max_retries=0).chat.completions
-    arguments = _completion_args(model_settings, messages, json_output)
+    arguments = _completion_args(model_settings, messages, json_output, adapter)
     arguments["tools"] = tools or omit
     if on_text is None:
         return await completions.create(**arguments)

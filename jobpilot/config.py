@@ -3,7 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -22,6 +22,30 @@ class ModelPurpose(StrEnum):
     EDIT_BULLET = "edit_bullet"
     GROUND_CHECK = "ground_check"
     AGENT = "agent"
+    COMPACT = "compact"
+
+
+class ProtocolAdapter(StrEnum):
+    DEEPSEEK = "deepseek"
+    OPENAI = "openai"
+
+
+class ModelProfile(BaseModel):
+    context_window: int = Field(gt=0)
+    max_output_tokens: int = Field(gt=0)
+    adapter: ProtocolAdapter
+
+
+def default_model_profiles() -> dict[str, ModelProfile]:
+    # 窗口和输出上限与服务商 /models 返回的单位一致。
+    return {
+        model: ModelProfile(
+            context_window=1_048_576,
+            max_output_tokens=393_216,
+            adapter=ProtocolAdapter.DEEPSEEK,
+        )
+        for model in ("deepseek-flash", "deepseek-v4-pro")
+    }
 
 
 class ModelSettings(BaseModel):
@@ -49,6 +73,14 @@ class AgentLimits(BaseModel):
     seconds: float = Field(default=180, gt=0)
     history_turns: int = Field(default=10, gt=0)
     history_tokens: int = Field(default=8000, gt=0)
+    context_window_ratio: float = Field(default=0.5, gt=0, le=1)
+    context_window_cap_tokens: int | None = Field(default=32_000, gt=0)
+    compact_trigger_ratio: float = Field(default=0.8, gt=0, lt=1)
+    compact_target_ratio: float = Field(default=0.5, gt=0, lt=1)
+    compact_summary_share: float = Field(default=0.2, gt=0, lt=1)
+    compact_input_tokens: int = Field(default=24_000, gt=0)
+    compact_model_calls: int = Field(default=3, ge=1)
+
     match_job_calls: int = Field(default=2, ge=1)
     tailor_resume_calls: int = Field(default=1, ge=1)
     parse_jd_without_attachments: int = Field(default=1, ge=1)
@@ -114,6 +146,12 @@ class Settings(BaseSettings):
     ground_check: ModelSettings = Field(default_factory=ModelSettings)
     order_ocr: ModelSettings = Field(default_factory=ModelSettings)
     agent: ModelSettings = Field(default_factory=ModelSettings)
+    compact: ModelSettings = Field(
+        default_factory=lambda: ModelSettings(max_tokens=4096)
+    )
+    model_profiles: dict[str, ModelProfile] = Field(
+        default_factory=default_model_profiles
+    )
 
     agent_limits: AgentLimits = Field(default_factory=AgentLimits)
 
@@ -123,6 +161,29 @@ class Settings(BaseSettings):
     def model_for_purpose(self, purpose: str) -> ModelSettings:
         """按用途查找模型配置，未知用途立即报错。"""
         return getattr(self, ModelPurpose(purpose).value)
+
+    def model_profile(self, purpose: str) -> ModelProfile:
+        return self.model_profiles[self.model_for_purpose(purpose).model_name]
+
+    def effective_window(self, purpose: str) -> int:
+        window = self.model_profile(purpose).context_window
+        reduced = int(window * self.agent_limits.context_window_ratio)
+        return min(
+            window, reduced, self.agent_limits.context_window_cap_tokens or window
+        )
+
+    @model_validator(mode="after")
+    def validate_model_windows(self) -> "Settings":
+        for purpose in ModelPurpose:
+            model = self.model_for_purpose(purpose).model_name
+            if model not in self.model_profiles:
+                raise ValueError(f"模型 {model} 没有登记档案")
+        limits = self.agent_limits
+        if limits.model_tokens < 4 * self.effective_window(ModelPurpose.AGENT):
+            raise ValueError("每轮 token 预算必须至少为有效窗口的四倍")
+        if limits.compact_target_ratio >= limits.compact_trigger_ratio:
+            raise ValueError("压缩目标水位必须低于触发水位")
+        return self
 
     @property
     def database_url(self) -> URL:

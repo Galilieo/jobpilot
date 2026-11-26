@@ -19,11 +19,18 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.config import ModelPurpose, ModelSettings, settings
+from jobpilot.config import (
+    ModelProfile,
+    ModelPurpose,
+    ModelSettings,
+    ProtocolAdapter,
+    settings,
+)
 from jobpilot.db.models import AiRun, ModelCall, RunStatus, User
 from jobpilot.db.runs import set_run_status
 from jobpilot.services.llm_gateway import (
     BudgetExhaustedError,
+    ContextOverflowError,
     ModelBudget,
     ModelRunInactiveError,
     request_completion,
@@ -176,6 +183,11 @@ async def test_each_request_has_a_durable_call(
             temperature=0.2,
             max_tokens=1024,
         ),
+    )
+    monkeypatch.setitem(
+        settings.model_profiles,
+        "configured-test-model",
+        settings.model_profiles["deepseek-flash"],
     )
     seen_ids: list[UUID] = []
 
@@ -470,4 +482,47 @@ async def test_invalid_json_output_is_repaired_and_accounted_for(
     assert {(call.outcome, call.prompt_version) for call in calls} == {
         ("invalid_output", "parse_jd@2"),
         ("success", "parse_jd@2+repair_json@1"),
+    }
+
+
+@pytest.mark.parametrize(
+    ("adapter", "error", "overflow"),
+    [
+        (
+            ProtocolAdapter.DEEPSEEK,
+            {"message": "Maximum context length exceeded"},
+            True,
+        ),
+        (ProtocolAdapter.OPENAI, {"code": "context_length_exceeded"}, True),
+        (ProtocolAdapter.DEEPSEEK, {"message": "invalid parameters"}, False),
+    ],
+)
+async def test_model_adapters_distinguish_overflow_from_bad_request(
+    session_factory: async_sessionmaker[AsyncSession],
+    run: AiRun,
+    monkeypatch: pytest.MonkeyPatch,
+    adapter: ProtocolAdapter,
+    error: dict[str, str],
+    overflow: bool,
+) -> None:
+    monkeypatch.setitem(
+        settings.model_profiles,
+        "chat-test",
+        ModelProfile(adapter=adapter, context_window=32_000, max_output_tokens=1200),
+    )
+    monkeypatch.setattr(settings, "rewrite", ModelSettings(model_name="chat-test"))
+    requests = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(loads(request.content))
+        return httpx.Response(400, json={"error": error})
+
+    async with fake_upstream(respond) as client:
+        with pytest.raises(APIStatusError) as caught:
+            await send(session_factory, run, client, max_output_tokens=800)
+    assert isinstance(caught.value, ContextOverflowError) is overflow
+    assert len(requests) == 1 and requests[0]["max_tokens"] == 800
+    assert ("thinking" in requests[0]) is (adapter == ProtocolAdapter.DEEPSEEK)
+    assert outcomes_and_usage(await calls_of(session_factory, run)) == {
+        ("http_error", None, None)
     }
