@@ -17,7 +17,11 @@ from uuid import UUID, uuid4
 
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, omit
 from openai.types import CompletionUsage
-from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
+from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionMessageParam,
+    ChatCompletionToolUnionParam,
+)
 from pydantic import ValidationError
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -110,6 +114,8 @@ async def request_completion(
     json_output: bool,
     budget: ModelBudget,
     validate: Callable[[ChatCompletion], None] | None = None,
+    tools: Sequence[ChatCompletionToolUnionParam] = (),
+    on_text: Callable[[str], None] | None = None,
 ) -> ChatCompletion:
     """完成一次逻辑请求，返回通过 validate 的响应。
 
@@ -126,6 +132,13 @@ async def request_completion(
     call_prompt_version = prompt_version
     upstream_attempts = 1
     repair_used = False
+    text_emitted = False
+
+    def emit_text(fragment: str) -> None:
+        nonlocal text_emitted
+        text_emitted = True
+        if on_text is not None:
+            on_text(fragment)
 
     while True:
         try:
@@ -140,10 +153,12 @@ async def request_completion(
                 json_output=json_output,
                 budget=budget,
                 validate=validate,
+                tools=tools,
+                on_text=emit_text if on_text is not None else None,
             )
 
         except ValidationError as error:
-            if not json_output or repair_used:
+            if not json_output or repair_used or text_emitted:
                 raise
 
             repair_used = True
@@ -152,7 +167,7 @@ async def request_completion(
             call_prompt_version = f"{prompt_version}+{repair_prompt.label}"
 
         except (APIStatusError, APIConnectionError) as error:
-            if not _is_retryable(error):
+            if text_emitted or not _is_retryable(error):
                 raise
             if upstream_attempts >= settings.model_max_attempts:
                 raise
@@ -193,6 +208,8 @@ async def _send_once(
     json_output: bool,
     budget: ModelBudget,
     validate: Callable[[ChatCompletion], None] | None,
+    tools: Sequence[ChatCompletionToolUnionParam],
+    on_text: Callable[[str], None] | None,
 ) -> ChatCompletion:
     """实际发送一次：查配置并脱敏 → 扣额度 → 登记 unknown → 发送并校验 → 结算。
 
@@ -202,7 +219,10 @@ async def _send_once(
     """
     model_settings = settings.model_for_purpose(purpose)
     sanitized_messages = _sanitize_messages(messages)
-    budget.reserve(_estimate_tokens(sanitized_messages, model_settings.max_tokens))
+    estimated = _estimate_tokens(sanitized_messages, model_settings.max_tokens)
+    if tools:
+        estimated += len(dumps(list(tools), ensure_ascii=False).encode("utf-8"))
+    budget.reserve(estimated)
     call_id = await _register_call(
         session_factory,
         user_id,
@@ -218,9 +238,14 @@ async def _send_once(
     outcome = CallOutcome.UNKNOWN
     usage: CompletionUsage | None = None
     try:
-        response = await _create_completion(
-            client, model_settings, sanitized_messages, json_output
-        )
+        if tools or on_text is not None:
+            response = await _tool_completion(
+                client, model_settings, sanitized_messages, json_output, tools, on_text
+            )
+        else:
+            response = await _create_completion(
+                client, model_settings, sanitized_messages, json_output
+            )
         usage = response.usage
         # 先记为 invalid_output：validate 抛出任何异常都按校验失败结算。
         outcome = CallOutcome.INVALID_OUTPUT
@@ -253,10 +278,28 @@ def _sanitize_message(
     copied: dict[str, Any] = dict(message)
     content = copied.get("content")
     if isinstance(content, str):
+        if copied["role"] == "tool":
+            content = wrap_untrusted_text("tool_result", content)
         copied["content"] = redact_pii(content)
     elif isinstance(content, list):
         copied["content"] = [_sanitize_part(part) for part in content]
+    if isinstance(reasoning := copied.get("reasoning_content"), str):
+        copied["reasoning_content"] = redact_pii(reasoning)
+    if copied.get("tool_calls"):
+        copied["tool_calls"] = [
+            _sanitize_tool_call(call) for call in copied["tool_calls"]
+        ]
     return cast(ChatCompletionMessageParam, copied)
+
+
+def _sanitize_tool_call(call: dict[str, Any]) -> dict[str, Any]:
+    if call["type"] != "function":
+        return call
+    function = call["function"]
+    return {
+        **call,
+        "function": {**function, "arguments": redact_pii(function["arguments"])},
+    }
 
 
 def _sanitize_part(part: Any) -> Any:
@@ -290,6 +333,16 @@ async def _create_completion(
 ) -> ChatCompletion:
     """按用途配置组装参数并发送；关闭 SDK 自带重试，重试只由网关负责。"""
     return await client.with_options(max_retries=0).chat.completions.create(
+        **_completion_args(model_settings, messages, json_output)
+    )
+
+
+def _completion_args(
+    model_settings: ModelSettings,
+    messages: Sequence[ChatCompletionMessageParam],
+    json_output: bool,
+) -> dict[str, Any]:
+    return dict(
         model=model_settings.model_name,
         messages=messages,
         max_tokens=model_settings.max_tokens,
@@ -300,6 +353,28 @@ async def _create_completion(
             "thinking": {"type": "enabled" if model_settings.thinking else "disabled"}
         },
     )
+
+
+async def _tool_completion(
+    client: AsyncOpenAI,
+    model_settings: ModelSettings,
+    messages: Sequence[ChatCompletionMessageParam],
+    json_output: bool,
+    tools: Sequence[ChatCompletionToolUnionParam],
+    on_text: Callable[[str], None] | None,
+) -> ChatCompletion:
+    completions = client.with_options(max_retries=0).chat.completions
+    arguments = _completion_args(model_settings, messages, json_output)
+    arguments["tools"] = tools or omit
+    if on_text is None:
+        return await completions.create(**arguments)
+    async with completions.stream(
+        **arguments, stream_options={"include_usage": True}
+    ) as stream:
+        async for event in stream:
+            if event.type == "content.delta":
+                on_text(event.delta)
+        return await stream.get_final_completion()
 
 
 async def _register_call(
