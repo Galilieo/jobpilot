@@ -25,6 +25,13 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
 from jobpilot.db.base import Base
+from jobpilot.db.memory_schema import (
+    MEMORY_KEY_CHECK,
+    MEMORY_KEY_LENGTH,
+    MEMORY_REVISION_CHECK,
+    MEMORY_SOURCE_CHECK,
+    MEMORY_VALUE_CHECK,
+)
 
 
 def normalize_email(email: str) -> str:
@@ -54,6 +61,30 @@ class User(Base):
     def _normalize_email(self, key: str, value: str) -> str:
         """账号创建和修改都复用登录、恢复时的规范化规则。"""
         return normalize_email(value)
+
+
+class Memory(Base):
+    """保存已确认的偏好，删除的栏目保留修订号以拒绝过期写入。"""
+
+    __tablename__ = "memory"
+    __table_args__ = (
+        CheckConstraint(MEMORY_KEY_CHECK, name="ck_memory_key"),
+        CheckConstraint(MEMORY_REVISION_CHECK, name="ck_memory_revision"),
+        CheckConstraint(MEMORY_VALUE_CHECK, name="ck_memory_value"),
+        CheckConstraint(MEMORY_SOURCE_CHECK, name="ck_memory_source"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE"), primary_key=True
+    )
+    key: Mapped[str] = mapped_column(String(MEMORY_KEY_LENGTH), primary_key=True)
+    value_json: Mapped[str | list[str] | None] = mapped_column(JSONB(none_as_null=True))
+    revision: Mapped[int] = mapped_column(BigInteger)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class UserSession(Base):
@@ -208,6 +239,7 @@ class AiRun(Base):
     # 改写计划和每块的结果（done / interrupted / failed / not_started），
     # 预算用完时查询接口据此说明哪几块没写完；不读 LangGraph 检查点。
     plan_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    writing_preferences_json: Mapped[dict[str, str] | None] = mapped_column(JSONB)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
