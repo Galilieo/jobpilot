@@ -239,6 +239,33 @@ E3 用 E1 的事实、求职条件、教育标注以及合成 JD 的要求标注
 
 [开发集标注](datasets/e3/labels-dev.jsonl)按要求一行，键为 `(pair_id, requirement_id)`，`pair_id` 为 `<resume_id>__<jd_id>`。开发集抽查见 [E3 三组抽查](reports/e3-dev-review.md)。抽查通过后按同一口径封存测试集，然后再运行模型。
 
+### 运行前预测（2026-11-26）
+
+- 程序判定三分类一致率预计 **100%**。测试主要使用规则能无歧义识别的天数下限、月数区间、学历下限和就读状态。偏差优先查区间端点、复合条件的路由以及学历状态约定。
+- 模型判定三分类一致率预计 **≥ 85%**。大多数不相关岗位应判未覆盖，部分覆盖和已覆盖容易在框架间接证据、复合技术项、试用与上线的界线上混淆。
+- 模型判为已覆盖时，依据命中率预计 **≥ 90%**。直接技术事实通常容易引用，复合要求的相关但冗余引用预计更多，单独报告多引率。程序判定的引用命中率预计 **100%**。
+
+### 运行、计分与第二人盲标
+
+在仓库根目录执行。开发测试两边的标注提交封存后、得到真实模型运行授权后才执行前两步。正式测试集使用定稿后的匹配提示词，只跑一个批次，每组 3 次。
+
+```sh
+uv run --project jobpilot python -m evals.runners.e3_match --split dev --runs 3
+uv run --project jobpilot python -m evals.runners.e3_match --split test --runs 3
+uv run --project jobpilot python -m evals.runners.e3_score <结果文件> --report <报告文件.md>
+```
+
+运行输出收录每次配对的逐条结果、网关实际调用、数据指纹、代码与提示词版本和模型参数。测试集固定写入 `evals/results/e3-test-official.json`，已存在时拒绝运行。
+
+三分类一致率的分母是成功返回报告的要求条目。另报成功、失败和未完成的配对数。依据指标的分母是**服务判为已覆盖**的要求。引用中至少有一项在标注里算命中，有任意一项不在标注里算多引，两项可以同时发生。稳定性只比较各轮都有有效结果的同一条要求。按每轮等权计算平均与区间，另给合计计数。
+
+封存后运行下列命令生成 50 条盲标材料。开发集和测试集各 25 条，按原判断、硬性或加分、程序或模型路由交叉分层。把 `second-annotator-sheet.csv` 与本节标注规则交给第二位标注人，填好「判断」一列后保存为 `evals/private/e3-second-annotator.csv`。计分用脚本读取盲标键表，输出完全一致率、Cohen's kappa 和不一致条目。
+
+```sh
+uv run --project jobpilot python -m evals.runners.e3_second_annotator --prepare
+uv run --project jobpilot python -m evals.runners.e3_second_annotator
+```
+
 ## E4 依据检查
 
 E4 测依据检查（[03 第 1 节](../notes/求职助手Agent/03-可信安全与隐私.md#1-防编造依据检查)）能不能拦下编造、会不会误拦正常改写。设计见 [04 E4](../notes/求职助手Agent/04-评测方案.md#e4-依据检查器v1核心)。预期：完整三层的编造检出率 ≥ 90%，误拦率 ≤ 10%。
