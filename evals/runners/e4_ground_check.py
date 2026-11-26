@@ -6,6 +6,10 @@
 
     uv run --project jobpilot python -m evals.runners.e4_ground_check
     uv run --project jobpilot python -m evals.runners.e4_ground_check --test --runs 3
+    uv run --project jobpilot python -m evals.runners.e4_ground_check \
+        --split dev2 --runs 0
+
+`--runs 0` 只算第一、二层，不调模型、不需要密钥，用于只验证程序规则的补充集。
 
 数据格式见 evals/README.md 的「E4 依据检查」。
 """
@@ -182,25 +186,14 @@ async def semantic_layer(
     return record
 
 
-async def main(split: str, runs: int) -> int:
-    api_key = settings.deepseek_api_key.get_secret_value()
-    if not api_key:
-        print("未配置 OPENAI_API_KEY，请在仓库根目录 .env 中填写后重试。")
-        return 1
-
-    cases, fact_sets = with_program_layers(load_cases(split))
-    output: dict[str, Any] = {
-        "eval": "E4",
-        "split": split,
-        "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "git": git_state(),
-        "prompt_version": load_prompt("ground_check").label,
-        "model": settings.model_for_purpose(ModelPurpose.GROUND_CHECK).model_dump(),
-        "runs": runs,
-        "cases": cases,
-        "semantic": [],
-    }
-
+async def _run_semantic(
+    output: dict[str, Any],
+    cases: list[dict[str, Any]],
+    fact_sets: dict[str, dict[UUID, GroundingFact]],
+    api_key: str,
+) -> None:
+    """第三层：每句按 output["runs"] 调模型，记录追加到 output["semantic"]。"""
+    runs = output["runs"]
     engine = create_database_engine(
         settings.database_url,
         connect_timeout_seconds=settings.database_connect_timeout_seconds,
@@ -227,6 +220,29 @@ async def main(split: str, runs: int) -> int:
     finally:
         await engine.dispose()
 
+
+async def main(split: str, runs: int) -> int:
+    api_key = settings.deepseek_api_key.get_secret_value()
+    if runs and not api_key:
+        print("未配置 OPENAI_API_KEY，请在仓库根目录 .env 中填写后重试。")
+        return 1
+
+    cases, fact_sets = with_program_layers(load_cases(split))
+    output: dict[str, Any] = {
+        "eval": "E4",
+        "split": split,
+        "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "git": git_state(),
+        "prompt_version": load_prompt("ground_check").label,
+        "model": settings.model_for_purpose(ModelPurpose.GROUND_CHECK).model_dump(),
+        "runs": runs,
+        "cases": cases,
+        "semantic": [],
+    }
+
+    if runs:
+        await _run_semantic(output, cases, fact_sets, api_key)
+
     RESULT_DIR.mkdir(exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     path = RESULT_DIR / f"e4-{split}-{stamp}.json"
@@ -237,7 +253,12 @@ async def main(split: str, runs: int) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--test", action="store_true", help="运行测试集")
-    parser.add_argument("--runs", type=int, default=3, help="第三层每句运行几次")
+    parser.add_argument(
+        "--test", action="store_true", help="运行测试集（同 --split test）"
+    )
+    parser.add_argument("--split", choices=["dev", "test", "dev2"], default="dev")
+    parser.add_argument(
+        "--runs", type=int, default=3, help="第三层每句运行几次，0 表示只算第一、二层"
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(main("test" if args.test else "dev", args.runs)))
+    sys.exit(asyncio.run(main("test" if args.test else args.split, args.runs)))

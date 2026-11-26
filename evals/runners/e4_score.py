@@ -44,6 +44,8 @@ CONFIGS = {
 }
 # 按编造类型列检出率时只看三种真实组合，不含「只用第三层」的参考。
 COMBINED = ("L1", "L12", "L123")
+# 结果文件 runs 为 0 时只算了第一、二层（补充集），报告只列这两种组合。
+PROGRAM_ONLY = ("L1", "L12")
 # 04 第 1.2 节的预期。
 EXPECTED_DETECTION = 0.90
 EXPECTED_FALSE_BLOCK = 0.10
@@ -54,6 +56,20 @@ def blocked(case: dict[str, Any], semantic: dict[str, Any]) -> dict[str, bool]:
     l2 = bool(case["layer2"])
     l3 = bool(semantic["error"] or semantic["issues"])
     return {"L1": l1, "L12": l1 or l2, "L123": l1 or l2 or l3, "L3": l3}
+
+
+def semantic_runs(
+    result: dict[str, Any], cases: dict[str, dict]
+) -> list[list[dict[str, Any]]]:
+    """按运行分组的第三层记录。只算程序层时每句一条空记录，第三层视为没拦。"""
+    if result["runs"] == 0:
+        return [
+            [{"case_id": case_id, "error": None, "issues": []} for case_id in cases]
+        ]
+    return [
+        [r for r in result["semantic"] if r["run_index"] == index]
+        for index in range(result["runs"])
+    ]
 
 
 def score_run(cases: dict[str, dict], semantic: list[dict]) -> dict[str, Any]:
@@ -115,14 +131,14 @@ def _header(result: dict[str, Any], cases: dict[str, dict], path: Path) -> list[
         lines.append(
             f"- 第一、二层按 {_commit(result['recheck_git'])} 的代码重算，第三层沿用原结果"
         )
+    third = f"第三层每句 {result['runs']} 次" if result["runs"] else "只算第一、二层"
     lines.append(
-        f"- 句子：{len(cases)} 句（正常 {normal}、编造 {len(cases) - normal}）；"
-        f"第三层每句 {result['runs']} 次"
+        f"- 句子：{len(cases)} 句（正常 {normal}、编造 {len(cases) - normal}）；{third}"
     )
     return lines
 
 
-def _config_table(runs: list[dict[str, Any]]) -> list[str]:
+def _config_table(runs: list[dict[str, Any]], configs: tuple[str, ...]) -> list[str]:
     lines = [
         "## 三种组合",
         "",
@@ -132,25 +148,29 @@ def _config_table(runs: list[dict[str, Any]]) -> list[str]:
         ),
         "| --- | ---: | ---: |",
     ]
-    for config, name in CONFIGS.items():
+    for config in configs:
+        name = CONFIGS[config]
         detection = spread([run["summary"][config]["detection"] for run in runs])
         false_block = spread([run["summary"][config]["false_block"] for run in runs])
         lines.append(f"| {name} | {detection} | {false_block} |")
     return lines
 
 
-def _label_table(runs: list[dict[str, Any]], cases: dict[str, dict]) -> list[str]:
+def _label_table(
+    runs: list[dict[str, Any]], cases: dict[str, dict], configs: tuple[str, ...]
+) -> list[str]:
     counts = Counter(case["label"] for case in cases.values())
+    shown = [c for c in COMBINED if c in configs]
     lines = [
         "## 按编造类型的检出率",
         "",
-        "| 类型 | 句数 | " + " | ".join(CONFIGS[c] for c in COMBINED) + " |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| 类型 | 句数 | " + " | ".join(CONFIGS[c] for c in shown) + " |",
+        "| --- | ---: | " + " | ".join("---:" for _ in shown) + " |",
     ]
     for label, name in LABELS.items():
         cells = [
             spread([run["summary"][c]["by_label"][label] for run in runs])
-            for c in COMBINED
+            for c in shown
         ]
         lines.append(f"| {name} | {counts[label]} | " + " | ".join(cells) + " |")
     return lines
@@ -165,14 +185,17 @@ def _first_blocker(runs: list[dict[str, Any]]) -> list[str]:
     ]
 
 
-def _failures(result: dict[str, Any], cases: dict[str, dict]) -> list[str]:
-    """完整组合下漏掉的编造、被拦下的正常句；误拦按原因分别计次。"""
+def _failures(result: dict[str, Any], cases: dict[str, dict], final: str) -> list[str]:
+    """最完整的组合下漏掉的编造、被拦下的正常句；误拦按原因分别计次。"""
     misses: Counter[str] = Counter()
     false_blocks: Counter[str] = Counter()
     reasons_by_case: dict[str, Counter[str]] = defaultdict(Counter)
-    for record in result["semantic"]:
+    # 只算程序层时没有第三层记录，按一次运行、每句一条空记录统计。
+    records = result["semantic"] or semantic_runs(result, cases)[0]
+    times_total = result["runs"] or 1
+    for record in records:
         case = cases[record["case_id"]]
-        caught = blocked(case, record)["L123"]
+        caught = blocked(case, record)[final]
         if case["label"] != NORMAL and not caught:
             misses[case["case_id"]] += 1
         if case["label"] == NORMAL and caught:
@@ -183,24 +206,25 @@ def _failures(result: dict[str, Any], cases: dict[str, dict]) -> list[str]:
             false_blocks[case["case_id"]] += 1
             reasons_by_case[case["case_id"]].update(set(reasons))
 
-    lines = ["## 漏掉的编造（完整组合）", ""]
+    name = CONFIGS[final]
+    lines = [f"## 漏掉的编造（{name}）", ""]
     for case_id, times in sorted(misses.items()):
         case = cases[case_id]
         lines.append(
-            f"- （{times}/{result['runs']} 次）`{case_id}` {LABELS[case['label']]}："
+            f"- （{times}/{times_total} 次）`{case_id}` {LABELS[case['label']]}："
             f"{case['sentence']}　— {case.get('note', '')}"
         )
     if not misses:
         lines.append("无")
 
-    lines += ["", "## 被误拦的正常句（完整组合）", ""]
+    lines += ["", f"## 被误拦的正常句（{name}）", ""]
     for case_id, times in sorted(false_blocks.items()):
         reasons = "；".join(
             f"{reason}（{count} 次）"
             for reason, count in sorted(reasons_by_case[case_id].items())
         )
         lines.append(
-            f"- （{times}/{result['runs']} 次）`{case_id}` "
+            f"- （{times}/{times_total} 次）`{case_id}` "
             f"{cases[case_id]['sentence']}　— {reasons}"
         )
     if not false_blocks:
@@ -236,14 +260,16 @@ def render(
     runs: list[dict[str, Any]],
     path: Path,
 ) -> str:
+    configs = PROGRAM_ONLY if result["runs"] == 0 else tuple(CONFIGS)
     sections = [
         _header(result, cases, path),
-        _config_table(runs),
-        _label_table(runs, cases),
+        _config_table(runs, configs),
+        _label_table(runs, cases, configs),
         _first_blocker(runs),
-        _failures(result, cases),
-        _cost(result),
+        _failures(result, cases, configs[-1] if result["runs"] == 0 else "L123"),
     ]
+    if result["runs"]:
+        sections.append(_cost(result))
     return "\n\n".join("\n".join(section) for section in sections) + "\n"
 
 
@@ -268,10 +294,7 @@ def main(path: Path | None, *, recheck_program: bool = False) -> int:
     if recheck_program:
         recheck(result)
     cases = {case["case_id"]: case for case in result["cases"]}
-    runs = [
-        score_run(cases, [r for r in result["semantic"] if r["run_index"] == index])
-        for index in range(result["runs"])
-    ]
+    runs = [score_run(cases, group) for group in semantic_runs(result, cases)]
     report = render(result, cases, runs, path)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     out = REPORT_DIR / f"{path.stem}{'-recheck' if recheck_program else ''}.md"
