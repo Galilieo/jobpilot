@@ -29,10 +29,10 @@ textarea {
 .recent-empty,
 .page-header-sub,
 .empty-hint-text,
-.workspace-card-label,
-.workspace-metric-sub,
+.stat-card-label,
+.stat-card-unit,
 .board-head-sub,
-.ant-typography.workspace-card-note,
+.ant-typography.stat-card-note,
 .board-column-title,
 .board-column-empty,
 .ant-typography.board-card-sub,
@@ -57,19 +57,18 @@ textarea {
   font-size: 13px;
 }
 
-.workspace-card,
+.stat-card,
 .board-column,
 .board-card,
 .login-card,
-.profile-stat-card,
 .job-card,
 .evidence-trigger,
 .resume-frame {
   border-color: var(--ant-color-border-secondary);
 }
 
-.workspace-card,
-.profile-stat-card,
+.stat-card,
+.board-column,
 .resume-panel,
 .login-page,
 .job-raw {
@@ -209,38 +208,38 @@ textarea {
   text-align: left;
 }
 
-/* 工作台 */
-.workspace-page {
-  max-width: 1040px;
-}
-.workspace-cards {
+/* 概览数字卡（工作台状态卡与「我的」概览卡共用） */
+.stat-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
 }
-.workspace-card,
+.stat-cards + .ant-tabs {
+  margin-top: 16px;
+}
+.stat-card,
 .board-card,
 .job-card {
   transition: border-color 0.2s ease;
 }
-.workspace-card:hover,
+.stat-card:hover,
 .board-card:hover,
 .job-card:hover {
   border-color: var(--ant-color-primary-border);
 }
-.workspace-card .ant-card-body,
+.stat-card .ant-card-body,
 .job-card .ant-card-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
   height: 100%;
 }
-.workspace-card-label {
+.stat-card-label-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.workspace-card-icon {
+.stat-card-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +248,7 @@ textarea {
   border-radius: 6px;
   font-size: 13px;
 }
-.workspace-metric {
+.stat-card-metric {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -260,16 +259,20 @@ textarea {
   line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
-.workspace-metric-sub {
+.stat-card-unit {
   font-weight: 400;
 }
-.ant-typography.workspace-card-note {
+.ant-typography.stat-card-note {
   margin-bottom: 12px;
   line-height: 1.55;
 }
-.workspace-card-action {
+.stat-card-action {
   margin-top: auto;
-  align-self: flex-start;
+}
+
+/* 工作台 */
+.workspace-page {
+  max-width: 1040px;
 }
 .workspace-board-head {
   display: flex;
@@ -787,12 +790,6 @@ textarea {
 }
 
 /* 我的：经历与简历 */
-.profile-overview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
 .import-upload {
   display: block;
   margin-top: 12px;

@@ -9,6 +9,7 @@ import type { BoardJobCard, FactsOverview, GroundingOverview, JobBoard } from '.
 import { useCurrentUser } from '../auth'
 import { EmptyHint } from '../components/EmptyHint'
 import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
 import { JOB_STAGE, formatJobMeta, formatMatchSummary } from '../labels'
 import { OVERVIEW_QUERY } from '../queryKeys'
 
@@ -66,83 +67,66 @@ function StatusCards({
   facts: FactsOverview
   grounding: GroundingOverview
 }): ReactElement {
-  const { token } = theme.useToken()
   const navigate = useNavigate()
   return (
-    <div className="workspace-cards">
-      <Card size="small" className="workspace-card">
-        <Typography.Text type="secondary" className="workspace-card-label">
-          <span
-            className="workspace-card-icon"
-            style={{ background: token.colorPrimaryBg, color: token.colorPrimaryText }}
-          >
-            <BookOutlined />
-          </span>
-          经历事实库
-        </Typography.Text>
-        <div className="workspace-metric">
-          <span>{facts.published_count}</span>
-          <Typography.Text type="secondary" className="workspace-metric-sub">
-            条 · {facts.version ? `v${facts.version}` : '尚未发布'}
-          </Typography.Text>
-        </div>
-        <Typography.Paragraph type="secondary" className="workspace-card-note">
-          {facts.pending_count > 0
+    <div className="stat-cards">
+      <StatCard
+        label={<StatLabel icon={<BookOutlined />} tone="primary" text="经历事实库" />}
+        value={facts.published_count}
+        unit={`条 · ${facts.version ? `v${facts.version}` : '尚未发布'}`}
+        note={
+          facts.pending_count > 0
             ? `${facts.pending_count} 条待确认，确认并发布后才会用于匹配和改写`
-            : '当前没有待确认的条目'}
-        </Typography.Paragraph>
-        <Button size="small" className="workspace-card-action" onClick={() => void navigate('/me')}>
-          {facts.pending_count > 0 ? '去确认' : '查看经历'}
-        </Button>
-      </Card>
-
-      <Card size="small" className="workspace-card">
-        <Typography.Text type="secondary" className="workspace-card-label">
-          <span
-            className="workspace-card-icon"
-            style={{ background: token.colorSuccessBg, color: token.colorSuccessText }}
-          >
-            <SafetyCertificateOutlined />
-          </span>
-          不编造记录
-        </Typography.Text>
-        <div className="workspace-metric">
-          <span>{grounding.total}</span>
-          <Typography.Text type="secondary" className="workspace-metric-sub">
-            条改写 · {grounding.resume_count} 份定制简历
-          </Typography.Text>
-        </div>
-        <Typography.Paragraph type="secondary" className="workspace-card-note">
-          通过 {grounding.passed} 条 · 回退原文 {grounding.fallback} 条 · 待处理 {grounding.pending}{' '}
-          条
-        </Typography.Paragraph>
-        <Button
-          size="small"
-          className="workspace-card-action"
-          onClick={() => void navigate('/me?tab=resumes')}
-        >
-          查看定制简历
-        </Button>
-      </Card>
-
-      <Card size="small" className="workspace-card">
-        <Typography.Text type="secondary" className="workspace-card-label">
-          <span
-            className="workspace-card-icon"
-            style={{ background: token.colorFillTertiary, color: token.colorTextSecondary }}
-          >
-            <BulbOutlined />
-          </span>
-          记住的偏好
-        </Typography.Text>
-        <div className="workspace-metric">
-          <Typography.Text type="secondary">之后开放</Typography.Text>
-        </div>
-        <Typography.Paragraph type="secondary" className="workspace-card-note">
-          偏好记忆将在后续版本开放，只保存求职与写作偏好，不保存经历。
-        </Typography.Paragraph>
-      </Card>
+            : '当前没有待确认的条目'
+        }
+        action={
+          <Button size="small" onClick={() => void navigate('/me')}>
+            {facts.pending_count > 0 ? '去确认' : '查看经历'}
+          </Button>
+        }
+      />
+      <StatCard
+        label={<StatLabel icon={<SafetyCertificateOutlined />} tone="success" text="不编造记录" />}
+        value={grounding.total}
+        unit={`条改写 · ${grounding.resume_count} 份定制简历`}
+        note={`通过 ${grounding.passed} 条 · 回退原文 ${grounding.fallback} 条 · 待处理 ${grounding.pending} 条`}
+        action={
+          <Button size="small" onClick={() => void navigate('/me?tab=resumes')}>
+            查看定制简历
+          </Button>
+        }
+      />
+      <StatCard
+        label={<StatLabel icon={<BulbOutlined />} tone="muted" text="记住的偏好" />}
+        unit="之后开放"
+        note="偏好记忆将在后续版本开放，只保存求职与写作偏好，不保存经历。"
+      />
     </div>
+  )
+}
+
+function StatLabel({
+  icon,
+  tone,
+  text,
+}: {
+  icon: ReactElement
+  tone: 'primary' | 'success' | 'muted'
+  text: string
+}): ReactElement {
+  const { token } = theme.useToken()
+  const tones = {
+    primary: { background: token.colorPrimaryBg, color: token.colorPrimaryText },
+    success: { background: token.colorSuccessBg, color: token.colorSuccessText },
+    muted: { background: token.colorFillTertiary, color: token.colorTextSecondary },
+  }
+  return (
+    <span className="stat-card-label-row">
+      <span className="stat-card-icon" style={tones[tone]}>
+        {icon}
+      </span>
+      {text}
+    </span>
   )
 }
 
@@ -189,11 +173,7 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
           {BOARD_COLUMNS.map(({ key, title, dot }) => {
             const items = board[key]
             return (
-              <div
-                key={key}
-                className="board-column"
-                style={{ background: token.colorFillQuaternary }}
-              >
+              <div key={key} className="board-column">
                 <div className="board-column-head">
                   <span className="board-column-title">
                     <span className="board-dot" style={{ background: dotColors[dot] }} />
