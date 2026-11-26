@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import cast
 
 from openai.types.chat import ChatCompletionToolUnionParam
 from pydantic import ValidationError
@@ -33,7 +34,18 @@ class Tool:
     category: ToolCategory
     description: str
     arguments: type[ToolArgs]
-    invoke: Callable[[ToolContext], Awaitable[Payload]]
+    execute: Callable[[ToolContext, ToolArgs], Awaitable[Payload]]
+
+    def parse_arguments(self, raw_arguments: str) -> ToolArgs:
+        try:
+            return self.arguments.model_validate_json(raw_arguments)
+        except ValidationError:
+            raise ToolError("工具参数格式错误") from None
+
+    async def invoke(self, context: ToolContext) -> Payload:
+        return await self.execute(
+            context, self.parse_arguments(context.call["arguments"])
+        )
 
     @property
     def definition(self) -> ChatCompletionToolUnionParam:
@@ -54,14 +66,10 @@ def _register[Args: ToolArgs](
     arguments: type[Args],
     run: Callable[[ToolContext, Args], Awaitable[Payload]],
 ) -> Tool:
-    async def invoke(context: ToolContext) -> Payload:
-        try:
-            args = arguments.model_validate_json(context.call["arguments"])
-        except ValidationError:
-            raise ToolError("工具参数格式错误") from None
-        return await run(context, args)
+    async def execute(context: ToolContext, args: ToolArgs) -> Payload:
+        return await run(context, cast(Args, args))
 
-    return Tool(name, category, description, arguments, invoke)
+    return Tool(name, category, description, arguments, execute)
 
 
 async def _ask(_context: ToolContext, args: AskArgs) -> Payload:
@@ -109,7 +117,7 @@ TOOLS = {
         _register(
             "parse_jd",
             ToolCategory.GENERATE,
-            "解析用户给出的完整 JD 正文并存入岗位库",
+            "引用本轮用户的完整 JD 正文或附件，解析后存入岗位库",
             ParseJobArgs,
             generation.parse_jd,
         ),

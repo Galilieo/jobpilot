@@ -22,6 +22,13 @@ def conversation_thread(user_id: UUID, conversation_id: UUID) -> str:
     return f"{user_id}:{conversation_id}"
 
 
+def set_job_binding(conversation: Conversation, job_id: UUID | None) -> int:
+    """在已锁住的对话上更新绑定，返回供撤销核对的修订号。"""
+    conversation.current_job_id = job_id
+    conversation.job_binding_revision += 1
+    return conversation.job_binding_revision
+
+
 async def find_conversation(
     user_id: UUID,
     session: AsyncSession,

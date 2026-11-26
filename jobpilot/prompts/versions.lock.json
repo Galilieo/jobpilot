@@ -1,7 +1,7 @@
 {
   "agent": {
-    "sha256": "3b671829950753cc65a72c0a2fbec0b65608b3eaee528a24845fb3a285d23472",
-    "version": 1
+    "version": 2,
+    "sha256": "889a1e59f75555edb25061a996fb5709eb6be58a4f0be5bbddd8da48111389de"
   },
   "extract_facts": {
     "sha256": "26a76d664805f9998d808d68317e0e2a69f3b4140ad3b75e5aa7dbe8691e534a",

@@ -19,13 +19,35 @@ export interface AgentMessageInput {
   attachments?: AgentTextAttachment[]
 }
 
-export interface AgentActionCard {
+interface AgentActionCardBase {
   action_id: string
   run_id: string
   tool: string
-  kind: 'question' | 'confirmation'
   status: 'pending' | 'confirmed' | 'rejected' | 'executed' | 'failed' | 'undone'
-  args: Record<string, unknown>
+}
+
+type AgentJobChoice = 'new' | 'switch' | 'keep'
+
+type AgentQuestionCardArgs =
+  | { type: 'questions'; questions: { question_id: string; text: string }[] }
+  | { type: 'job_choice'; question: string; job_id: string; choices: AgentJobChoice[] }
+
+export type AgentActionCard = AgentActionCardBase &
+  (
+    | { kind: 'confirmation'; args: Record<string, unknown> }
+    | { kind: 'question'; args: AgentQuestionCardArgs }
+  )
+
+export type AgentDecision =
+  | { decision: 'reject' }
+  | { decision: 'confirm'; answers?: never; job_choice?: never }
+  | { decision: 'confirm'; answers: Record<string, string>; job_choice?: never }
+  | { decision: 'confirm'; job_choice: AgentJobChoice; answers?: never }
+
+export interface AgentConfirmationDetails {
+  confirmation_status: 'waiting_decision' | 'decision_saved' | 'recovering' | null
+  pending_action: AgentActionCard | null
+  latest_decided_action: (AgentActionCard & { result: Record<string, unknown> | null }) | null
 }
 
 export interface AgentMessageConflict {

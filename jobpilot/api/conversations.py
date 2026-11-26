@@ -17,12 +17,13 @@ from jobpilot.db.conversations import (
     latest_confirmation,
     latest_decided_action,
     pending_action,
+    set_job_binding,
 )
 from jobpilot.db.conversations import (
     list_conversations as list_owned_conversations,
 )
 from jobpilot.db.jobs import get_user_job
-from jobpilot.db.models import ActionStatus, Conversation, MessageRole, RunStatus
+from jobpilot.db.models import Conversation, MessageRole, RunStatus
 from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.runtime import (
     ConfirmationStatus,
@@ -133,27 +134,24 @@ async def get_conversation(
         card = await latest_confirmation(user.user_id, db, run.run_id) if run else None
         decided = await latest_decided_action(user.user_id, db, conversation_id)
     stream = request.app.state.agent_runtime.streams.get(run.run_id) if run else None
+    phase = (
+        confirmation_status(run, card, stream.action_id if stream else None)
+        if run
+        else None
+    )
     return ConversationDetail(
         **ConversationOut.model_validate(conversation).model_dump(),
         messages=[MessageOut.model_validate(message) for message in messages],
         run=AgentRunOut.model_validate(run) if run else None,
-        pending_action=(
-            card_payload(card)
-            if card
-            and card.status == ActionStatus.PENDING
-            and run.status == RunStatus.WAITING_CONFIRMATION
-            else None
-        ),
+        pending_action=card_payload(card)
+        if card and phase == ConfirmationStatus.WAITING_DECISION
+        else None,
         latest_decided_action=(
             {**card_payload(decided), "result": decided.result_json}
             if decided
             else None
         ),
-        confirmation_status=(
-            confirmation_status(run, card, stream.action_id if stream else None)
-            if run
-            else None
-        ),
+        confirmation_status=phase,
     )
 
 
@@ -168,7 +166,7 @@ async def update_conversation(
         conversation.title = body.title
     if "current_job_id" in body.model_fields_set:
         await _require_job(db, user.user_id, body.current_job_id)
-        conversation.current_job_id = body.current_job_id
+        set_job_binding(conversation, body.current_job_id)
     await db.commit()
     await db.refresh(conversation)
     return ConversationOut.model_validate(conversation)

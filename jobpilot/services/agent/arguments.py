@@ -1,6 +1,6 @@
 """模型可传的工具参数。身份、当前简历版本和审批状态由服务端取得。"""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, StringConstraints
@@ -41,7 +41,9 @@ class EditResumeArgs(ToolArgs):
 
 
 class ParseJobArgs(ToolArgs):
-    raw_text: str = Field(min_length=1, max_length=50000)
+    source: Literal["message"] | Annotated[int, Field(strict=True, ge=1)] = Field(
+        description="message 指本轮消息正文，整数指从 1 开始的本轮附件序号"
+    )
 
 
 class TailorArgs(JobArgs):

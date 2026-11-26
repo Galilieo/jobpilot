@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from jobpilot.db.conversations import agent_input
 from jobpilot.db.jobs import find_existing_job
 from jobpilot.db.models import (
     AiRun,
@@ -91,9 +92,23 @@ async def _save_job(
     return job_id
 
 
+async def _jd_source_text(context: ToolContext, args: ParseJobArgs) -> str:
+    """引用只能指向本轮输入，返回服务端保存的原文。"""
+    agent = context.agent
+    async with agent.sessions() as session:
+        message = await agent_input(agent.user_id, session, agent.run_id)
+    if message is None:
+        raise ToolError("本轮消息不存在")
+    if args.source == "message":
+        return message.content
+    if args.source > len(message.attachments_json):
+        raise ToolError("附件序号不属于本轮消息")
+    return message.attachments_json[args.source - 1]["text"]
+
+
 async def parse_jd(context: ToolContext, args: ParseJobArgs) -> Payload:
     user_id, run_id = context.agent.user_id, _child_id(context)
-    raw_text = normalize_text(args.raw_text).strip()
+    raw_text = normalize_text(await _jd_source_text(context, args)).strip()
     if not raw_text:
         raise ToolError("请提供 JD 正文")
     content_hash = sha256(raw_text.encode("utf-8")).hexdigest()

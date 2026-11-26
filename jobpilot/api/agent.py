@@ -10,6 +10,7 @@ from starlette.responses import StreamingResponse
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.api.tailoring import Launcher
+from jobpilot.config import settings
 from jobpilot.db.accounts import lock_active_account
 from jobpilot.db.conversations import (
     add_message,
@@ -33,6 +34,7 @@ from jobpilot.db.models import (
     RunStatus,
 )
 from jobpilot.services.agent.actions import undo_write, verify_action_version
+from jobpilot.services.agent.questions import validate_card_decision
 from jobpilot.services.agent.runtime import (
     AgentRuntime,
     EventStream,
@@ -60,9 +62,13 @@ class MessageIn(BaseModel):
     attachments: list[TextAttachment] = Field(default_factory=list, max_length=5)
 
     @model_validator(mode="after")
-    def nonempty(self) -> "MessageIn":
+    def validate_text_length(self) -> "MessageIn":
         if not self.content and not self.attachments:
             raise ValueError("请输入消息或添加附件")
+        limit = settings.agent_limits.input_characters
+        length = len(self.content) + sum(len(item.text) for item in self.attachments)
+        if length > limit:
+            raise ValueError(f"消息正文和附件的总长度不能超过 {limit} 字符")
         return self
 
 
@@ -193,23 +199,6 @@ async def send_message(
     return _launch(runtime, launcher, sessions, model, run)
 
 
-def _validate_decision(body: DecisionIn, action: AgentAction) -> None:
-    if body.decision == Decision.REJECT and (body.answers or body.job_choice):
-        raise HTTPException(422, "拒绝时无需填写回答")
-    if action.tool != "ask_user" and (body.answers or body.job_choice):
-        raise HTTPException(422, "写入确认只接收确认或拒绝")
-    if body.job_choice is not None and body.job_choice not in action.args_json.get(
-        "choices", []
-    ):
-        raise HTTPException(422, "未知的岗位选择")
-    if (
-        action.tool == "ask_user"
-        and body.decision == Decision.CONFIRM
-        and not (body.answers or body.job_choice)
-    ):
-        raise HTTPException(422, "请回答问题或选择岗位操作")
-
-
 async def _store_decision(
     db: DbSession, run: AiRun, action: AgentAction, body: DecisionIn
 ) -> None:
@@ -220,12 +209,12 @@ async def _store_decision(
         or card.action_id != action.action_id
     ):
         raise HTTPException(409, "确认卡已失效")
-    _validate_decision(body, action)
-    if body.decision == Decision.CONFIRM:
-        try:
+    try:
+        validate_card_decision(body, action)
+        if body.decision == Decision.CONFIRM:
             await verify_action_version(db, action)
-        except ToolError as error:
-            raise HTTPException(error.status, str(error)) from None
+    except ToolError as error:
+        raise HTTPException(error.status, str(error)) from None
     action.decision_json = body.model_dump(mode="json")
     action.status = (
         ActionStatus.CONFIRMED

@@ -38,6 +38,7 @@ from jobpilot.db.runs import finish_run
 from jobpilot.diagnostics import describe_error, error_locations
 from jobpilot.services.agent.context import serialize
 from jobpilot.services.agent.graph import build_agent_graph
+from jobpilot.services.agent.questions import load_question_card
 from jobpilot.services.agent.types import AgentDeps, Payload
 
 logger = logging.getLogger("uvicorn.error").getChild("agent")
@@ -104,13 +105,19 @@ class EventStream:
 
 
 def card_payload(action: AgentAction) -> Payload:
+    asks_question = action.tool == "ask_user"
+    args = (
+        load_question_card(action.args_json).model_dump(mode="json")
+        if asks_question
+        else action.args_json
+    )
     return {
         "action_id": str(action.action_id),
         "run_id": str(action.run_id),
         "tool": action.tool,
-        "args": action.args_json,
+        "args": args,
         "status": action.status,
-        "kind": "question" if action.tool == "ask_user" else "confirmation",
+        "kind": "question" if asks_question else "confirmation",
     }
 
 

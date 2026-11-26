@@ -35,16 +35,23 @@ class Decision(StrEnum):
     REJECT = "reject"
 
 
+class JobChoice(StrEnum):
+    NEW = "new"
+    SWITCH = "switch"
+    KEEP = "keep"
+
+
+AnswerText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+]
+
+
 class DecisionIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     decision: Decision
-    answers: list[
-        Annotated[
-            str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
-        ]
-    ] = Field(default_factory=list, max_length=10)
-    job_choice: str | None = Field(default=None, max_length=30)
+    answers: dict[str, AnswerText] | None = Field(default=None, max_length=10)
+    job_choice: JobChoice | None = None
 
 
 class ToolCall(TypedDict):
@@ -66,6 +73,7 @@ class AgentState(TypedDict, total=False):
     budget_exhausted: bool
     asked: bool
     switch_job_id: str | None
+    generation_results: dict[str, dict[str, Payload]]
 
 
 @dataclass(frozen=True)

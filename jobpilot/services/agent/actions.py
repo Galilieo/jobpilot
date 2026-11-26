@@ -7,9 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.conversations import find_conversation
+from jobpilot.db.conversations import find_conversation, set_job_binding
 from jobpilot.db.jobs import get_user_job
-from jobpilot.db.models import ActionStatus, AgentAction, AiRun
+from jobpilot.db.models import ActionStatus, AgentAction, AiRun, Conversation
 from jobpilot.services import drafts
 from jobpilot.services.agent.arguments import EditResumeArgs, SetJobArgs
 from jobpilot.services.agent.types import Payload, ToolContext, ToolError
@@ -46,6 +46,14 @@ class PreparedJob(SetJobArgs):
 class JobChange(BaseModel):
     job_id: UUID | None
     previous_job_id: UUID | None
+    applied_revision: int | None = None
+
+
+def bind_job(conversation: Conversation, job_id: UUID | None) -> JobChange:
+    """更新已锁住的对话绑定，记下撤销所需的旧岗位和动作生效的修订号。"""
+    previous = conversation.current_job_id
+    revision = set_job_binding(conversation, job_id)
+    return JobChange(job_id=job_id, previous_job_id=previous, applied_revision=revision)
 
 
 class ResumeUndo(BaseModel):
@@ -145,8 +153,7 @@ async def _apply_job(session: AsyncSession, action: AgentAction) -> AppliedActio
         and await get_user_job(session, action.user_id, args.job_id) is None
     ):
         raise ToolError("岗位不存在", 404)
-    change = JobChange(job_id=args.job_id, previous_job_id=conversation.current_job_id)
-    conversation.current_job_id = args.job_id
+    change = bind_job(conversation, args.job_id)
     return AppliedAction(
         {"job_id": str(args.job_id) if args.job_id else None},
         change.model_dump(mode="json"),
@@ -233,14 +240,17 @@ async def _undo_job(
     conversation = await find_conversation(
         action.user_id, session, action.conversation_id, lock=True
     )
-    if conversation is None or conversation.current_job_id != change.job_id:
+    if (
+        conversation is None
+        or conversation.job_binding_revision != change.applied_revision
+    ):
         raise ToolError("当前岗位已变更，无法撤销", 409)
     if (
         change.previous_job_id
         and await get_user_job(session, action.user_id, change.previous_job_id) is None
     ):
         raise ToolError("原岗位已删除，无法撤销", 409)
-    conversation.current_job_id = change.previous_job_id
+    set_job_binding(conversation, change.previous_job_id)
     return {"job_id": str(change.previous_job_id) if change.previous_job_id else None}
 
 

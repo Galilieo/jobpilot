@@ -35,6 +35,10 @@ class ModelSettings(BaseModel):
     max_tokens: int = Field(default=2048, gt=0)
 
 
+_AGENT_INPUT_BUDGET_SHARE = 2
+_MAX_JSON_BYTES_PER_CHARACTER = 6
+
+
 class AgentLimits(BaseModel):
     """同一轮对话及其工具共享的预算与历史窗口。"""
 
@@ -44,6 +48,19 @@ class AgentLimits(BaseModel):
     seconds: float = Field(default=180, gt=0)
     history_turns: int = Field(default=10, gt=0)
     history_tokens: int = Field(default=8000, gt=0)
+    match_job_calls: int = Field(default=2, ge=1)
+    tailor_resume_calls: int = Field(default=1, ge=1)
+    parse_jd_without_attachments: int = Field(default=1, ge=1)
+    tool_result_bytes: int = Field(default=6000, ge=512)
+
+    @property
+    def input_characters(self) -> int:
+        """保守按 JSON 转义后的字节数预留至少一半预算给工具及回复。"""
+        return (
+            self.model_tokens
+            // _AGENT_INPUT_BUDGET_SHARE
+            // _MAX_JSON_BYTES_PER_CHARACTER
+        )
 
 
 class Settings(BaseSettings):

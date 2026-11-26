@@ -16,6 +16,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, omit
+from openai.resources.chat.completions import AsyncCompletions
 from openai.types import CompletionUsage
 from openai.types.chat import (
     ChatCompletion,
@@ -80,6 +81,10 @@ def redact_pii(text: str) -> str:
 
 class EmptyModelResponseError(RuntimeError):
     """上游返回成功，但没有候选消息可供解析。"""
+
+
+class IncompleteModelStreamError(RuntimeError):
+    """流已断开或完成标记与实际响应不一致。"""
 
 
 class BudgetExhaustedError(RuntimeError):
@@ -385,13 +390,39 @@ async def _tool_completion(
     arguments["tools"] = tools or omit
     if on_text is None:
         return await completions.create(**arguments)
+    return await _read_completion_stream(completions, arguments, on_text)
+
+
+async def _read_completion_stream(
+    completions: AsyncCompletions,
+    arguments: dict[str, Any],
+    on_text: Callable[[str], None],
+) -> ChatCompletion:
+    """先确认首选响应确实结束，再让 SDK 组装最终回复。"""
+    finish_reason = None
     async with completions.stream(
         **arguments, stream_options={"include_usage": True}
     ) as stream:
         async for event in stream:
+            if event.type == "chunk":
+                for choice in event.chunk.choices:
+                    if choice.index == 0 and choice.finish_reason is not None:
+                        finish_reason = choice.finish_reason
             if event.type == "content.delta":
                 on_text(event.delta)
-        return await stream.get_final_completion()
+        if finish_reason not in ("stop", "tool_calls"):
+            raise IncompleteModelStreamError("未收到完整的模型响应")
+        completion = await stream.get_final_completion()
+    response = completion.choices[0].message
+    if finish_reason == "tool_calls" and response.tool_calls:
+        return completion
+    if (
+        finish_reason == "stop"
+        and (response.content or "").strip()
+        and not response.tool_calls
+    ):
+        return completion
+    raise IncompleteModelStreamError("模型完成标记与响应内容不一致")
 
 
 async def _register_call(

@@ -8,12 +8,49 @@ from jobpilot.db.conversations import find_conversation, recent_messages
 from jobpilot.db.models import Message, MessageRole
 from jobpilot.services.agent.read_tools import current_job_summary
 from jobpilot.services.agent.types import AgentDeps, AgentState, Payload
-from jobpilot.services.llm_gateway import wrap_untrusted_text
+from jobpilot.services.llm_gateway import redact_pii, wrap_untrusted_text
 from jobpilot.services.prompts import load_prompt
+
+
+def _result_preview(value: object, limit: int) -> object:
+    if len(serialize(value).encode()) <= limit:
+        return value
+    if isinstance(value, str):
+        # 脱敏后再裁剪，避免把邮箱截成无法识别的半段。
+        return redact_pii(value).encode()[: limit // 2].decode(errors="ignore")
+    if isinstance(value, list):
+        items: list[object] = []
+        for item in value:
+            if len(serialize([*items, item]).encode()) > limit:
+                break
+            items.append(item)
+        return items
+    if isinstance(value, dict):
+        return {
+            key: item
+            for key, item in value.items()
+            if len(serialize(item).encode()) <= limit // max(1, len(value))
+        }
+    return None
 
 
 def serialize(value: object) -> str:
     return dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
+
+
+def serialize_tool_result(result: Payload) -> str:
+    """在字段边界裁剪当轮超量回包，始终交给模型完整的 JSON。"""
+    content = serialize(result)
+    limit = settings.agent_limits.tool_result_bytes
+    if len(content.encode()) <= limit:
+        return content
+    preview: Payload = {"truncated": True}
+    field_limit = limit // max(1, len(result))
+    for key, value in result.items():
+        candidate = {**preview, key: _result_preview(value, field_limit)}
+        if len(serialize(candidate).encode()) <= limit:
+            preview = candidate
+    return serialize(preview)
 
 
 def summarize_tool(name: str, result: Payload) -> Payload:
@@ -39,8 +76,10 @@ def summarize_tool(name: str, result: Payload) -> Payload:
 def _history_content(message: Message, *, current: bool) -> str:
     content = message.content
     if message.role == MessageRole.USER and current:
-        for attachment in message.attachments_json:
-            content += "\n" + wrap_untrusted_text("attachment", attachment["text"])
+        for index, attachment in enumerate(message.attachments_json, start=1):
+            content += "\n" + wrap_untrusted_text(
+                f"attachment_{index}", attachment["text"]
+            )
     return content
 
 
@@ -99,6 +138,7 @@ async def build_context(agent: AgentDeps) -> AgentState:
         "action_id": "",
         "switch_job_id": None,
         "budget_exhausted": False,
+        "generation_results": {},
         "tools_left": limits.tool_calls,
         "seconds_left": agent.seconds_left,
     }

@@ -77,7 +77,7 @@ async def test_job_parse_finishes_after_http_client_disconnects(
         if payload["messages"][-1]["role"] == "tool":
             return reply("岗位已加入岗位库")
         if payload.get("stream"):
-            return batch(("parse_jd", {"raw_text": JD}))
+            return batch(("parse_jd", {"source": "message"}))
         send_count += 1
         await parsed.wait()
         return completion_response(dumps(OUTPUT))

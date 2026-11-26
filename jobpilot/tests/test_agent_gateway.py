@@ -4,36 +4,52 @@ from json import dumps, loads
 from uuid import UUID
 
 import httpx
+import pytest
+from openai import APIConnectionError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from jobpilot.config import settings
 from jobpilot.db.models import AiRun, User
 from jobpilot.services.llm_gateway import ModelBudget, request_completion
-from jobpilot.tests.test_call_accounting import calls_of, fake_upstream
+from jobpilot.tests.test_call_accounting import calls_of, fake_upstream, send
+from jobpilot.tests.test_call_accounting import run as run
 
 
 def stream_response(
-    *deltas: dict, finish_reason: str = "stop", stream_id: str = "test"
+    *deltas: dict,
+    finish_reason: str | None = "stop",
+    stream_id: str = "test",
+    include_usage: bool = True,
 ) -> httpx.Response:
     base = dict(id=stream_id, object="chat.completion.chunk", created=1, model="test")
     chunks = [
         {**base, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]}
         for delta in deltas
     ]
-    chunks.append(
-        {**base, "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}]}
-    )
-    chunks.append(
-        {
-            **base,
-            "choices": [],
-            "usage": {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15},
-        }
-    )
+    if finish_reason is not None:
+        chunks.append(
+            {
+                **base,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+            }
+        )
+    if include_usage:
+        chunks.append(
+            {
+                **base,
+                "choices": [],
+                "usage": {
+                    "prompt_tokens": 12,
+                    "completion_tokens": 3,
+                    "total_tokens": 15,
+                },
+            }
+        )
     payload = "".join(f"data: {dumps(chunk)}\n\n" for chunk in chunks)
     return httpx.Response(
         200,
         headers={"Content-Type": "text/event-stream"},
-        text=payload + "data: [DONE]\n\n",
+        text=payload + ("data: [DONE]\n\n" if finish_reason is not None else ""),
     )
 
 
@@ -106,4 +122,49 @@ async def test_tool_stream_is_masked_budgeted_and_recorded(
         "success",
         12,
         3,
+    )
+
+
+@pytest.mark.parametrize("finish_reason", [None, "tool_calls", "length", "connection"])
+async def test_incomplete_stream_keeps_usage_unknown(
+    session_factory: async_sessionmaker[AsyncSession],
+    run: AiRun,
+    finish_reason: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "model_max_attempts", 1)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if finish_reason == "connection":
+            raise httpx.ReadError("连接中断", request=request)
+        return stream_response(
+            {"role": "assistant", "content": "半截正文"}, finish_reason=finish_reason
+        )
+
+    async with fake_upstream(respond) as client:
+        with pytest.raises((RuntimeError, APIConnectionError)):
+            await send(session_factory, run, client, on_text=lambda _: None)
+    [record] = await calls_of(session_factory, run)
+    assert (record.outcome, record.prompt_tokens, record.completion_tokens) == (
+        "unknown",
+        None,
+        None,
+    )
+
+
+async def test_finish_marker_without_usage_is_a_complete_stream(
+    session_factory: async_sessionmaker[AsyncSession], run: AiRun
+) -> None:
+    async with fake_upstream(
+        lambda _: stream_response(
+            {"role": "assistant", "content": "完整正文"}, include_usage=False
+        )
+    ) as client:
+        completion = await send(session_factory, run, client, on_text=lambda _: None)
+    assert completion.choices[0].message.content == "完整正文"
+    [record] = await calls_of(session_factory, run)
+    assert (record.outcome, record.prompt_tokens, record.completion_tokens) == (
+        "success",
+        None,
+        None,
     )
