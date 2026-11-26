@@ -106,6 +106,38 @@ body[data-dir="c"] {
   --panel-col: 55%;
 }
 
+/* ---------- 方向 D：雾蓝 + 纸面（A 为底，借 B 的宋体标题、线框事实编号和核对绿，细节精修） ---------- */
+body[data-dir="d"] {
+  --font-head: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --bg: #FFFFFF;
+  --side-bg: #F5F6F7;
+  --side-ink: #26313C;
+  --side-muted: #7D8893;
+  --side-active: #E8EDF2;
+  --side-line: #E6E9EC;
+  --ink: #1E2832;
+  --muted: #66717D;
+  --faint: #9DA6B0;
+  --line: #E7EAED;
+  --accent: #46607A;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #EEF2F6;
+  --accent-text: #3B5268;
+  --ok: #2E6B58;
+  --ok-soft: #EAF3EE;
+  --warn: #9A6418;
+  --warn-soft: #FBF2E2;
+  --mark: #D9A04A;
+  --user-bubble: #F3F5F7;
+  --paper-desk: #F2F4F5;
+  --r-s: 5px;
+  --r-m: 8px;
+  --r-l: 14px;
+  --composer-border: #CDD6DF;
+  --composer-shadow: 0 1px 2px rgba(30, 45, 60, .04), 0 8px 28px rgba(30, 45, 60, .07);
+  --panel-col: 58%;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
@@ -423,16 +455,79 @@ body[data-dir="c"] .col { background: #F6F7F9; }
 .col .empty { color: var(--faint); font-size: 12.5px; padding: 6px 4px; }
 .col .empty button { border: 0; background: none; padding: 0; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; font-size: 12.5px; }
 
+/* ---------- 事实编号悬停显示原文（所有方向） ---------- */
+.fact { position: relative; }
+.fact[data-tip]:hover::after, .fact[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  width: max-content; max-width: 260px; white-space: normal; text-align: left;
+  font-family: var(--font-ui); font-size: 12.5px; font-weight: 400; line-height: 1.55; letter-spacing: 0;
+  color: #fff; background: #26313C; padding: 8px 10px; border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+.fact[data-tip]:hover::before {
+  content: ""; position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #26313C; border-bottom: 0;
+}
+.meta { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); font-size: 12.5px; }
+
+/* ---------- 方向 D 的细节 ---------- */
+body[data-dir="d"] .logo { font-family: var(--font-head); font-size: 18px; letter-spacing: .5px; }
+body[data-dir="d"] .nav a[aria-current="page"],
+body[data-dir="d"] .recent a[aria-current="page"] { box-shadow: inset 2px 0 0 var(--accent); font-weight: 500; }
+body[data-dir="d"] .new-chat { box-shadow: 0 1px 2px rgba(30,45,60,.05); }
+body[data-dir="d"] .welcome h2 { font-size: 30px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+body[data-dir="d"] .welcome p.sub { margin-bottom: 28px; }
+body[data-dir="d"] .composer { border-width: 1px; }
+body[data-dir="d"] .composer:focus-within { box-shadow: 0 0 0 3px var(--accent-soft), var(--composer-shadow); }
+body[data-dir="d"] .starter { border-radius: var(--r-s); padding: 6px 12px; font-size: 13.5px; }
+body[data-dir="d"] .fact {
+  background: transparent; border: 1px solid color-mix(in srgb, var(--ok) 55%, transparent);
+  border-radius: 3px; height: 16px; min-width: 20px; font-size: 10.5px; vertical-align: 2px; color: var(--ok);
+}
+body[data-dir="d"] .fact:hover { background: var(--ok-soft); border-color: var(--ok); }
+body[data-dir="d"] .msg-user { border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; }
+body[data-dir="d"] .sys::before, body[data-dir="d"] .sys::after { width: 40px; }
+body[data-dir="d"] .trace { border-radius: var(--r-m); }
+body[data-dir="d"] .trace-steps { padding-left: 40px; }
+body[data-dir="d"] .trace-steps li::before { left: -19px; top: 10px; width: 7px; height: 7px; background: var(--bg); border: 1.5px solid var(--ok); }
+body[data-dir="d"] .trace-steps li:not(:last-child)::after { content: ""; position: absolute; left: -16px; top: 19px; bottom: -9px; width: 1px; background: var(--line); }
+body[data-dir="d"] .verdict { border-bottom-style: solid; border-bottom-color: #F0F2F4; }
+body[data-dir="d"] .tag { border-radius: 4px; font-weight: 500; }
+body[data-dir="d"] .card { box-shadow: 0 1px 2px rgba(30,45,60,.04); }
+body[data-dir="d"] .card.pending { border-color: #D6DEE6; box-shadow: 0 0 0 3px var(--accent-soft); }
+body[data-dir="d"] .card-head .state { display: inline-flex; align-items: center; gap: 6px; color: var(--warn); }
+body[data-dir="d"] .card-head .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mark); }
+body[data-dir="d"] .diff > div + div { background: var(--bg); box-shadow: inset 2px 0 0 var(--accent); border-left-color: transparent; }
+body[data-dir="d"] .check { background: transparent; border-top-style: dashed; }
+body[data-dir="d"] .panel-head .tabs button { position: relative; border-bottom: 0; }
+body[data-dir="d"] .panel-head .tabs button::after {
+  content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--accent);
+  transform: scaleX(0); transition: transform .18s ease;
+}
+body[data-dir="d"] .panel-head .tabs button[aria-selected="true"]::after { transform: scaleX(1); }
+body[data-dir="d"] .guarantee { background: var(--bg); color: var(--muted); }
+body[data-dir="d"] .guarantee b { color: var(--ink); font-weight: 600; }
+body[data-dir="d"] .paper { box-shadow: 0 0 0 1px rgba(30,45,60,.06), 0 2px 4px rgba(30,45,60,.04), 0 16px 40px rgba(30,45,60,.08); border-radius: 2px; }
+body[data-dir="d"] .paper li.changed { background: none; box-shadow: -8px 0 0 -6px var(--mark); margin-left: 0; padding-left: 0; }
+body[data-dir="d"] .work h2 { font-size: 28px; font-weight: 700; letter-spacing: .5px; }
+body[data-dir="d"] .ledger { box-shadow: 0 1px 2px rgba(30,45,60,.04); }
+body[data-dir="d"] .ledger strong { font-family: var(--font-head); font-size: 26px; font-weight: 700; }
+body[data-dir="d"] .col { background: transparent; border: 1px dashed #DDE2E7; }
+body[data-dir="d"] .col:has(.jobcard) { background: var(--paper-desk); border-style: solid; border-color: transparent; }
+body[data-dir="d"] .jobcard { box-shadow: 0 1px 2px rgba(30,45,60,.05); transition: box-shadow .15s, border-color .15s; }
+body[data-dir="d"] .jobcard:hover { box-shadow: 0 4px 14px rgba(30,45,60,.09); }
+.ledger strong, .fit, .trace-steps time, .col-head span { font-variant-numeric: tabular-nums; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
-<body data-dir="a" data-screen="new" data-facts="on">
+<body data-dir="d" data-screen="new" data-facts="on">
 
 <header class="proto-bar" aria-label="原型控制">
   <strong>JobPilot 原型 v2</strong>
   <div class="proto-group"><span>方向</span>
     <div class="seg" data-control="dir">
-      <button data-value="a" aria-pressed="true">A 雾蓝精修</button>
+      <button data-value="d" aria-pressed="true">D 雾蓝 + 纸面</button>
+      <button data-value="a" aria-pressed="false">A 雾蓝精修</button>
       <button data-value="b" aria-pressed="false">B 档案纸面</button>
       <button data-value="c" aria-pressed="false">C 深色侧栏</button>
     </div>
@@ -462,6 +557,7 @@ body[data-dir="c"] .col { background: #F6F7F9; }
   </ol>
   <h3>三个方向</h3>
   <ul>
+    <li><b>D 雾蓝 + 纸面（用户 2026-11-26 选定的方向）</b>：以 A 为底，借 B 的宋体大标题（只用在欢迎语、工作台问候、简历姓名）、线框事实编号和核对绿；细节精修：事实编号悬停显示原文、圆角分层级、改动条目用左侧细竖线、确认卡「改成」一侧用强调线、工具步骤展开为时间轴、数字等宽、元信息分开排而不用中点串。</li>
     <li><b>A 雾蓝精修</b>：保留现在的雾蓝主色，理顺层级。改动最小，风险最低。</li>
     <li><b>B 档案纸面</b>：整页像一份带批注的档案，简历面板更宽，标题用宋体，依据用「核对过」的绿色。</li>
     <li><b>C 深色侧栏</b>：深墨色侧栏，回复不用气泡、像文档；需要你处理的地方用琥珀色。</li>
@@ -546,7 +642,7 @@ body[data-dir="c"] .col { background: #F6F7F9; }
         </div>
         <div class="messages">
           <div class="msgs-inner">
-            <div class="msg-user">帮我看看这个岗位，存进岗位库后做匹配。<span class="clip">苔汀推理工坊｜AI 应用开发实习生 · 上海 · 每周至少 4 天……</span><button class="more">展开全文</button></div>
+            <div class="msg-user">帮我看看这个岗位，存进岗位库后做匹配。<span class="clip">苔汀推理工坊｜AI 应用开发实习生，上海，每周至少 4 天……</span><button class="more">展开全文</button></div>
             <div class="sys">已存入岗位库，设为当前岗位</div>
             <div class="trace" open-state="false">
               <button class="trace-head" data-toggle="trace" aria-expanded="false">
@@ -617,7 +713,7 @@ body[data-dir="c"] .col { background: #F6F7F9; }
             <button class="btn btn-primary">导出 PDF</button>
           </div>
         </div>
-        <div class="guarantee"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>改写 7 条，每条都能追溯到你确认过的事实；没有条目回退到原文。<span class="stale">基于事实库 v2</span></div>
+        <div class="guarantee"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span><b>改写 7 条</b>，每条都能追溯到你确认过的事实；没有条目回退到原文。</span><span class="stale">基于事实库 v2</span></div>
         <div class="paper-wrap">
           <article class="paper">
             <h3>林同学</h3>
@@ -668,10 +764,10 @@ body[data-dir="c"] .col { background: #F6F7F9; }
         <div class="board">
           <div class="col"><div class="col-head"><i></i>未匹配<span>0</span></div><div class="empty">发一段 JD 就会出现在这里。<button>发 JD</button></div></div>
           <div class="col"><div class="col-head"><i style="background:var(--accent)"></i>已匹配<span>1</span></div>
-            <div class="jobcard" data-go="chat"><b>数据平台实习生</b><small>北斗数仓 · 杭州 · 每周 3 天</small><div class="meter"><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+            <div class="jobcard" data-go="chat"><b>数据平台实习生</b><span class="meta"><span>北斗数仓</span><span>杭州</span><span>每周 3 天</span></span><div class="meter"><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
           </div>
           <div class="col"><div class="col-head"><i style="background:var(--ok)"></i>已生成简历<span>1</span></div>
-            <div class="jobcard" data-go="chat"><b>AI 应用开发实习生</b><small>苔汀推理工坊 · 上海 · 每周 4 天</small><div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+            <div class="jobcard" data-go="chat"><b>AI 应用开发实习生</b><span class="meta"><span>苔汀推理工坊</span><span>上海</span><span>每周 4 天</span></span><div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
           </div>
           <div class="col"><div class="col-head"><i style="background:var(--warn)"></i>已投递<span>0</span></div><div class="empty">记录投递后会出现在这里。</div></div>
         </div>
@@ -732,6 +828,23 @@ body[data-dir="c"] .col { background: #F6F7F9; }
     const on = sw.getAttribute('aria-checked') !== 'true';
     sw.setAttribute('aria-checked', String(on));
     body.dataset.facts = on ? 'on' : 'off';
+  });
+
+  // 事实编号悬停显示原文（合成数据）
+  const FACTS = {
+    F1: '在实验室设备手册问答项目中带领三人小组完成原型设计（负责人）',
+    F2: '用 PostgreSQL 和 pgvector 存储文档片段与向量',
+    F3: '用 FastAPI 实现问答接口',
+    F4: '答案里返回引用的段落编号，供人工复核',
+    F5: '整理 48 条设备操作问题作为离线评测集',
+    F6: '对比关键词检索与向量混合检索的效果',
+    F7: '根据报修描述推荐工种和紧急程度，值班员确认后派单（三人课程项目）',
+    F8: '类别超出枚举或描述不清时转入人工确认',
+    F9: '技能：Python、FastAPI、PostgreSQL、pgvector'
+  };
+  document.querySelectorAll('.fact').forEach(el => {
+    const text = FACTS[el.textContent.trim()];
+    if (text) { el.dataset.tip = el.textContent.trim() + '　' + text; el.tabIndex = 0; }
   });
 
   // 说明面板
