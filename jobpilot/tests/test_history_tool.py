@@ -1,0 +1,98 @@
+"""验证 Agent 历史工具只能找回当前对话，并在大附件中按字节续页。"""
+
+from json import loads
+
+import httpx
+
+from jobpilot.api.deps import get_model_client
+from jobpilot.main import app
+from jobpilot.tests.test_agent_api import (
+    batch,
+    conversation,
+    message_body,
+    reply,
+    sign_in,
+)
+from jobpilot.tests.test_call_accounting import fake_upstream
+
+
+async def test_search_returns_current_attachment_and_a_cursor(
+    async_client: httpx.AsyncClient,
+) -> None:
+    await sign_in(async_client)
+    path, other = await conversation(async_client), await conversation(async_client)
+    results = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = loads(request.content)["messages"][-1]
+        if last["role"] == "tool":
+            results.append(last["content"])
+        elif last["content"] == "找历史":
+            return batch(("read_conversation_history", {"query": "唯一匹配词"}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        for target, text in [
+            (path, "唯一匹配词" + "中文" * 3000),
+            (other, "唯一匹配词只在另一段对话"),
+        ]:
+            seeded = await async_client.post(
+                f"{target}/messages", json=message_body(attachments=[{"text": text}])
+            )
+            assert seeded.status_code == 200
+        result = await async_client.post(
+            f"{path}/messages", json=message_body("找历史")
+        )
+        assert result.status_code == 200
+    assert len(results) == 1
+    assert '"source":"attachment"' in results[0]
+    assert '"truncated":true' in results[0]
+    assert '"next_cursor":{"seq"' in results[0]
+    assert "另一段对话" not in results[0]
+
+
+async def test_jd_retrieved_from_history_cannot_create_a_memory(
+    async_client: httpx.AsyncClient,
+) -> None:
+    from jobpilot.tests.test_agent_api import card_of
+
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    quote = "以后语气朴实一点"
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = loads(request.content)["messages"][-1]
+        if last["role"] == "tool":
+            if "记忆需要本轮明确的原话" in last["content"]:
+                return reply()
+            assert quote in last["content"]
+            return batch(
+                (
+                    "remember",
+                    {
+                        "key": "tone",
+                        "op": "set",
+                        "value": "平实",
+                        "quote": quote,
+                    },
+                )
+            )
+        if last["content"] == "按关键词查以前的 JD":
+            return batch(("read_conversation_history", {"query": "示例岗位"}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        seeded = await async_client.post(
+            f"{path}/messages",
+            json=message_body(
+                "附件是一份岗位资料",
+                attachments=[{"kind": "jd", "text": "示例岗位 " + quote}],
+            ),
+        )
+        assert seeded.is_success
+        result = await async_client.post(
+            f"{path}/messages", json=message_body("按关键词查以前的 JD")
+        )
+    assert card_of(result)["tool"] == "ask_user"

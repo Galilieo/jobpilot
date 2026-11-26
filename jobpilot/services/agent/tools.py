@@ -19,6 +19,7 @@ from jobpilot.services.agent.arguments import (
     SetJobArgs,
     TailorArgs,
 )
+from jobpilot.services.agent.history import HistoryArgs, read_history
 from jobpilot.services.agent.memory_actions import (
     ForgetArgs,
     RememberArgs,
@@ -118,6 +119,13 @@ TOOLS = {
             "按改写运行 ID 读取定制简历及版本",
             ResumeArgs,
             read_tools.read_resume,
+        ),
+        _register(
+            "read_conversation_history",
+            ToolCategory.READ,
+            "按序号范围或关键词查当前对话原文，按 next_cursor 续读",
+            HistoryArgs,
+            read_history,
         ),
         _register(
             "parse_jd",
