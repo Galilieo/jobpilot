@@ -332,6 +332,8 @@ async def test_full_run_succeeds_and_saves_bullets_in_plan_order(
         (2, "skills", None, "passed"),
     ]
     assert len(refs) == 2 + 1 + 3
+    assert {ref.bullet_id for ref in refs} == {bullet.bullet_id for bullet in bullets}
+    assert {ref.fact_id for ref in refs} <= set(seeded.fact_ids)
     blocks = run.plan_json["blocks"]
     assert [b["status"] for b in blocks] == ["done", "done", "done"]
     # 计划里记下了底稿判断：底稿就是事实的来源，已写到

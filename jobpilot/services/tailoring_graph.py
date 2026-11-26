@@ -18,7 +18,13 @@ from langgraph.types import Send
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.db.models import AiRun, RunStatus, SectionKind, StopReason
+from jobpilot.db.models import (
+    STOP_REASON_STATUS,
+    AiRun,
+    RunStatus,
+    SectionKind,
+    StopReason,
+)
 from jobpilot.db.reports import add_match_report
 from jobpilot.db.runs import finish_run
 from jobpilot.services.grounding import organizations_of
@@ -32,6 +38,7 @@ from jobpilot.services.matching import (
 from jobpilot.services.tailoring import (
     MODEL_ERRORS,
     BlockOutcome,
+    CheckLevel,
     WriteContext,
     write_block,
 )
@@ -41,6 +48,7 @@ from jobpilot.services.tailoring_store import (
     load_inputs,
     reusable_match_items,
     save_outcome,
+    stop_reason_of,
 )
 
 
@@ -52,6 +60,7 @@ class TailorDeps:
     client: AsyncOpenAI
     budget: ModelBudget
     limiter: asyncio.Semaphore
+    check_level: CheckLevel = CheckLevel.FULL
 
 
 class TailorState(TypedDict, total=False):
@@ -129,6 +138,12 @@ def build_tailor_graph(
         return {"outcomes": [outcome]}
 
     async def finalize(state: TailorState) -> dict[str, Any]:
+        if deps.check_level is CheckLevel.NONE:
+            # 未检查的文字只返回给评测器，不能写成可导出的产品简历。
+            reason = state.get("stop_reason") or stop_reason_of(state["outcomes"])
+            status = STOP_REASON_STATUS[reason] if reason else RunStatus.SUCCEEDED
+            await _finish(deps, state["user_id"], state["run_id"], status)
+            return {"stop_reason": reason}
         await save_outcome(
             deps.session_factory,
             state["user_id"],
@@ -169,6 +184,7 @@ def _context(deps: TailorDeps, task: BlockTask) -> WriteContext:
         known_organizations=frozenset(organizations_of(available.values())),
         job_title=inputs.snapshot.basic_fields.title,
         keywords=tuple(inputs.snapshot.keywords),
+        check_level=deps.check_level,
     )
 
 
@@ -230,7 +246,7 @@ async def run_match(
 
 async def _finish(
     deps: TailorDeps, user_id: UUID, run_id: UUID, status: RunStatus
-) -> None:
+) -> TailorState:
     async with deps.session_factory.begin() as session:
         await finish_run(session, user_id, run_id, status)
 
@@ -244,7 +260,7 @@ async def run_tailoring(
 ) -> None:
     """执行一次已创建的改写运行，直到写入终态。调用前需已提交 ai_run。"""
     graph = build_tailor_graph(deps)
-    await graph.ainvoke(
+    return await graph.ainvoke(
         TailorState(
             user_id=user_id,
             run_id=run_id,

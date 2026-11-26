@@ -52,6 +52,14 @@ MODEL_ERRORS = (
 )
 
 
+class CheckLevel(StrEnum):
+    """评测消融用的依据检查级别，产品始终使用 FULL。"""
+
+    NONE = "none"
+    PROGRAM = "program"
+    FULL = "full"
+
+
 class BlockStatus(StrEnum):
     DONE = "done"
     INTERRUPTED = "interrupted"  # 预算用完
@@ -59,11 +67,11 @@ class BlockStatus(StrEnum):
 
 
 class FinalBullet(BaseModel):
-    """定稿的一条：通过、回退成事实原文，或待用户处理。"""
+    """一条改写结果；仅评测跳过检查时 check_status 为空。"""
 
     text: str
     fact_ids: tuple[UUID, ...]
-    check_status: CheckStatus
+    check_status: CheckStatus | None
     revision_count: int
     issues: tuple[GroundingIssue, ...] = ()  # 最后一次检查的问题；通过时为空
 
@@ -88,6 +96,7 @@ class WriteContext:
     known_organizations: frozenset[str]
     job_title: str | None
     keywords: tuple[str, ...]
+    check_level: CheckLevel = CheckLevel.FULL
 
 
 async def write_block(ctx: WriteContext, block: PlanBlock) -> BlockOutcome:
@@ -116,6 +125,21 @@ async def write_block(ctx: WriteContext, block: PlanBlock) -> BlockOutcome:
         return BlockOutcome(key=block.key, status=BlockStatus.INTERRUPTED)
     except MODEL_ERRORS:
         return BlockOutcome(key=block.key, status=BlockStatus.FAILED)
+
+    if ctx.check_level is CheckLevel.NONE:
+        return BlockOutcome(
+            key=block.key,
+            status=BlockStatus.DONE,
+            bullets=tuple(
+                FinalBullet(
+                    text=draft.text,
+                    fact_ids=draft.fact_ids,
+                    check_status=None,
+                    revision_count=0,
+                )
+                for draft in drafts
+            ),
+        )
 
     results = await asyncio.gather(
         *(_settle(ctx, block, facts, draft) for draft in drafts),
@@ -177,7 +201,7 @@ async def _settle(
 async def _check(
     ctx: WriteContext, block: PlanBlock, draft: DraftBullet, revisions_left: int
 ) -> tuple[GroundingIssue, ...]:
-    """第一、二层总是查；第三层按 should_run_semantic 决定要不要调。"""
+    """执行前两层检查，完整模式再按规则决定是否调第三层。"""
     issues = check_grounding(
         draft.text,
         draft.fact_ids,
@@ -186,7 +210,9 @@ async def _check(
         experience=block.experience,
         known_organizations=ctx.known_organizations,
     ).issues
-    if not should_run_semantic(issues, revisions_left=revisions_left):
+    if ctx.check_level is CheckLevel.PROGRAM or not should_run_semantic(
+        issues, revisions_left=revisions_left
+    ):
         return issues
     async with ctx.limiter:
         semantic = await ground_check(

@@ -128,6 +128,21 @@ async def test_start_runs_in_background_and_result_reads_back(
         (None, "passed"),
     ]
     assert len(result["bullets"][0]["fact_ids"]) == 2
+    assert model.calls["check"] == len(result["bullets"])
+
+
+async def test_tailor_api_rejects_evaluation_check_level(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    model: FakeModel,
+) -> None:
+    user_id = await sign_in(async_client, "check-level@tailor-api.invalid")
+    inputs = await seed_inputs(session_factory, user_id)
+
+    response = await start(async_client, inputs.user_job_id, check_level="none")
+
+    assert response.status_code == 422
+    assert model.calls == {"match": 0, "rewrite": 0, "check": 0}
 
 
 async def test_base_doc_defaults_to_latest_and_stays_fixed(

@@ -27,6 +27,7 @@ from jobpilot.services.prompts import load_prompt
 from jobpilot.services.rewriting import DraftBullet
 from jobpilot.services.tailoring import (
     BlockStatus,
+    CheckLevel,
     WriteContext,
     fallback,
     write_block,
@@ -113,7 +114,15 @@ async def run(session_factory: Factory) -> AiRun:
     return run
 
 
-async def write(session_factory, run, upstream, *, calls=20, block=BLOCK):
+async def write(
+    session_factory,
+    run,
+    upstream,
+    *,
+    calls=20,
+    block=BLOCK,
+    check_level: CheckLevel = CheckLevel.FULL,
+):
     async with fake_upstream(upstream) as client:
         ctx = WriteContext(
             session_factory=session_factory,
@@ -126,8 +135,39 @@ async def write(session_factory, run, upstream, *, calls=20, block=BLOCK):
             known_organizations=frozenset({"云栈物流科技", "星桥数据"}),
             job_title="后端开发实习生",
             keywords=("Redis",),
+            check_level=check_level,
         )
         return await write_block(ctx, block)
+
+
+async def test_no_grounding_keeps_unsupported_draft_as_written(
+    session_factory: Factory, run: AiRun
+) -> None:
+    upstream = Upstream(rewrite=[{"bullets": [bullet("主导运单查询接口", "f1")]}])
+    outcome = await write(session_factory, run, upstream, check_level=CheckLevel.NONE)
+
+    [only] = outcome.bullets
+    assert (only.text, only.fact_ids) == ("主导运单查询接口", (F1.fact_id,))
+    assert (only.check_status, only.revision_count, only.issues) == (None, 0, ())
+    assert upstream.seen == {"rewrite": 1, "revise": 0, "check": 0}
+
+
+async def test_program_checks_keep_revision_and_fallback_without_semantic_calls(
+    session_factory: Factory, run: AiRun
+) -> None:
+    stubborn = bullet("主导运单查询接口", "f1")
+    upstream = Upstream(rewrite=[{"bullets": [stubborn]}], revise=[stubborn, stubborn])
+    outcome = await write(
+        session_factory, run, upstream, check_level=CheckLevel.PROGRAM
+    )
+
+    [only] = outcome.bullets
+    assert (only.text, only.check_status, only.revision_count) == (
+        F1.text,
+        CheckStatus.FALLBACK,
+        2,
+    )
+    assert upstream.seen == {"rewrite": 1, "revise": 2, "check": 0}
 
 
 async def test_all_bullets_pass(session_factory: Factory, run: AiRun) -> None:
