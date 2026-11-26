@@ -226,7 +226,7 @@ async def test_match_persists_report_separates_summaries_and_outputs_no_score(
     }
     assert [i["verdict"] for i in report["items"]] == ["covered", "missing"]
     assert report["items"][0]["facts"][0]["fact_id"] == resume_fact["fact_id"]
-    assert report["main_gaps"] == ["缺少 Redis 缓存经验（加分项）"]
+    assert report["main_gaps"] == [f"{r_pref['text']}（未见 Redis 经验）"]
 
     detail = await signed_in.get(f"/api/match-reports/{report['report_id']}")
     assert detail.status_code == 200

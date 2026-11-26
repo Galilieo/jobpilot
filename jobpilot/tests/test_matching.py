@@ -11,8 +11,15 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from jobpilot.db.models import CriterionField, FactKind, FactSource, Responsibility
-from jobpilot.services.criteria_match import CriterionCandidate
+from jobpilot.db.models import (
+    CriterionField,
+    DegreeLevel,
+    EducationStatus,
+    FactKind,
+    FactSource,
+    Responsibility,
+)
+from jobpilot.services.criteria_match import CriterionCandidate, EducationCandidate
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.jobs import BasicFields, ParsedJob, Requirement, RequirementType
 from jobpilot.services.matching import (
@@ -169,7 +176,68 @@ def test_build_match_report_reclassifies_expression_gap_and_summarizes() -> None
         "partial": 1,
         "missing": 1,
     }
-    assert built.main_gaps == ["缺少 Kafka 经验"]
+    assert built.main_gaps == [
+        "有 Kafka 经验（没有 Kafka 经历）",
+        "有分布式压测经验（仅做过单机压测，尚未涉及分布式压测）",
+    ]
+
+
+def test_covered_degree_does_not_hide_another_requirement_gap() -> None:
+    user_id, fact_set_id = uuid4(), uuid4()
+    education_id = uuid4()
+    education = EducationCandidate(
+        ref_id=f"education.{education_id}",
+        education_id=education_id,
+        school="东澜理工",
+        major="计算机",
+        degree=DegreeLevel.BACHELOR,
+        status=EducationStatus.COMPLETED,
+        start_text=None,
+        end_text=None,
+        text="本科",
+    )
+    python = _fact(user_id, fact_set_id)
+    degree = _req(RequirementType.HARD, "本科及以上")
+    compound = _req(RequirementType.HARD, "本科及以上且必须熟练使用 Python")
+    reason = "学历符合，Python 仅有基础项目经验"
+    raw = _raw(
+        [
+            {
+                "requirement_id": degree.requirement_id,
+                "verdict": "missing",
+                "fact_ids": [],
+                "reason": "缺少学历",
+                "suggestion": "补充学历",
+            },
+            {
+                "requirement_id": compound.requirement_id,
+                "verdict": "partial",
+                "fact_ids": [python.fact_id],
+                "criteria_refs": [education.ref_id],
+                "reason": reason,
+                "suggestion": "核对 Python 熟练程度",
+            },
+        ],
+        main_gaps=["缺少学历", reason],
+    )
+    report = build_match_report(
+        user_id=user_id,
+        fact_set_id=fact_set_id,
+        requirements=[degree, compound],
+        facts=[python],
+        education=[education],
+        raw=raw,
+    )
+    covered, partial = report.items
+    assert covered.verdict is MatchVerdict.COVERED
+    assert (
+        partial.verdict is MatchVerdict.PARTIAL and partial.decision_source == "model"
+    )
+    assert partial.fact_ids == [python.fact_id] and partial.criteria_refs == [
+        education.ref_id
+    ]
+    assert partial.review_note
+    assert len(report.main_gaps) == 1 and reason in report.main_gaps[0]
 
 
 def test_build_match_report_rejects_bad_fact_references() -> None:

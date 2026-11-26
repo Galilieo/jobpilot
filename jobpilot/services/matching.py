@@ -22,9 +22,7 @@ from jobpilot.services import drafts
 from jobpilot.services.criteria_match import (
     CriterionCandidate,
     EducationCandidate,
-    ProgramDecision,
     evaluate_requirement,
-    sync_main_gaps,
 )
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.jobs import BasicFields, ParsedJob, Requirement, RequirementType
@@ -68,6 +66,7 @@ class RawMatchItem(_ModelOutput):
 
 class RawMatchOutput(_ModelOutput):
     items: list[RawMatchItem] = Field(max_length=80)
+    # 兼容现有提示词的输出。展示摘要从校验后、带要求 ID 的逐项结果生成。
     main_gaps: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(
         default_factory=list, max_length=10
     )
@@ -235,6 +234,24 @@ def summarize_stored_match(
     return summarize_job_match(requirements, items)
 
 
+_MAX_MAIN_GAPS = 5
+
+
+def _summarize_gaps(
+    requirements: Sequence[Requirement], items: Sequence[MatchItem]
+) -> list[str]:
+    """按要求 ID 对齐最终结论，优先列出影响投递的硬性缺口。"""
+    by_id = {item.requirement_id: item for item in items}
+    return [
+        f"{req.text}（{item.reason.rstrip('。')}）"
+        for req_type in (RequirementType.HARD, RequirementType.PREFERRED)
+        for verdict in (MatchVerdict.MISSING, MatchVerdict.PARTIAL)
+        for req in requirements
+        if req.type is req_type
+        and (item := by_id[req.requirement_id]).verdict is verdict
+    ][:_MAX_MAIN_GAPS]
+
+
 def build_match_report(
     *,
     user_id: UUID,
@@ -276,7 +293,6 @@ def build_match_report(
         raise MatchValidationError(f"遗漏了岗位要求：{', '.join(missing)}")
 
     items: list[MatchItem] = []
-    program_decisions: dict[UUID, ProgramDecision] = {}
     for req in requirements:
         raw_item = raw_by_req[req.requirement_id]
         fact_ids = list(dict.fromkeys(raw_item.fact_ids))
@@ -320,7 +336,6 @@ def build_match_report(
             req, criteria, education, basic_fields=basic_fields
         )
         if decision is not None:
-            program_decisions[req.requirement_id] = decision
             items.append(
                 MatchItem(
                     requirement_id=req.requirement_id,
@@ -347,7 +362,7 @@ def build_match_report(
                 )
             )
 
-    synced_gaps = sync_main_gaps(raw.main_gaps, requirements, program_decisions)
+    synced_gaps = _summarize_gaps(requirements, items)
     hard_summary, preferred_summary = summarize_report_counts(requirements, items)
     return BuiltMatchReport(
         items=items,

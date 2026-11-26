@@ -2,12 +2,13 @@
 
 from uuid import uuid4
 
+import pytest
+
 from jobpilot.db.models import CriterionField, DegreeLevel, EducationStatus
 from jobpilot.services.criteria_match import (
     CriterionCandidate,
     EducationCandidate,
     evaluate_requirement,
-    sync_main_gaps,
 )
 from jobpilot.services.jobs import BasicFields, Requirement, RequirementType
 
@@ -157,18 +158,20 @@ def test_ambiguous_compound_and_conflicting_requirements_trigger_review() -> Non
     assert dec3 is None and note3 is not None and "不一致" in note3
 
 
-def test_sync_main_gaps_removes_covered_and_adds_hard_gaps() -> None:
-    r_days = Requirement(type=RequirementType.HARD, text="每周到岗 4 天以上")
-    r_months = Requirement(type=RequirementType.HARD, text="实习至少 3 个月")
-    d_days, _ = evaluate_requirement(r_days, [_days(5)], [])
-    d_months, _ = evaluate_requirement(r_months, [], [])
-    assert d_days is not None and d_months is not None
-
-    synced = sync_main_gaps(
-        ["缺少每周到岗 4 天证明", "缺少 Kafka 经验"],
-        [r_days, r_months],
-        {r_days.requirement_id: d_days, r_months.requirement_id: d_months},
-    )
-    assert all("到岗" not in g for g in synced)
-    assert "缺少 Kafka 经验" in synced
-    assert any("实习至少 3 个月" in g for g in synced)
+@pytest.mark.parametrize(
+    "text",
+    [
+        "本科及以上且必须熟练使用 Python",
+        "本科及以上，计算机相关专业",
+        "本科及以上，2027 届",
+        "本科及以上，提前到岗",
+        "本科及以上需提前到岗",
+        "本科及以上学历且为应届生",
+        "每周至少到岗 4 天并且熟练使用 Python",
+    ],
+)
+def test_program_defers_when_part_of_requirement_is_unrecognized(text: str) -> None:
+    req = Requirement(type=RequirementType.HARD, text=text)
+    bachelor = _edu("东澜理工", DegreeLevel.BACHELOR, EducationStatus.ENROLLED)
+    decision, note = evaluate_requirement(req, [_days(5)], [bachelor])
+    assert decision is None and note

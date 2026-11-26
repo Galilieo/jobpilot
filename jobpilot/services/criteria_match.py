@@ -28,7 +28,7 @@ from jobpilot.services.jobs import BasicFields, Requirement, RequirementType
 
 DEFAULT_CRITERIA_RULES = REPO_ROOT / "jobpilot" / "data" / "criteria_rules.yaml"
 
-_CLAUSE_SPLIT = re.compile(r"[，,;；。\n]+")
+_CLAUSE_SPLIT = re.compile(r"[，,;；。\n]+|并且|且|以及")
 _DAYS_RANGE_RE = re.compile(
     r"(?P<low>\d+|[一二两三四五六七])\s*(?P<sep>[～~—\-至到])\s*"
     r"(?P<high>\d+|[一二两三四五六七])\s*(?:天|日)"
@@ -64,11 +64,12 @@ class CriteriaRules:
     education_cues: tuple[str, ...]
     chinese_numbers: dict[str, int]
     filler_clauses: frozenset[str]
+    education_modifiers: tuple[str, ...]
+    schedule_modifiers: tuple[str, ...]
 
     @property
     def degree_pattern(self) -> re.Pattern[str]:
-        words = sorted(self.degree_words, key=len, reverse=True)
-        return re.compile("|".join(map(re.escape, words)))
+        return _term_pattern(tuple(self.degree_words))
 
 
 def load_criteria_rules(path: Path) -> CriteriaRules:
@@ -103,6 +104,8 @@ def load_criteria_rules(path: Path) -> CriteriaRules:
             str(k): int(v) for k, v in (data.get("chinese_numbers") or {}).items()
         },
         filler_clauses=frozenset(data.get("filler_clauses") or ()),
+        education_modifiers=tuple(data.get("education_modifiers") or ()),
+        schedule_modifiers=tuple(data.get("schedule_modifiers") or ()),
     )
 
 
@@ -229,12 +232,38 @@ def _is_preferred_clause(
     return RequirementType.HARD
 
 
+@cache
+def _term_pattern(terms: tuple[str, ...]) -> re.Pattern[str]:
+    return re.compile("|".join(map(re.escape, sorted(terms, key=len, reverse=True))))
+
+
+def _known_text(text: str, terms: tuple[str, ...]) -> bool:
+    """每段剩余文本都必须能由已知词解释。"""
+    return not _term_pattern(terms).sub("", text).strip()
+
+
+def _known_schedule_text(
+    clause: str, match: re.Match[str], rules: CriteriaRules, cues: tuple[str, ...]
+) -> bool:
+    residue = clause[: match.start()] + " " + clause[match.end() :]
+    return _known_text(
+        residue,
+        cues
+        + rules.schedule_modifiers
+        + rules.gte_markers
+        + rules.preferred_markers
+        + tuple(sorted(rules.filler_clauses)),
+    )
+
+
 def _parse_days_clause(
     clause: str, base_type: RequirementType, rules: CriteriaRules
 ) -> ParsedClause | None:
     hardness = _is_preferred_clause(clause, base_type, rules)
     m_range = _DAYS_RANGE_RE.search(clause)
     if m_range:
+        if not _known_schedule_text(clause, m_range, rules, rules.onsite_cues):
+            return None
         low = _to_int(m_range.group("low"), rules)
         high = _to_int(m_range.group("high"), rules)
         if low is not None and high is not None and 1 <= low <= high <= 7:
@@ -244,13 +273,11 @@ def _parse_days_clause(
     if not any(cue in clause for cue in (*rules.onsite_cues, "天", "日")):
         return None
     matches = list(_DAYS_SINGLE_RE.finditer(clause))
-    if not matches:
+    if len(matches) != 1 or not _known_schedule_text(
+        clause, matches[0], rules, rules.onsite_cues
+    ):
         return None
-    # 同一小句出现两个不同的天数值，交给模型核对。
-    values = {_to_int(m.group("val"), rules) for m in matches}
-    if len(values) != 1:
-        return None
-    val = next(iter(values))
+    val = _to_int(matches[0].group("val"), rules)
     if val is None or not (1 <= val <= 7):
         return None
     return ParsedClause("onsite_days", CompareOp.GTE, val, None, None, hardness, clause)
@@ -262,6 +289,8 @@ def _parse_months_clause(
     hardness = _is_preferred_clause(clause, base_type, rules)
     m_range = _MONTHS_RANGE_RE.search(clause)
     if m_range:
+        if not _known_schedule_text(clause, m_range, rules, rules.months_cues):
+            return None
         low = _to_int(m_range.group("low"), rules)
         high = _to_int(m_range.group("high"), rules)
         if low is not None and high is not None and 1 <= low <= high <= 24:
@@ -274,15 +303,12 @@ def _parse_months_clause(
     if "年" in clause and "一年" not in clause and "月" not in clause:
         return None
     matches = list(_MONTHS_SINGLE_RE.finditer(clause))
-    if not matches:
+    if len(matches) != 1 or not _known_schedule_text(
+        clause, matches[0], rules, rules.months_cues
+    ):
         return None
-    values: set[int | None] = set()
-    for m in matches:
-        token = m.group("alias") or m.group("val")
-        values.add(_to_int(token, rules) if token else None)
-    if len(values) != 1:
-        return None
-    val = next(iter(values))
+    match = matches[0]
+    val = _to_int(match.group("alias") or match.group("val"), rules)
     if val is None or not (1 <= val <= 24):
         return None
     return ParsedClause(
@@ -293,18 +319,29 @@ def _parse_months_clause(
 def _parse_education_clause(
     clause: str, base_type: RequirementType, rules: CriteriaRules
 ) -> ParsedClause | None:
-    matches = rules.degree_pattern.findall(clause)
+    matches = list(rules.degree_pattern.finditer(clause))
     if not matches:
         return None
-    degrees = {rules.degree_words[w] for w in matches}
-    # 同一小句出现两个等级（如「本科或硕士」），取较低门槛还是标待核对？
-    # 若写「本科或硕士」等价于本科及以上；若写冲突说法交下面复合检查。
+    statuses = {status for word, status in rules.status_words.items() if word in clause}
+    if len(statuses) > 1 or not _is_simple_degree_alternative(
+        clause, matches, statuses
+    ):
+        return None
+    leftover = rules.degree_pattern.sub("", clause)
+    recognized = (
+        tuple(rules.status_words)
+        + rules.education_modifiers
+        + rules.gte_markers
+        + rules.preferred_markers
+        + tuple(sorted(rules.filler_clauses))
+        + ("或", "／", "/")
+    )
+    if not _known_text(leftover, recognized):
+        return None
+    degrees = {rules.degree_words[match.group()] for match in matches}
+    # 学历明确为「本科或硕士」时，沿用较低等级作为下限。
     min_degree = min(degrees, key=lambda d: rules.degree_ranks[d])
-    status: EducationStatus | None = None
-    for word, st in rules.status_words.items():
-        if word in clause:
-            status = st
-            break
+    status = next(iter(statuses), None)
     hardness = _is_preferred_clause(clause, base_type, rules)
     return ParsedClause(
         "education",
@@ -314,6 +351,18 @@ def _parse_education_clause(
         status,
         hardness,
         clause,
+    )
+
+
+def _is_simple_degree_alternative(
+    clause: str, matches: list[re.Match[str]], statuses: set[EducationStatus]
+) -> bool:
+    if len(matches) == 1:
+        return True
+    # 多个等级加上就读状态时，无法确定状态约束适用于哪个等级。
+    return not statuses and all(
+        clause[left.end() : right.start()].strip() in {"或", "／", "/"}
+        for left, right in zip(matches, matches[1:], strict=False)
     )
 
 
@@ -686,51 +735,3 @@ def evaluate_requirement(
         ),
         None,
     )
-
-
-def _gap_matches_requirement(gap: str, req_text: str, rules: CriteriaRules) -> bool:
-    """判断模型生成的 main_gaps 条目是否针对同一条求职条件/学历要求。"""
-    if req_text in gap or gap in req_text:
-        return True
-    groups = (
-        (*rules.onsite_cues, "天"),
-        (*rules.months_cues, "个月"),
-        rules.education_cues,
-    )
-    for cues in groups:
-        if any(c in req_text for c in cues) and any(c in gap for c in cues):
-            return True
-    return False
-
-
-def sync_main_gaps(
-    model_gaps: Sequence[str],
-    requirements: Sequence[Requirement],
-    decisions: dict[UUID, ProgramDecision],
-) -> list[str]:
-    """根据程序判定结论同步增删 main_gaps，避免明细改对了摘要还在报缺口。"""
-    rules = default_criteria_rules()
-    covered_reqs = [
-        req
-        for req in requirements
-        if req.requirement_id in decisions
-        and decisions[req.requirement_id].verdict == "covered"
-    ]
-    kept_gaps = [
-        gap
-        for gap in model_gaps
-        if not any(
-            _gap_matches_requirement(gap, req.text, rules) for req in covered_reqs
-        )
-    ]
-
-    for req in requirements:
-        decision = decisions.get(req.requirement_id)
-        if decision is None or decision.verdict == "covered":
-            continue
-        if req.type is not RequirementType.HARD:
-            continue
-        if any(_gap_matches_requirement(g, req.text, rules) for g in kept_gaps):
-            continue
-        kept_gaps.append(f"{req.text}（{decision.reason}）")
-    return kept_gaps
