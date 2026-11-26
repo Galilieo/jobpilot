@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobPilot 原型 v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* 原型只用来定方向，不是要复用的代码。实现时用 antd 主题 token 表达这些变量。 */
+:root {
+  --font-ui: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-head: var(--font-ui);
+  --font-num: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+/* ---------- 方向 A：雾蓝精修 ---------- */
+body[data-dir="a"] {
+  --bg: #FFFFFF;
+  --side-bg: #F4F5F7;
+  --side-ink: #2A3440;
+  --side-muted: #7A8592;
+  --side-active: #E4EAF0;
+  --side-line: #E4E7EB;
+  --ink: #1F2933;
+  --muted: #6B7684;
+  --faint: #9AA4AF;
+  --line: #E6E9ED;
+  --accent: #46607A;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E9EEF3;
+  --accent-text: #3B5268;
+  --ok: #3F7A5F;
+  --ok-soft: #E8F2EC;
+  --warn: #9A6B1F;
+  --warn-soft: #FBF1DE;
+  --user-bubble: #EEF1F4;
+  --paper-desk: #F1F3F5;
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 16px;
+  --composer-border: #C9D4DF;
+  --composer-shadow: 0 6px 24px rgba(40, 60, 85, .08);
+  --panel-col: 56%;
+}
+
+/* ---------- 方向 B：档案纸面 ---------- */
+body[data-dir="b"] {
+  --font-head: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --bg: #FFFFFF;
+  --side-bg: #EEF1EF;
+  --side-ink: #1E2B2A;
+  --side-muted: #6E7B78;
+  --side-active: #DCE5E1;
+  --side-line: #DDE3E0;
+  --ink: #18242B;
+  --muted: #5F6B70;
+  --faint: #95A09F;
+  --line: #E1E5E3;
+  --accent: #1F3A4D;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E7EDF0;
+  --accent-text: #1F3A4D;
+  --ok: #2E6B58;
+  --ok-soft: #E3F0EA;
+  --warn: #8C5A14;
+  --warn-soft: #F7EDDA;
+  --user-bubble: #F1F4F2;
+  --paper-desk: #E6EBE8;
+  --r-s: 3px;
+  --r-m: 5px;
+  --r-l: 8px;
+  --composer-border: #1F3A4D;
+  --composer-shadow: none;
+  --panel-col: 62%;
+}
+
+/* ---------- 方向 C：深色侧栏 ---------- */
+body[data-dir="c"] {
+  --bg: #FFFFFF;
+  --side-bg: #1E2833;
+  --side-ink: #E8EDF2;
+  --side-muted: #8C99A6;
+  --side-active: #2E3B49;
+  --side-line: #2C3845;
+  --ink: #161D24;
+  --muted: #5E6975;
+  --faint: #9AA4AF;
+  --line: #E7EAEE;
+  --accent: #1E2833;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #F1F3F6;
+  --accent-text: #1E2833;
+  --ok: #2F7A55;
+  --ok-soft: #E6F3EC;
+  --warn: #B4730E;
+  --warn-soft: #FDF3E1;
+  --user-bubble: transparent;
+  --paper-desk: #F3F4F6;
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 18px;
+  --composer-border: #D5DAE0;
+  --composer-shadow: 0 10px 30px rgba(20, 30, 40, .10);
+  --panel-col: 55%;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 原型控制条（不属于产品界面） ---------- */
+.proto-bar {
+  position: fixed; inset: 0 0 auto 0; height: 48px; z-index: 50;
+  display: flex; align-items: center; gap: 20px; padding: 0 16px;
+  background: #0F1418; color: #D9E0E6; font-size: 13px;
+}
+.proto-bar strong { font-weight: 600; color: #fff; }
+.proto-group { display: flex; align-items: center; gap: 8px; }
+.proto-group span { color: #8E9AA5; }
+.seg { display: inline-flex; background: #1C242B; border-radius: 8px; padding: 3px; }
+.seg button {
+  border: 0; background: transparent; color: #B7C1CA; padding: 4px 10px; border-radius: 6px;
+}
+.seg button[aria-pressed="true"] { background: #F2F5F7; color: #0F1418; }
+.proto-notes-toggle { margin-left: auto; border: 1px solid #39444E; background: transparent; color: #D9E0E6; border-radius: 6px; padding: 4px 10px; }
+
+.notes {
+  position: fixed; top: 48px; right: 0; bottom: 0; width: 360px; z-index: 40;
+  background: #fff; border-left: 1px solid #E2E6EA; padding: 20px 22px; overflow: auto;
+  box-shadow: -12px 0 30px rgba(0,0,0,.06); display: none; color: #1F2933;
+  font-family: -apple-system, "PingFang SC", sans-serif;
+}
+.notes.open { display: block; }
+.notes h2 { font-size: 15px; margin: 0 0 4px; }
+.notes p.lead { color: #6B7684; margin: 0 0 14px; font-size: 13px; }
+.notes h3 { font-size: 13px; margin: 18px 0 6px; color: #3B5268; }
+.notes ol, .notes ul { padding-left: 18px; margin: 0; }
+.notes li { margin: 0 0 8px; font-size: 13px; }
+
+/* ---------- 应用骨架 ---------- */
+.app { position: fixed; top: 48px; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 232px 1fr; }
+.sidebar {
+  background: var(--side-bg); color: var(--side-ink);
+  display: flex; flex-direction: column; padding: 16px 12px 12px; border-right: 1px solid var(--side-line);
+  min-height: 0;
+}
+.logo { font-family: var(--font-head); font-weight: 700; font-size: 17px; padding: 2px 8px 14px; letter-spacing: .2px; }
+.new-chat {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  border: 1px solid var(--side-line); background: var(--bg); color: var(--ink);
+  border-radius: var(--r-m); padding: 8px 10px; font-weight: 500;
+}
+body[data-dir="c"] .new-chat { background: #F2F5F7; border-color: transparent; color: #1E2833; }
+.nav { margin: 14px 0 6px; display: grid; gap: 2px; }
+.nav a, .recent a {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-s);
+  color: var(--side-ink); text-decoration: none; cursor: pointer;
+}
+.nav a:hover, .recent a:hover { background: var(--side-active); }
+.nav a[aria-current="page"], .recent a[aria-current="page"] { background: var(--side-active); font-weight: 600; }
+.nav svg, .recent svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; opacity: .85; }
+.side-label { font-size: 12px; color: var(--side-muted); padding: 14px 10px 6px; border-top: 1px solid var(--side-line); margin-top: 8px; }
+.recent { display: grid; gap: 2px; overflow: auto; min-height: 0; }
+.recent a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent small { color: var(--side-muted); font-size: 12px; margin-left: auto; flex: none; }
+.side-spacer { flex: 1; }
+
+.account { position: relative; }
+.account-trigger {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-m);
+  border: 1px solid transparent; background: transparent; text-align: left; color: var(--side-ink);
+}
+.account-trigger:hover, .account-trigger[aria-expanded="true"] { background: var(--side-active); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 13px; font-weight: 600; flex: none; }
+body[data-dir="c"] .avatar { background: #E8A33D; color: #1E2833; }
+.account-trigger .who { min-width: 0; flex: 1; }
+.account-trigger .who b { display: block; font-weight: 500; font-size: 13px; }
+.account-trigger .who em { display: block; font-style: normal; font-size: 12px; color: var(--side-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chev { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; transition: transform .18s ease; flex: none; }
+.account-trigger[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.account-menu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); background: #fff; color: #1F2933;
+  border: 1px solid #E3E7EB; border-radius: var(--r-m); padding: 4px; box-shadow: 0 10px 28px rgba(20,30,40,.12);
+  display: none;
+}
+.account-menu.open { display: block; }
+.account-menu button { width: 100%; display: flex; gap: 10px; align-items: center; border: 0; background: transparent; padding: 8px 10px; border-radius: var(--r-s); text-align: left; }
+.account-menu button:hover { background: #F2F4F6; }
+.account-menu svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.account-menu hr { border: 0; border-top: 1px solid #EEF0F2; margin: 4px 6px; }
+
+.main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.screen { display: none; flex: 1; min-height: 0; }
+body[data-screen="new"] #screen-new,
+body[data-screen="chat"] #screen-chat,
+body[data-screen="work"] #screen-work { display: flex; }
+
+/* ---------- 共用小件 ---------- */
+.btn { border: 1px solid var(--line); background: var(--bg); border-radius: var(--r-s); padding: 6px 12px; }
+.btn:hover { border-color: var(--faint); }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-quiet { border-color: transparent; background: transparent; color: var(--muted); }
+.btn-quiet:hover { background: var(--accent-soft); color: var(--ink); }
+.icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; border-radius: var(--r-s); color: var(--muted); }
+.icon-btn:hover { background: var(--accent-soft); color: var(--ink); }
+.icon-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+
+.job-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-text); font-size: 13px; border: 1px solid transparent;
+}
+.job-pill:hover { border-color: var(--composer-border); }
+.job-pill svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.job-pill.empty { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+
+/* 事实编号：这一版的标志性元素 */
+.fact {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 18px; padding: 0 5px;
+  border-radius: 4px; font-family: var(--font-num); font-size: 11px; font-weight: 600; line-height: 1;
+  color: var(--ok); background: var(--ok-soft); vertical-align: 1px; margin-left: 3px; cursor: help;
+}
+body[data-dir="b"] .fact { border-radius: 2px; background: transparent; border: 1px solid currentColor; height: 16px; font-size: 10px; vertical-align: 3px; }
+body[data-dir="c"] .fact { border-radius: 999px; }
+
+/* ---------- 输入框 ---------- */
+.composer {
+  border: 1.5px solid var(--composer-border); border-radius: var(--r-l); background: var(--bg);
+  box-shadow: var(--composer-shadow); padding: 12px 12px 10px 16px; transition: border-color .15s, box-shadow .15s;
+}
+.composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--composer-shadow); }
+body[data-dir="b"] .composer { border-width: 1px; }
+.composer textarea {
+  width: 100%; border: 0; outline: 0; resize: none; font: inherit; font-size: 15px; color: var(--ink); background: transparent;
+  min-height: 26px; line-height: 1.6;
+}
+.composer textarea::placeholder { color: var(--faint); }
+.composer-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.composer-row .hint { color: var(--faint); font-size: 12px; }
+.send {
+  margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink);
+  display: grid; place-items: center;
+}
+.send svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+.composer-foot { text-align: center; color: var(--faint); font-size: 12px; margin-top: 8px; }
+
+/* ---------- 新对话 ---------- */
+#screen-new { flex-direction: column; }
+.page-head { height: 52px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.page-head h1 { font-size: 15px; font-weight: 600; margin: 0; font-family: var(--font-ui); }
+.welcome { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 24px 9vh; }
+.welcome-inner { width: min(720px, 100%); }
+.welcome h2 { font-family: var(--font-head); font-size: 28px; font-weight: 600; margin: 0 0 6px; text-align: center; letter-spacing: .3px; }
+body[data-dir="b"] .welcome h2 { font-weight: 700; font-size: 30px; }
+body[data-dir="c"] .welcome h2 { font-size: 32px; text-align: left; }
+.welcome p.sub { text-align: center; color: var(--muted); margin: 0 0 26px; }
+body[data-dir="c"] .welcome p.sub { text-align: left; }
+.welcome .composer textarea { min-height: 72px; }
+.starters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; justify-content: center; }
+body[data-dir="c"] .starters { justify-content: flex-start; }
+.starter {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+}
+body[data-dir="b"] .starter { border-radius: var(--r-s); }
+.starter:hover { border-color: var(--composer-border); background: var(--accent-soft); }
+.starter svg { width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 1.7; }
+.welcome .trust { display: flex; gap: 18px; justify-content: center; margin-top: 30px; color: var(--muted); font-size: 13px; }
+body[data-dir="c"] .welcome .trust { justify-content: flex-start; }
+.trust span { display: inline-flex; align-items: center; gap: 6px; }
+.trust svg { width: 15px; height: 15px; stroke: var(--ok); fill: none; stroke-width: 1.8; }
+
+/* ---------- 对话与面板 ---------- */
+#screen-chat { display: none; }
+body[data-screen="chat"] #screen-chat { display: grid; grid-template-columns: 1fr var(--panel-col); }
+.conv { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+.conv-head { height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--line); }
+.conv-head h1 { font-size: 15px; font-weight: 600; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.conv-head .job-pill { flex: none; }
+.conv-head .icon-btn { margin-left: auto; }
+.messages { flex: 1; overflow: auto; padding: 22px 22px 12px; }
+.msgs-inner { max-width: 640px; margin: 0 auto; display: grid; gap: 16px; }
+
+.msg-user { justify-self: end; max-width: 86%; background: var(--user-bubble); padding: 10px 14px; border-radius: var(--r-l) var(--r-l) 4px var(--r-l); }
+body[data-dir="b"] .msg-user { border-radius: var(--r-m); border: 1px solid var(--line); }
+body[data-dir="c"] .msg-user { justify-self: stretch; max-width: none; border-left: 3px solid #E8A33D; border-radius: 0; padding: 2px 0 2px 14px; color: var(--ink); font-weight: 500; }
+.msg-user .clip { color: var(--muted); }
+.msg-user .more { color: var(--accent-text); border: 0; background: none; padding: 0; margin-left: 4px; font-size: 13px; }
+
+.sys { justify-self: center; color: var(--muted); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+.sys::before, .sys::after { content: ""; width: 28px; height: 1px; background: var(--line); }
+
+.trace { border: 1px solid var(--line); border-radius: var(--r-m); background: var(--bg); }
+body[data-dir="c"] .trace { background: var(--accent-soft); border-color: transparent; }
+.trace-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 0; background: transparent; text-align: left; color: var(--muted); font-size: 13px; }
+.trace-head .done { width: 16px; height: 16px; stroke: var(--ok); fill: none; stroke-width: 2; }
+.trace-head b { color: var(--ink); font-weight: 500; }
+.trace-head .chev { margin-left: auto; }
+.trace[open-state="true"] .trace-head .chev { transform: rotate(180deg); }
+.trace-steps { display: none; margin: 0; padding: 2px 14px 10px 36px; list-style: none; color: var(--muted); font-size: 13px; }
+.trace[open-state="true"] .trace-steps { display: block; }
+.trace-steps li { position: relative; padding: 3px 0; display: flex; gap: 10px; }
+.trace-steps li::before { content: ""; position: absolute; left: -15px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.trace-steps time { margin-left: auto; font-family: var(--font-num); color: var(--faint); font-size: 12px; }
+
+.msg-ai { font-size: 14.5px; line-height: 1.75; }
+.msg-ai p { margin: 0 0 8px; }
+.verdicts { display: grid; gap: 6px; margin: 6px 0 10px; }
+.verdict { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.verdict:last-child { border-bottom: 0; }
+.tag { font-size: 12px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+body[data-dir="b"] .tag { border-radius: 2px; }
+.tag-ok { background: var(--ok-soft); color: var(--ok); }
+.tag-part { background: var(--warn-soft); color: var(--warn); }
+.tag-miss { background: #F6E8E8; color: #9B3C3C; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.quick button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 3px 10px; font-size: 13px; color: var(--muted); }
+.quick button:hover { color: var(--ink); border-color: var(--composer-border); }
+
+.card {
+  border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: var(--bg);
+}
+.card.pending { border-color: var(--composer-border); }
+body[data-dir="c"] .card.pending { border-color: #E8A33D; box-shadow: 0 0 0 3px #FDF3E1; }
+.card-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.card-head b { font-weight: 600; }
+.card-head .state { margin-left: auto; color: var(--warn); font-size: 12px; }
+.diff { display: grid; grid-template-columns: 1fr 1fr; }
+.diff > div { padding: 12px 14px; }
+.diff > div + div { border-left: 1px solid var(--line); background: var(--accent-soft); }
+.diff small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.diff del { color: var(--muted); text-decoration-color: var(--faint); }
+.check { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ok); background: var(--ok-soft); }
+.check svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; flex: none; margin-top: 2px; }
+.check span { color: var(--ink); }
+.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); justify-content: flex-end; }
+.result-line { display: none; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.result-line svg { width: 15px; height: 15px; stroke: var(--ok); fill: none; stroke-width: 2; }
+.result-line button { border: 0; background: none; color: var(--accent-text); padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.confirmed .card { display: none; }
+.confirmed .result-line { display: flex; }
+
+.conv-foot { flex: none; padding: 10px 22px 14px; }
+.conv-foot .composer { max-width: 640px; margin: 0 auto; }
+
+.panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--paper-desk); }
+.panel-head { height: 52px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 12px 0 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.tabs { display: flex; gap: 4px; height: 100%; }
+.tabs button { border: 0; background: transparent; padding: 0 12px; color: var(--muted); border-bottom: 2px solid transparent; height: 100%; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.panel-head .spacer { flex: 1; }
+.panel-tools { flex: none; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 13px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 0; color: var(--ink); }
+.switch i { width: 30px; height: 18px; border-radius: 999px; background: #CBD2D9; position: relative; transition: background .15s; }
+.switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch[aria-checked="true"] i { background: var(--ok); }
+.switch[aria-checked="true"] i::after { transform: translateX(12px); }
+.fit { color: var(--muted); font-family: var(--font-num); }
+.fit b { color: var(--ok); font-weight: 600; }
+.panel-tools .push { margin-left: auto; display: flex; gap: 8px; }
+.guarantee { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: var(--ink); background: var(--ok-soft); border-bottom: 1px solid var(--line); }
+.guarantee svg { width: 16px; height: 16px; stroke: var(--ok); fill: none; stroke-width: 2; flex: none; }
+.guarantee .stale { margin-left: auto; color: var(--muted); }
+.paper-wrap { flex: 1; overflow: auto; padding: 22px; }
+.paper {
+  width: min(620px, 100%); margin: 0 auto; background: #fff; color: #111; padding: 38px 44px 44px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06); font-family: var(--font-ui); font-size: 12.5px; line-height: 1.65;
+}
+body[data-dir="b"] .paper { box-shadow: 0 0 0 1px #D9DFDC; }
+.paper h3 { font-size: 20px; margin: 0 0 2px; letter-spacing: 1px; font-family: "Noto Serif SC", "Songti SC", serif; }
+.paper .contact { color: #555; margin-bottom: 14px; }
+.paper h4 { font-size: 13px; color: #2E4A63; border-bottom: 1.5px solid #8FA5B8; padding-bottom: 2px; margin: 14px 0 6px; }
+.paper .row { display: flex; justify-content: space-between; font-weight: 600; }
+.paper .row span { font-weight: 400; color: #555; }
+.paper ul { margin: 4px 0 0; padding-left: 16px; }
+.paper li { margin: 2px 0; }
+.paper li.changed { background: linear-gradient(90deg, rgba(232,163,61,.16), transparent 80%); margin-left: -6px; padding-left: 6px; border-radius: 2px; }
+.paper .fact { font-size: 9.5px; height: 15px; min-width: 18px; padding: 0 4px; }
+body[data-facts="off"] .paper .fact { display: none; }
+
+/* ---------- 工作台 ---------- */
+#screen-work { flex-direction: column; overflow: auto; }
+.work { width: min(1040px, 100%); margin: 0 auto; padding: 36px 32px 48px; }
+.work h2 { font-family: var(--font-head); font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+.work .sub { color: var(--muted); margin: 0 0 18px; }
+.work .composer { margin-bottom: 26px; }
+.ledger { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--r-m); margin-bottom: 30px; }
+.ledger > div { padding: 14px 18px; }
+.ledger > div + div { border-left: 1px solid var(--line); }
+.ledger small { display: block; color: var(--muted); font-size: 12.5px; }
+.ledger strong { font-family: var(--font-num); font-size: 24px; font-weight: 600; margin-right: 6px; }
+body[data-dir="b"] .ledger strong { font-family: "Noto Serif SC", serif; }
+.ledger p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.ledger a { color: var(--accent-text); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.board-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.board-head h3 { margin: 0; font-size: 16px; font-family: var(--font-head); }
+.board-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.board-head .btn { margin-left: auto; }
+.board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.col { background: var(--paper-desk); border-radius: var(--r-m); padding: 10px; min-height: 120px; }
+body[data-dir="c"] .col { background: #F6F7F9; }
+.col-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 2px 4px 8px; }
+.col-head i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.col-head span { margin-left: auto; color: var(--muted); font-weight: 400; font-family: var(--font-num); }
+.jobcard { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-s); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.jobcard:hover { border-color: var(--composer-border); }
+.jobcard b { display: block; font-weight: 600; }
+.jobcard small { color: var(--muted); font-size: 12.5px; }
+.jobcard .meter { display: flex; gap: 3px; margin-top: 8px; }
+.jobcard .meter i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.jobcard .meter i.on { background: var(--ok); }
+.col .empty { color: var(--faint); font-size: 12.5px; padding: 6px 4px; }
+.col .empty button { border: 0; background: none; padding: 0; color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; font-size: 12.5px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body data-dir="a" data-screen="new" data-facts="on">
+
+<header class="proto-bar" aria-label="原型控制">
+  <strong>JobPilot 原型 v2</strong>
+  <div class="proto-group"><span>方向</span>
+    <div class="seg" data-control="dir">
+      <button data-value="a" aria-pressed="true">A 雾蓝精修</button>
+      <button data-value="b" aria-pressed="false">B 档案纸面</button>
+      <button data-value="c" aria-pressed="false">C 深色侧栏</button>
+    </div>
+  </div>
+  <div class="proto-group"><span>页面</span>
+    <div class="seg" data-control="screen">
+      <button data-value="new" aria-pressed="true">新对话</button>
+      <button data-value="chat" aria-pressed="false">对话与简历</button>
+      <button data-value="work" aria-pressed="false">工作台</button>
+    </div>
+  </div>
+  <button class="proto-notes-toggle" id="notes-toggle" aria-expanded="false">这一版改了什么</button>
+</header>
+
+<aside class="notes" id="notes" aria-label="改动说明">
+  <h2>原型 v2 改了什么</h2>
+  <p class="lead">2026-11-26，按现有界面实测和用户反馈整理。三个方向共用同一套交互，只是视觉不同。</p>
+  <h3>交互问题（三个方向都修）</h3>
+  <ol>
+    <li>头像菜单展开时箭头翻转，按 Esc 或点外面关闭。</li>
+    <li>新对话的输入框放到欢迎语正下方，加粗边框和阴影；入口建议改成输入框下的一行小按钮，点了填进输入框。</li>
+    <li>一轮里的多个工具步骤合并成一行（「解析岗位、匹配、生成简历，3 步，用时 21 秒」），点开看每一步。</li>
+    <li>右侧面板只留一层标签（简历、匹配报告、岗位）；「显示依据」改成开关，字号、分页等收进「更多」。</li>
+    <li>改写后的条目在简历上标出事实编号，像脚注；改动过的条目带一条淡色底。</li>
+    <li>确认卡改前、改后并排，依据检查写明用了哪几条事实；确认后变成一行结果和「撤销」。</li>
+    <li>工作台顶部加输入框，发出后新建对话；三个统计并成一条，不再是三张一样的卡；空的看板列给出下一步。</li>
+  </ol>
+  <h3>三个方向</h3>
+  <ul>
+    <li><b>A 雾蓝精修</b>：保留现在的雾蓝主色，理顺层级。改动最小，风险最低。</li>
+    <li><b>B 档案纸面</b>：整页像一份带批注的档案，简历面板更宽，标题用宋体，依据用「核对过」的绿色。</li>
+    <li><b>C 深色侧栏</b>：深墨色侧栏，回复不用气泡、像文档；需要你处理的地方用琥珀色。</li>
+  </ul>
+  <h3>不在这一版</h3>
+  <ul>
+    <li>窄屏布局沿用现在的做法（侧栏抽屉、面板全屏层）。</li>
+    <li>「我的」与岗位库按选定的方向再统一，结构不变。</li>
+  </ul>
+</aside>
+
+<div class="app">
+  <aside class="sidebar" aria-label="导航">
+    <div class="logo">JobPilot</div>
+    <button class="new-chat" data-go="new">
+      <svg class="chev" viewBox="0 0 24 24" style="transform:none"><path d="M12 5v14M5 12h14"/></svg>新对话
+    </button>
+    <nav class="nav">
+      <a data-go="work"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>工作台</a>
+      <a><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM9 7V5h6v2"/></svg>岗位库</a>
+      <a><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>我的</a>
+    </nav>
+    <div class="side-label">最近对话</div>
+    <div class="recent">
+      <a data-go="chat"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM9 7V5h6v2"/></svg><span>AI 应用开发实习生</span><small>今天</small></a>
+      <a data-go="chat"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM9 7V5h6v2"/></svg><span>数据平台实习生</span><small>昨天</small></a>
+      <a><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg><span>补充一段课程项目</span><small>周一</small></a>
+    </div>
+    <div class="side-spacer"></div>
+    <div class="account">
+      <div class="account-menu" id="account-menu" role="menu">
+        <button role="menuitem"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>账号设置</button>
+        <hr>
+        <button role="menuitem"><svg viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>退出登录</button>
+      </div>
+      <button class="account-trigger" id="account-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-menu">
+        <span class="avatar">林</span>
+        <span class="who"><b>我的账号</b><em>demo@jobpilot.test</em></span>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 新对话 -->
+    <section class="screen" id="screen-new" aria-label="新对话">
+      <div class="page-head"><h1>新对话</h1><span class="job-pill empty">未关联岗位</span></div>
+      <div class="welcome">
+        <div class="welcome-inner">
+          <h2>今天想准备哪个岗位？</h2>
+          <p class="sub">贴一段 JD、传一份简历，或者说说你想补充的经历。</p>
+          <div class="composer">
+            <textarea id="welcome-input" rows="3" placeholder="例如：帮我看看这个岗位，存进岗位库后做匹配。（可以直接粘贴 JD）"></textarea>
+            <div class="composer-row">
+              <button class="icon-btn" title="添加文件或截图"><svg viewBox="0 0 24 24"><path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg></button>
+              <span class="hint">支持 PDF、Word、图片；Enter 发送，Shift + Enter 换行</span>
+              <button class="send" aria-label="发送"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            </div>
+          </div>
+          <div class="starters">
+            <button class="starter" data-fill="我上传一份简历，帮我整理成经历事实。"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 15v5h16v-5"/></svg>上传简历</button>
+            <button class="starter" data-fill="这是一个岗位的 JD："><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM9 7V5h6v2"/></svg>发 JD 或截图</button>
+            <button class="starter" data-fill="从岗位库里选一个岗位继续准备。"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>从岗位库选一个</button>
+            <button class="starter" data-fill="我想补充一段简历里没写的经历："><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>补充经历</button>
+          </div>
+          <div class="trust">
+            <span><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>只用你确认过的经历</span>
+            <span><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>改动前先问你</span>
+            <span><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>每条都能查到依据</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 对话与简历 -->
+    <section class="screen" id="screen-chat" aria-label="对话与简历">
+      <div class="conv">
+        <div class="conv-head">
+          <h1>AI 应用开发实习生</h1>
+          <button class="job-pill"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM9 7V5h6v2"/></svg>苔汀推理工坊<svg class="chev" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M6 9l6 6 6-6"/></svg></button>
+          <button class="icon-btn" title="更多"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+        </div>
+        <div class="messages">
+          <div class="msgs-inner">
+            <div class="msg-user">帮我看看这个岗位，存进岗位库后做匹配。<span class="clip">苔汀推理工坊｜AI 应用开发实习生 · 上海 · 每周至少 4 天……</span><button class="more">展开全文</button></div>
+            <div class="sys">已存入岗位库，设为当前岗位</div>
+            <div class="trace" open-state="false">
+              <button class="trace-head" data-toggle="trace" aria-expanded="false">
+                <svg class="done" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>
+                <span><b>解析岗位、匹配、生成简历</b>　3 步，用时 21 秒</span>
+                <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <ol class="trace-steps">
+                <li>解析 JD，提取 5 条硬性要求<time>3.1 秒</time></li>
+                <li>对照你确认过的 11 条事实做匹配<time>4.3 秒</time></li>
+                <li>改写 7 条，全部通过依据检查<time>13.6 秒</time></li>
+              </ol>
+            </div>
+            <div class="msg-ai">
+              <p>匹配好了。5 条硬性要求里 3 条有直接依据，1 条部分覆盖，1 条没有对应经历：</p>
+              <div class="verdicts">
+                <div class="verdict"><span>能用 FastAPI 写服务接口<span class="fact">F3</span></span><span class="tag tag-ok">覆盖</span></div>
+                <div class="verdict"><span>做过检索增强或问答系统<span class="fact">F5</span><span class="fact">F7</span></span><span class="tag tag-ok">覆盖</span></div>
+                <div class="verdict"><span>熟悉 Python</span><span class="tag tag-part">部分覆盖</span></div>
+                <div class="verdict"><span>有线上服务的监控经验</span><span class="tag tag-miss">没有依据</span></div>
+              </div>
+              <p>定制简历已经生成，在右边。「熟悉 Python」只在技能栏出现过，要补的话可以告诉我具体用 Python 做过什么。</p>
+              <div class="quick"><button>为什么 Python 是部分覆盖</button><button>补充一段经历</button><button>对比另一个岗位</button></div>
+            </div>
+            <div class="msg-user">第二条写得更偏工程一点，突出接口和评测。</div>
+            <div class="confirm-wrap" id="confirm-wrap">
+              <div class="card pending">
+                <div class="card-head"><b>修改简历条目</b><span>项目经历第 2 条</span><span class="state">等你确认</span></div>
+                <div class="diff">
+                  <div><small>现在</small><del>决定用 PostgreSQL 和 pgvector 管理文档片段与向量</del></div>
+                  <div><small>改成</small>用 FastAPI 实现问答接口，基于 PostgreSQL 与 pgvector 管理文档片段，并用 48 条回归样例做评测</div>
+                </div>
+                <div class="check"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg><span>依据检查通过：每处说法都有你确认过的事实<span class="fact">F2</span><span class="fact">F3</span><span class="fact">F6</span></span></div>
+                <div class="card-actions"><button class="btn btn-quiet" id="reject">不改了</button><button class="btn btn-primary" id="confirm">确认修改</button></div>
+              </div>
+              <div class="result-line"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>已修改项目经历第 2 条，右边的简历已更新。<button id="undo">撤销</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="conv-foot">
+          <div class="composer">
+            <textarea rows="1" placeholder="问匹配情况，或者让我改一条简历……"></textarea>
+            <div class="composer-row">
+              <button class="icon-btn" title="添加文件或截图"><svg viewBox="0 0 24 24"><path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg></button>
+              <span class="hint">新增、修改和删除前，会先请你确认</span>
+              <button class="send" aria-label="发送"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="tabs" role="tablist">
+            <button role="tab" aria-selected="true">简历</button>
+            <button role="tab" aria-selected="false">匹配报告</button>
+            <button role="tab" aria-selected="false">岗位</button>
+          </div>
+          <div class="spacer"></div>
+          <button class="icon-btn" title="全屏编辑"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          <button class="icon-btn" title="关闭面板"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div class="panel-tools">
+          <button class="switch" id="facts-switch" role="switch" aria-checked="true"><i></i>显示依据</button>
+          <span class="fit">一页内，占用 <b>78%</b></span>
+          <div class="push">
+            <button class="btn">更多</button>
+            <button class="btn btn-primary">导出 PDF</button>
+          </div>
+        </div>
+        <div class="guarantee"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>改写 7 条，每条都能追溯到你确认过的事实；没有条目回退到原文。<span class="stale">基于事实库 v2</span></div>
+        <div class="paper-wrap">
+          <article class="paper">
+            <h3>林同学</h3>
+            <div class="contact">上海　|　138-0000-0000　|　lin@example.com</div>
+            <h4>教育经历</h4>
+            <div class="row">某某大学　计算机科学与技术（本科）<span>2023.09 – 2027.06</span></div>
+            <h4>项目经历</h4>
+            <div class="row">实验室设备手册问答<span>2025.09 – 2026.01</span></div>
+            <ul>
+              <li>主导三人小组设计设备手册问答原型<span class="fact">F1</span></li>
+              <li class="changed">用 FastAPI 实现问答接口，基于 PostgreSQL 与 pgvector 管理文档片段，并用 48 条回归样例做评测<span class="fact">F2</span><span class="fact">F3</span><span class="fact">F6</span></li>
+              <li>在答案中返回引用段落编号，方便人工复核<span class="fact">F4</span></li>
+              <li>整理 48 条设备操作问题作为离线评测集，对比关键词与向量混合检索<span class="fact">F5</span><span class="fact">F6</span></li>
+            </ul>
+            <div class="row" style="margin-top:10px">课程项目：物业报修工单分流<span>2025.03 – 2025.06</span></div>
+            <ul>
+              <li>根据报修描述推荐工种和紧急程度，值班员确认后再派单<span class="fact">F7</span></li>
+              <li>类别超出枚举或描述不清时转入人工确认<span class="fact">F8</span></li>
+            </ul>
+            <h4>专业技能</h4>
+            <ul>
+              <li>Python、FastAPI、PostgreSQL、pgvector<span class="fact">F9</span></li>
+              <li>检索增强问答、离线评测与回归样例<span class="fact">F5</span><span class="fact">F6</span></li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 工作台 -->
+    <section class="screen" id="screen-work" aria-label="工作台">
+      <div class="work">
+        <h2>下午好，林同学</h2>
+        <p class="sub">今天想准备哪个岗位？发出后会新开一段对话。</p>
+        <div class="composer">
+          <textarea rows="2" placeholder="粘贴一段 JD，或者说说你想做什么……"></textarea>
+          <div class="composer-row">
+            <button class="icon-btn" title="添加文件或截图"><svg viewBox="0 0 24 24"><path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg></button>
+            <button class="send" aria-label="发送"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </div>
+        <div class="ledger">
+          <div><small>经历事实</small><strong>11</strong>条，版本 v2<p>没有待确认的条目　<a>查看经历</a></p></div>
+          <div><small>改写记录</small><strong>7</strong>条，全部可追溯<p>0 条回退到原文　<a>查看定制简历</a></p></div>
+          <div><small>记住的偏好</small><strong>2</strong>项<p>城市：上海、杭州；语气：平实　<a>管理</a></p></div>
+        </div>
+        <div class="board-head"><h3>岗位进度</h3><p>点一个岗位，回到它的对话继续</p><button class="btn">打开岗位库</button></div>
+        <div class="board">
+          <div class="col"><div class="col-head"><i></i>未匹配<span>0</span></div><div class="empty">发一段 JD 就会出现在这里。<button>发 JD</button></div></div>
+          <div class="col"><div class="col-head"><i style="background:var(--accent)"></i>已匹配<span>1</span></div>
+            <div class="jobcard" data-go="chat"><b>数据平台实习生</b><small>北斗数仓 · 杭州 · 每周 3 天</small><div class="meter"><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+          </div>
+          <div class="col"><div class="col-head"><i style="background:var(--ok)"></i>已生成简历<span>1</span></div>
+            <div class="jobcard" data-go="chat"><b>AI 应用开发实习生</b><small>苔汀推理工坊 · 上海 · 每周 4 天</small><div class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+          </div>
+          <div class="col"><div class="col-head"><i style="background:var(--warn)"></i>已投递<span>0</span></div><div class="empty">记录投递后会出现在这里。</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  const body = document.body;
+  const setPressed = (group, value) => {
+    group.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === value)));
+  };
+  document.querySelectorAll('.seg').forEach(group => {
+    group.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      body.dataset[group.dataset.control] = btn.dataset.value;
+      setPressed(group, btn.dataset.value);
+    });
+  });
+  const go = screen => {
+    body.dataset.screen = screen;
+    setPressed(document.querySelector('[data-control="screen"]'), screen);
+  };
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => go(el.dataset.go)));
+
+  // 头像菜单：展开时箭头翻转，Esc 或点外面关闭
+  const trigger = document.getElementById('account-trigger');
+  const menu = document.getElementById('account-menu');
+  const setMenu = open => { trigger.setAttribute('aria-expanded', String(open)); menu.classList.toggle('open', open); };
+  trigger.addEventListener('click', e => { e.stopPropagation(); setMenu(trigger.getAttribute('aria-expanded') !== 'true'); });
+  document.addEventListener('click', e => { if (!menu.contains(e.target)) setMenu(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMenu(false); trigger.focus(); } });
+
+  // 工具步骤折叠
+  document.querySelectorAll('[data-toggle="trace"]').forEach(btn => btn.addEventListener('click', () => {
+    const trace = btn.closest('.trace');
+    const open = trace.getAttribute('open-state') !== 'true';
+    trace.setAttribute('open-state', String(open));
+    btn.setAttribute('aria-expanded', String(open));
+  }));
+
+  // 入口建议填进输入框
+  const input = document.getElementById('welcome-input');
+  document.querySelectorAll('.starter').forEach(b => b.addEventListener('click', () => { input.value = b.dataset.fill; input.focus(); }));
+
+  // 确认卡 → 结果行 → 撤销
+  const wrap = document.getElementById('confirm-wrap');
+  document.getElementById('confirm').addEventListener('click', () => wrap.classList.add('confirmed'));
+  document.getElementById('reject').addEventListener('click', () => wrap.classList.add('confirmed'));
+  document.getElementById('undo').addEventListener('click', () => wrap.classList.remove('confirmed'));
+
+  // 显示依据开关
+  const sw = document.getElementById('facts-switch');
+  sw.addEventListener('click', () => {
+    const on = sw.getAttribute('aria-checked') !== 'true';
+    sw.setAttribute('aria-checked', String(on));
+    body.dataset.facts = on ? 'on' : 'off';
+  });
+
+  // 说明面板
+  const notesBtn = document.getElementById('notes-toggle');
+  const notes = document.getElementById('notes');
+  notesBtn.addEventListener('click', () => {
+    const open = !notes.classList.contains('open');
+    notes.classList.toggle('open', open);
+    notesBtn.setAttribute('aria-expanded', String(open));
+  });
+})();
+</script>
+</body>
+</html>
