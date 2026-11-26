@@ -72,6 +72,8 @@ class AgentState(TypedDict, total=False):
     reply: str
     budget_exhausted: bool
     asked: bool
+    message_used_as_jd: bool
+    clarify_memory: bool
     switch_job_id: str | None
     generation_results: dict[str, dict[str, Payload]]
 
@@ -96,6 +98,7 @@ class AgentDeps:
 class ToolContext:
     agent: AgentDeps
     call: ToolCall
+    message_used_as_jd: bool = False
 
     @property
     def budget(self) -> AgentModelBudget:

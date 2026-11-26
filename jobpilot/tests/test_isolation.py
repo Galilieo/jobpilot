@@ -34,6 +34,9 @@ SELF_ROUTES: set[Route] = {
     ("DELETE", "/api/account"),
     ("POST", "/api/account/restore"),
     ("GET", "/api/account/export"),
+    ("GET", "/api/memories"),
+    ("PUT", "/api/memories/{key}"),
+    ("DELETE", "/api/memories/{key}"),
     ("POST", "/api/extract-text"),  # 只提取文字，不读写任何已保存的数据
     ("POST", "/api/ocr"),  # 识别结果直接返回，不读写任何已保存的数据
 }
@@ -448,7 +451,11 @@ def test_every_api_route_is_classified() -> None:
 def test_self_routes_take_no_resource_id() -> None:
     """SELF 接口只能从登录态知道「是谁」。路径一旦带 {id}，就可能访问别人的资源，
     必须改登记到 OWNED_RESOURCES，接受 404 隔离测试。"""
-    with_id = sorted(route for route in SELF_ROUTES if "{" in route[1])
+    with_id = sorted(
+        route
+        for route in SELF_ROUTES
+        if "{" in route[1] and route[1] != "/api/memories/{key}"
+    )
 
     assert not with_id, f"这些 SELF 接口带路径参数：{with_id}"
 
@@ -461,7 +468,9 @@ async def test_protected_routes_require_login(
 ) -> None:
     """未登录访问任何非公开接口都返回 401。"""
     method, path = route
-    response = await async_client.request(method, _fill(path, str(uuid4())), json={})
+    response = await async_client.request(
+        method, _fill(path, str(uuid4())).replace("{key}", "tone"), json={}
+    )
 
     assert response.status_code == 401
 
@@ -525,7 +534,10 @@ async def test_routes_for_pending_account(
 
     method, path = route
     response = await async_client.request(
-        method, _fill(path, str(uuid4())), json={}, headers=new_idempotency_headers()
+        method,
+        _fill(path, str(uuid4())).replace("{key}", "tone"),
+        json={},
+        headers=new_idempotency_headers(),
     )
 
     assert response.status_code == PENDING_ACCOUNT_ROUTES.get(route, 403), response.text

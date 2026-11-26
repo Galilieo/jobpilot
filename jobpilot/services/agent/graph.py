@@ -32,12 +32,13 @@ from jobpilot.db.models import (
     RunStatus,
 )
 from jobpilot.services.agent.actions import apply_write, bind_job
-from jobpilot.services.agent.arguments import JobArgs
+from jobpilot.services.agent.arguments import JobArgs, ParseJobArgs
 from jobpilot.services.agent.context import (
     build_context,
     serialize_tool_result,
     summarize_tool,
 )
+from jobpilot.services.agent.memory_actions import MEMORY_CLARIFICATION
 from jobpilot.services.agent.questions import (
     JOB_CHOICE_QUESTION,
     JobSelection,
@@ -119,6 +120,15 @@ def _validate_completion(completion: ChatCompletion) -> None:
         raise EmptyModelResponseError("对话模型未返回有效回复或工具调用")
 
 
+def _uses_body_as_jd(call: ToolCall) -> bool:
+    if call["name"] != "parse_jd":
+        return False
+    try:
+        return ParseJobArgs.model_validate_json(call["arguments"]).source == "message"
+    except ValidationError:
+        return False
+
+
 async def _call_model(agent: AgentDeps, state: AgentState) -> AgentState:
     prompt = load_prompt("agent")
     try:
@@ -143,6 +153,8 @@ async def _call_model(agent: AgentDeps, state: AgentState) -> AgentState:
         "seconds_left": agent.seconds_left,
         "messages": [*state["messages"], output],
         "calls": calls,
+        "message_used_as_jd": state.get("message_used_as_jd", False)
+        or any(_uses_body_as_jd(call) for call in calls),
         "reply": output["content"] or "",
         "next_tool": "select_tool" if calls else "finish",
     }
@@ -196,13 +208,17 @@ def _tool_start(agent: AgentDeps, call: ToolCall) -> None:
 
 
 async def _result_for(
-    agent: AgentDeps, call: ToolCall, args: ToolArgs | None = None
+    agent: AgentDeps,
+    call: ToolCall,
+    args: ToolArgs | None = None,
+    *,
+    message_used_as_jd: bool = False,
 ) -> Payload:
     tool = TOOLS.get(call["name"])
     if tool is None:
         return {"status": 422, "error": "未知工具"}
     try:
-        context = ToolContext(agent, call)
+        context = ToolContext(agent, call, message_used_as_jd=message_used_as_jd)
         if args is not None:
             return await tool.execute(context, args)
         return await tool.invoke(context)
@@ -269,10 +285,10 @@ async def _bind_parsed_job(agent: AgentDeps, job_id: UUID) -> bool:
         return conversation.current_job_id != job_id
 
 
-def _switch_question(call: ToolCall) -> tuple[Payload, ToolCall]:
-    tool_call_id = "switch-" + call["call_id"]
+def _question_call(name: str, turn: int, question: str) -> tuple[Payload, ToolCall]:
+    tool_call_id = f"{name}-job"
     arguments = dumps(
-        {"questions": [JOB_CHOICE_QUESTION]},
+        {"questions": [question]},
         ensure_ascii=False,
     )
     output = {
@@ -287,7 +303,7 @@ def _switch_question(call: ToolCall) -> tuple[Payload, ToolCall]:
     }
     return output, ToolCall(
         call_id=tool_call_id,
-        key="switch:" + call["key"],
+        key=f"{name}:{turn}",
         name="ask_user",
         arguments=arguments,
     )
@@ -328,23 +344,22 @@ def _route_tool(state: AgentState) -> str:
 
 
 def _next_call(state: AgentState) -> AgentState:
-    if not state["calls"] and state.get("switch_job_id") and not state["asked"]:
-        if state["tools_left"] < 1:
-            return _exhausted()
-        output, switch = _switch_question(
-            {
-                "call_id": "job",
-                "key": str(len(state["messages"])),
-                "name": "parse_jd",
-                "arguments": "",
-            }
-        )
-        return {
-            "messages": [*state["messages"], output],
-            "calls": [switch],
-            "next_tool": "propose_action",
-        }
-    return _select_tool(state)
+    if state["calls"] or state["asked"]:
+        return _select_tool(state)
+    if state.get("switch_job_id"):
+        name, question = "switch", JOB_CHOICE_QUESTION
+    elif state.get("clarify_memory"):
+        name, question = "memory", MEMORY_CLARIFICATION
+    else:
+        return _select_tool(state)
+    if state["tools_left"] < 1:
+        return _exhausted()
+    output, call = _question_call(name, len(state["messages"]), question)
+    return {
+        "messages": [*state["messages"], output],
+        "calls": [call],
+        "next_tool": "propose_action",
+    }
 
 
 async def _ask_arguments(agent: AgentDeps, state: AgentState) -> Payload:
@@ -371,7 +386,9 @@ async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
                 else await _ask_arguments(agent, state)
             )
         else:
-            args = await _result_for(agent, call)
+            args = await _result_for(
+                agent, call, message_used_as_jd=state.get("message_used_as_jd", False)
+            )
     except BudgetExhaustedError:
         await _record(agent, call, {"status": "budget_exhausted"})
         return {"seconds_left": agent.seconds_left, **_exhausted()}
@@ -380,6 +397,8 @@ async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
         return {
             "seconds_left": agent.seconds_left,
             "next_tool": "select_tool",
+            "clarify_memory": state.get("clarify_memory", False)
+            or args.get("clarify", False),
             "calls": state["calls"][1:],
             "tools_left": state["tools_left"] - 1,
             "messages": [*state["messages"], _tool_message(call, args)],
@@ -468,10 +487,7 @@ async def _apply(agent: AgentDeps, state: AgentState) -> AgentState:
         await _record(agent, item, item_result)
         replies.append(_tool_message(item, item_result))
     return {
-        "messages": [
-            *state["messages"],
-            *replies,
-        ],
+        "messages": [*state["messages"], *replies],
         "calls": state["calls"][len(calls) :],
         "tools_left": state["tools_left"] - len(calls),
         "asked": state["asked"] or ask,

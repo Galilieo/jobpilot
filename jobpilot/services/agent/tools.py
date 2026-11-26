@@ -19,6 +19,11 @@ from jobpilot.services.agent.arguments import (
     SetJobArgs,
     TailorArgs,
 )
+from jobpilot.services.agent.memory_actions import (
+    ForgetArgs,
+    RememberArgs,
+    prepare_memory,
+)
 from jobpilot.services.agent.types import (
     Payload,
     ToolArgs,
@@ -148,6 +153,20 @@ TOOLS = {
             "提议修改一条定制简历条目，须用户确认",
             EditResumeArgs,
             actions.prepare_resume,
+        ),
+        _register(
+            "remember",
+            ToolCategory.WRITE,
+            "引用本轮正文提议长期偏好，须用户确认",
+            RememberArgs,
+            prepare_memory,
+        ),
+        _register(
+            "forget",
+            ToolCategory.WRITE,
+            "引用本轮正文提议删除偏好，须用户确认",
+            ForgetArgs,
+            prepare_memory,
         ),
         _register(
             "ask_user", ToolCategory.ASK, "合并本轮需要用户回答的问题", AskArgs, _ask

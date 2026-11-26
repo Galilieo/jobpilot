@@ -21,6 +21,7 @@ from jobpilot.api.facts import router as facts_router
 from jobpilot.api.idempotency import IdempotentReplay, replay_response
 from jobpilot.api.jobs import router as jobs_router
 from jobpilot.api.match_idempotency import include_matching_routes
+from jobpilot.api.memories import router as memories_router
 from jobpilot.api.ocr import router as ocr_router
 from jobpilot.api.overview import router as overview_router
 from jobpilot.api.resumes import router as resumes_router
@@ -98,6 +99,7 @@ app.include_router(auth_router)
 app.include_router(conversation_router)
 app.include_router(agent_router)
 app.include_router(account_router)
+app.include_router(memories_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)
 app.include_router(facts_router)

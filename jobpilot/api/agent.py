@@ -34,6 +34,7 @@ from jobpilot.db.models import (
     RunStatus,
 )
 from jobpilot.services.agent.actions import undo_write, verify_action_version
+from jobpilot.services.agent.memory_actions import MEMORY_TOOLS, confirm_memory
 from jobpilot.services.agent.questions import validate_card_decision
 from jobpilot.services.agent.runtime import (
     AgentRuntime,
@@ -222,6 +223,11 @@ async def _store_decision(
         else ActionStatus.REJECTED
     )
     action.decided_at = func.now()
+    if body.decision == Decision.CONFIRM and action.tool in MEMORY_TOOLS:
+        try:
+            await confirm_memory(db, action)
+        except ToolError as error:
+            raise HTTPException(error.status, str(error)) from None
 
 
 @router.post("/conversations/{conversation_id}/actions/{action_id}")
