@@ -57,7 +57,7 @@ export function ProfilePage(): ReactElement {
     <section className="page">
       <PageHeader title="我的" subtitle="改写只引用你确认并发布过的经历事实，不会编造。" />
 
-      <div className="stat-cards">
+      <div className="stat-cards stat-cards-inline">
         <StatCard
           label="经历事实"
           value={library.isPending ? '—' : publishedCount}

@@ -14,7 +14,8 @@ const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ConfigProvider locale={zhCN} theme={jobpilotTheme}>
+    {/* 不在两个汉字的按钮中间插空格（默认会显示成「打 开」） */}
+    <ConfigProvider locale={zhCN} theme={jobpilotTheme} button={{ autoInsertSpace: false }}>
       <AntApp>
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>

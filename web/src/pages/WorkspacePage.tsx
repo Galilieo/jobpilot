@@ -20,7 +20,6 @@ function greetingPrefix(hour: number): string {
 }
 
 export function WorkspacePage(): ReactElement {
-  const navigate = useNavigate()
   const email = useCurrentUser().data?.email ?? ''
   const handle = email.split('@')[0] || '同学'
   const greeting = `${greetingPrefix(new Date().getHours())}，${handle}，今天准备哪个岗位？`
@@ -31,15 +30,7 @@ export function WorkspacePage(): ReactElement {
 
   return (
     <section className="page workspace-page">
-      <PageHeader
-        title={greeting}
-        subtitle="先确认经历事实，再匹配岗位并生成可追溯的定制简历。"
-        extra={
-          <Button type="primary" onClick={() => void navigate('/jobs')}>
-            打开岗位库
-          </Button>
-        }
-      />
+      <PageHeader title={greeting} subtitle="先确认经历事实，再匹配岗位并生成可追溯的定制简历。" />
 
       {query.isPending ? (
         <Skeleton active />
@@ -160,12 +151,21 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
         <Typography.Text type="secondary" className="board-head-sub">
           点击卡片进入岗位详情继续处理
         </Typography.Text>
+        {total > 0 && (
+          <Button size="small" className="board-head-action" onClick={() => void navigate('/jobs')}>
+            打开岗位库
+          </Button>
+        )}
       </div>
       {total === 0 ? (
         <Card>
           <EmptyHint
             description="还没有添加岗位。去岗位库贴入一份 JD 开始。"
-            action={<Button onClick={() => void navigate('/jobs')}>打开岗位库</Button>}
+            action={
+              <Button type="primary" onClick={() => void navigate('/jobs')}>
+                打开岗位库
+              </Button>
+            }
           />
         </Card>
       ) : (

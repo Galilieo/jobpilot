@@ -45,7 +45,6 @@ textarea {
 .fact-quote,
 .ant-typography.job-company,
 .job-card-salary,
-.job-card-match,
 .job-card-foot,
 .job-raw,
 .job-field-label,
@@ -278,8 +277,11 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 12px;
+}
+.board-head-action {
+  margin-inline-start: auto;
 }
 .workspace-board {
   display: grid;
@@ -292,7 +294,7 @@ textarea {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  min-height: 160px;
+  min-height: 128px;
   padding: 12px;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 12px;
@@ -848,8 +850,21 @@ textarea {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+.job-card .ant-card-body {
+  gap: 6px;
+}
+.job-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
 .job-card-title {
-  font-size: 14px;
+  min-width: 0;
+  font-size: 15px;
+}
+.job-card-salary {
+  flex-shrink: 0;
 }
 .ant-typography.job-company {
   margin: 0;
@@ -862,9 +877,23 @@ textarea {
 .job-tags .ant-tag {
   margin-inline-end: 0;
 }
+.job-tags {
+  margin-top: 2px;
+}
 .job-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
   margin-top: auto;
-  padding-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+/* 表格自带表头底色与行分隔，外层卡片不再加内边距 */
+.table-card > .ant-card-body {
+  padding: 0;
+  overflow: hidden;
+  border-radius: inherit;
 }
 
 /* 岗位详情 */
@@ -1212,6 +1241,13 @@ textarea {
   .job-detail {
     grid-template-columns: minmax(0, 1fr);
   }
+  .board-column {
+    min-height: 0;
+  }
+  .board-column-empty {
+    justify-content: flex-start;
+    padding: 0 4px 4px;
+  }
   .job-detail-panel {
     position: static;
   }
@@ -1239,5 +1275,25 @@ textarea {
 @media (max-width: 767px) {
   .fact-item {
     flex-wrap: wrap;
+  }
+}
+/* 只有数字的概览卡（「我的」）在手机上并排成一行，不占满第一屏；
+ * 看板标题旁的提示让位给「打开岗位库」按钮，避免按钮单独折到下一行 */
+@media (max-width: 575px) {
+  .board-head-sub {
+    display: none;
+  }
+  .stat-cards-inline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .stat-cards-inline .stat-card .ant-card-body {
+    padding: 10px 12px;
+  }
+  .stat-cards-inline .stat-card-metric {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    font-size: 20px;
   }
 }

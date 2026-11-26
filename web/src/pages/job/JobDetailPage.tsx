@@ -162,7 +162,7 @@ export function JobDetailPage(): ReactElement {
                 >
                   <Button icon={<EllipsisOutlined />} aria-label="更多岗位操作" />
                 </Dropdown>
-                {isNarrow && <Button onClick={() => setResumeOpen(true)}>查看结果</Button>}
+                {isNarrow && <Button onClick={() => setResumeOpen(true)}>查看定制简历</Button>}
               </Space>
             }
           />

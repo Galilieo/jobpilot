@@ -70,22 +70,24 @@ export function JobsPage(): ReactElement {
                 className="job-card"
                 onClick={() => void navigate(`/jobs/${job.job_id}`)}
               >
-                <Typography.Text strong className="job-card-title">
-                  {job.title ?? '未命名岗位'}
-                </Typography.Text>
-                {job.salary ? (
-                  <Typography.Text
-                    strong
-                    className="job-card-salary"
-                    style={{ color: token.colorPrimary }}
-                  >
-                    {job.salary}
+                <div className="job-card-head">
+                  <Typography.Text strong className="job-card-title">
+                    {job.title ?? '未命名岗位'}
                   </Typography.Text>
-                ) : (
-                  <Typography.Text type="secondary" className="job-card-salary">
-                    薪资未填写
-                  </Typography.Text>
-                )}
+                  {job.salary ? (
+                    <Typography.Text
+                      strong
+                      className="job-card-salary"
+                      style={{ color: token.colorPrimary }}
+                    >
+                      {job.salary}
+                    </Typography.Text>
+                  ) : (
+                    <Typography.Text type="secondary" className="job-card-salary">
+                      薪资未填写
+                    </Typography.Text>
+                  )}
+                </div>
                 <Typography.Paragraph type="secondary" className="job-company">
                   {formatJobMeta(job)}
                 </Typography.Paragraph>
@@ -102,10 +104,10 @@ export function JobsPage(): ReactElement {
                     )}
                   </div>
                 )}
-                <Typography.Text type="secondary" className="job-card-match tabular-num">
-                  {formatMatchSummary(job.match_summary)}
-                </Typography.Text>
                 <div className="job-card-foot">
+                  <Typography.Text type="secondary" className="tabular-num">
+                    {formatMatchSummary(job.match_summary)}
+                  </Typography.Text>
                   <Typography.Text type="secondary">{JOB_STAGE[job.stage]}</Typography.Text>
                 </div>
               </Card>

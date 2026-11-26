@@ -119,7 +119,7 @@ export function TailoredResumeList(): ReactElement {
   ]
 
   return (
-    <Card>
+    <Card className="table-card">
       <Table
         rowKey="resume_id"
         columns={columns}
