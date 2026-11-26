@@ -1,0 +1,71 @@
+{
+  "sample_id": "jd-syn-03",
+  "source_url": null,
+  "basic_fields": {
+    "company": "梧阶视觉研究社",
+    "title": "视觉算法实习生",
+    "location": "南京",
+    "salary": null,
+    "onsite_days_per_week": null,
+    "internship_duration": "可实习至少 5 个月",
+    "education": "硕士在读",
+    "graduation_window": null,
+    "application_deadline": null
+  },
+  "requirements": [
+    {
+      "requirement_id": "jd-syn-03-r01",
+      "type": "hard",
+      "text": "硕士在读",
+      "source_quote": "硕士在读"
+    },
+    {
+      "requirement_id": "jd-syn-03-r02",
+      "type": "hard",
+      "text": "熟悉 Python",
+      "source_quote": "熟悉 Python"
+    },
+    {
+      "requirement_id": "jd-syn-03-r03",
+      "type": "hard",
+      "text": "用 PyTorch 训练或复现过视觉模型",
+      "source_quote": "用 PyTorch 训练或复现过视觉模型"
+    },
+    {
+      "requirement_id": "jd-syn-03-r04",
+      "type": "hard",
+      "text": "独立留出过验证集，并记录模型召回率",
+      "source_quote": "独立留出过验证集，并记录模型召回率"
+    },
+    {
+      "requirement_id": "jd-syn-03-r05",
+      "type": "hard",
+      "text": "可实习至少 5 个月",
+      "source_quote": "可实习至少 5 个月"
+    },
+    {
+      "requirement_id": "jd-syn-03-r06",
+      "type": "preferred",
+      "text": "用过 ONNX 导出模型",
+      "source_quote": "用过 ONNX 导出模型"
+    },
+    {
+      "requirement_id": "jd-syn-03-r07",
+      "type": "preferred",
+      "text": "了解 TensorRT",
+      "source_quote": "了解 TensorRT"
+    },
+    {
+      "requirement_id": "jd-syn-03-r08",
+      "type": "preferred",
+      "text": "有工业缺陷识别项目经验",
+      "source_quote": "有工业缺陷识别项目经验"
+    }
+  ],
+  "keywords": [
+    "Python",
+    "PyTorch",
+    "ONNX",
+    "TensorRT"
+  ]
+}

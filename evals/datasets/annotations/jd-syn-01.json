@@ -1,0 +1,71 @@
+{
+  "sample_id": "jd-syn-01",
+  "source_url": null,
+  "basic_fields": {
+    "company": "苔汀推理工坊",
+    "title": "AI 应用开发实习生",
+    "location": "上海",
+    "salary": null,
+    "onsite_days_per_week": "每周至少到岗 4 天",
+    "internship_duration": "可以连续实习 3～4 个月",
+    "education": null,
+    "graduation_window": null,
+    "application_deadline": null
+  },
+  "requirements": [
+    {
+      "requirement_id": "jd-syn-01-r01",
+      "type": "hard",
+      "text": "能够使用 Python 开发应用",
+      "source_quote": "能够使用 Python 开发应用"
+    },
+    {
+      "requirement_id": "jd-syn-01-r02",
+      "type": "hard",
+      "text": "用 FastAPI 实现过 HTTP 接口",
+      "source_quote": "用 FastAPI 实现过 HTTP 接口"
+    },
+    {
+      "requirement_id": "jd-syn-01-r03",
+      "type": "hard",
+      "text": "做过基于检索增强的文档问答项目",
+      "source_quote": "做过基于检索增强的文档问答项目"
+    },
+    {
+      "requirement_id": "jd-syn-01-r04",
+      "type": "hard",
+      "text": "每周至少到岗 4 天",
+      "source_quote": "每周至少到岗 4 天"
+    },
+    {
+      "requirement_id": "jd-syn-01-r05",
+      "type": "hard",
+      "text": "可以连续实习 3～4 个月",
+      "source_quote": "可以连续实习 3～4 个月"
+    },
+    {
+      "requirement_id": "jd-syn-01-r06",
+      "type": "preferred",
+      "text": "使用过 pgvector",
+      "source_quote": "使用过 pgvector"
+    },
+    {
+      "requirement_id": "jd-syn-01-r07",
+      "type": "preferred",
+      "text": "有人工复核模型输出的流程实践",
+      "source_quote": "有人工复核模型输出的流程实践"
+    },
+    {
+      "requirement_id": "jd-syn-01-r08",
+      "type": "preferred",
+      "text": "做过模型输出的离线评测",
+      "source_quote": "做过模型输出的离线评测"
+    }
+  ],
+  "keywords": [
+    "Python",
+    "FastAPI",
+    "RAG",
+    "pgvector"
+  ]
+}

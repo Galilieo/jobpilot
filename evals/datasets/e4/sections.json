@@ -80,5 +80,23 @@
     "简序办公软件 实施工程师": "internship",
     "桥翌网络服务 技术支持": "internship",
     "工具与技能": "skill"
+  },
+  "resume-001": {
+    "实验室设备手册问答": "project"
+  },
+  "resume-002": {
+    "校内器材预约系统": "project"
+  },
+  "resume-003": {
+    "课程排班面板": "project"
+  },
+  "resume-006": {
+    "客服工单分派助手": "project"
+  },
+  "resume-007": {
+    "社区志愿活动日历": "project"
+  },
+  "resume-009": {
+    "课程资料检索对照实验": "project"
   }
 }

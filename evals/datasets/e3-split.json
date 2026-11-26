@@ -1,0 +1,24 @@
+{
+  "version": "e3-v1",
+  "dev": [
+    "resume-001",
+    "resume-002",
+    "resume-003",
+    "resume-011",
+    "resume-015"
+  ],
+  "test": [
+    "resume-006",
+    "resume-007",
+    "resume-009",
+    "resume-012",
+    "resume-017"
+  ],
+  "jd_ids": [
+    "jd-syn-01",
+    "jd-syn-02",
+    "jd-syn-03",
+    "jd-syn-04",
+    "jd-syn-05"
+  ]
+}

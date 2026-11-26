@@ -1,0 +1,70 @@
+{
+  "sample_id": "jd-syn-02",
+  "source_url": null,
+  "basic_fields": {
+    "company": "岫舟库存科技",
+    "title": "后端开发实习生",
+    "location": "杭州",
+    "salary": null,
+    "onsite_days_per_week": "每周至少到岗 5 天",
+    "internship_duration": "可实习至少 4 个月",
+    "education": null,
+    "graduation_window": null,
+    "application_deadline": null
+  },
+  "requirements": [
+    {
+      "requirement_id": "jd-syn-02-r01",
+      "type": "hard",
+      "text": "有 Spring Boot 或 Go 项目经验",
+      "source_quote": "有 Spring Boot 或 Go 项目经验"
+    },
+    {
+      "requirement_id": "jd-syn-02-r02",
+      "type": "hard",
+      "text": "有关系型数据库项目经验",
+      "source_quote": "有关系型数据库项目经验"
+    },
+    {
+      "requirement_id": "jd-syn-02-r03",
+      "type": "hard",
+      "text": "用数据库约束或事务处理过重复请求或并发写入",
+      "source_quote": "用数据库约束或事务处理过重复请求或并发写入"
+    },
+    {
+      "requirement_id": "jd-syn-02-r04",
+      "type": "hard",
+      "text": "写过接口自动化测试",
+      "source_quote": "写过接口自动化测试"
+    },
+    {
+      "requirement_id": "jd-syn-02-r05",
+      "type": "hard",
+      "text": "每周至少到岗 5 天",
+      "source_quote": "每周至少到岗 5 天"
+    },
+    {
+      "requirement_id": "jd-syn-02-r06",
+      "type": "hard",
+      "text": "可实习至少 4 个月",
+      "source_quote": "可实习至少 4 个月"
+    },
+    {
+      "requirement_id": "jd-syn-02-r07",
+      "type": "preferred",
+      "text": "在项目中使用过 Redis 缓存",
+      "source_quote": "在项目中使用过 Redis 缓存"
+    },
+    {
+      "requirement_id": "jd-syn-02-r08",
+      "type": "preferred",
+      "text": "设计过接口幂等键",
+      "source_quote": "设计过接口幂等键"
+    }
+  ],
+  "keywords": [
+    "Spring Boot",
+    "Go",
+    "Redis"
+  ]
+}

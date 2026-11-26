@@ -1,0 +1,69 @@
+{
+  "sample_id": "jd-syn-05",
+  "source_url": null,
+  "basic_fields": {
+    "company": "砂序智能工程",
+    "title": "AI 应用工程师（校招）",
+    "location": "深圳",
+    "salary": null,
+    "onsite_days_per_week": null,
+    "internship_duration": null,
+    "education": "本科及以上，硕士优先",
+    "graduation_window": null,
+    "application_deadline": null
+  },
+  "requirements": [
+    {
+      "requirement_id": "jd-syn-05-r01",
+      "type": "hard",
+      "text": "本科及以上，硕士优先",
+      "source_quote": "本科及以上，硕士优先"
+    },
+    {
+      "requirement_id": "jd-syn-05-r02",
+      "type": "hard",
+      "text": "有 Python 服务开发经验",
+      "source_quote": "有 Python 服务开发经验"
+    },
+    {
+      "requirement_id": "jd-syn-05-r03",
+      "type": "hard",
+      "text": "使用过关键词与向量混合检索或候选复排",
+      "source_quote": "使用过关键词与向量混合检索或候选复排"
+    },
+    {
+      "requirement_id": "jd-syn-05-r04",
+      "type": "hard",
+      "text": "做过模型输出的结构化字段校验",
+      "source_quote": "做过模型输出的结构化字段校验"
+    },
+    {
+      "requirement_id": "jd-syn-05-r05",
+      "type": "hard",
+      "text": "能够用独立留出集报告召回率",
+      "source_quote": "能够用独立留出集报告召回率"
+    },
+    {
+      "requirement_id": "jd-syn-05-r06",
+      "type": "preferred",
+      "text": "做过失败案例归因并据此调整检索",
+      "source_quote": "做过失败案例归因并据此调整检索"
+    },
+    {
+      "requirement_id": "jd-syn-05-r07",
+      "type": "preferred",
+      "text": "有线上功能交付经历",
+      "source_quote": "有线上功能交付经历"
+    },
+    {
+      "requirement_id": "jd-syn-05-r08",
+      "type": "preferred",
+      "text": "使用过 OpenSearch",
+      "source_quote": "使用过 OpenSearch"
+    }
+  ],
+  "keywords": [
+    "Python",
+    "OpenSearch"
+  ]
+}

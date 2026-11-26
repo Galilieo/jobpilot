@@ -1,0 +1,74 @@
+{
+  "sample_id": "jd-syn-04",
+  "source_url": null,
+  "basic_fields": {
+    "company": "折溪交互工作室",
+    "title": "Web 前端开发实习生",
+    "location": "北京",
+    "salary": null,
+    "onsite_days_per_week": "每周至少到岗 4 天",
+    "internship_duration": null,
+    "education": null,
+    "graduation_window": null,
+    "application_deadline": null
+  },
+  "requirements": [
+    {
+      "requirement_id": "jd-syn-04-r01",
+      "type": "hard",
+      "text": "具备 JavaScript、HTML、CSS 基础，有 Vue 3 或 React 项目经验",
+      "source_quote": "具备 JavaScript、HTML、CSS 基础，有 Vue 3 或 React 项目经验"
+    },
+    {
+      "requirement_id": "jd-syn-04-r02",
+      "type": "hard",
+      "text": "熟悉 TypeScript",
+      "source_quote": "熟悉 TypeScript"
+    },
+    {
+      "requirement_id": "jd-syn-04-r03",
+      "type": "hard",
+      "text": "有前端页面的接口请求失败处理实践",
+      "source_quote": "有前端页面的接口请求失败处理实践"
+    },
+    {
+      "requirement_id": "jd-syn-04-r04",
+      "type": "hard",
+      "text": "编写过前端自动化测试",
+      "source_quote": "编写过前端自动化测试"
+    },
+    {
+      "requirement_id": "jd-syn-04-r05",
+      "type": "hard",
+      "text": "每周至少到岗 4 天",
+      "source_quote": "每周至少到岗 4 天"
+    },
+    {
+      "requirement_id": "jd-syn-04-r06",
+      "type": "preferred",
+      "text": "使用过 Playwright",
+      "source_quote": "使用过 Playwright"
+    },
+    {
+      "requirement_id": "jd-syn-04-r07",
+      "type": "preferred",
+      "text": "做过键盘可访问性改进",
+      "source_quote": "做过键盘可访问性改进"
+    },
+    {
+      "requirement_id": "jd-syn-04-r08",
+      "type": "preferred",
+      "text": "测量过前端资源体积",
+      "source_quote": "测量过前端资源体积"
+    }
+  ],
+  "keywords": [
+    "JavaScript",
+    "HTML",
+    "CSS",
+    "Vue 3",
+    "React",
+    "TypeScript",
+    "Playwright"
+  ]
+}
