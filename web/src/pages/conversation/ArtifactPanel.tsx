@@ -13,6 +13,9 @@ import { PANEL_TAB_LABEL, panelTabs, type PanelTab } from './panelTabs'
 
 interface ArtifactPanelProps {
   jobId: string
+  // 对话里确认或撤销了写入时变化。简历预览的 iframe 自己保存、自己持有版本号，
+  // 外面改了简历要整个重建，否则它会拿旧版本号保存而冲突。
+  writeKey: string
   activeTab: PanelTab | null
   onTabChange: (tab: PanelTab) => void
   expanded?: boolean
@@ -28,8 +31,8 @@ function JobTab({ jobId }: { jobId: string }): ReactElement {
   return job.data ? <JobInfo job={job.data} /> : <Skeleton active />
 }
 
-function tabContent(tab: PanelTab, jobId: string): ReactElement {
-  if (tab === 'resume') return <ResumePanel jobId={jobId} />
+function tabContent(tab: PanelTab, jobId: string, writeKey: string): ReactElement {
+  if (tab === 'resume') return <ResumePanel key={writeKey} jobId={jobId} />
   if (tab === 'match') return <MatchPanel jobId={jobId} embedded />
   return <JobTab jobId={jobId} />
 }
@@ -88,7 +91,9 @@ export function ArtifactPanel(props: ArtifactPanelProps): ReactElement {
       items={tabs.map((tab) => ({
         key: tab,
         label: PANEL_TAB_LABEL[tab],
-        children: <div className="artifact-panel-body">{tabContent(tab, jobId)}</div>,
+        children: (
+          <div className="artifact-panel-body">{tabContent(tab, jobId, props.writeKey)}</div>
+        ),
       }))}
     />
   )

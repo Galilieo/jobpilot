@@ -4,12 +4,12 @@ import { render, type RenderResult } from '@testing-library/react'
 import { App as AntApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import type { ReactElement } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, type InitialEntry } from 'react-router'
 import { jobpilotTheme } from '../theme'
 
 export function renderWithProviders(
   ui: ReactElement,
-  { initialEntries = ['/'] }: { initialEntries?: string[] } = {},
+  { initialEntries = ['/'] }: { initialEntries?: InitialEntry[] } = {},
 ): RenderResult & { queryClient: QueryClient } {
   const queryClient = new QueryClient({
     defaultOptions: {

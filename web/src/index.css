@@ -379,6 +379,7 @@ textarea {
   margin-inline-start: auto;
 }
 .conversation-body {
+  display: flex;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -389,10 +390,25 @@ textarea {
   align-items: center;
   justify-content: center;
 }
+/* 消息区由 Bubble.List 自己滚动，新消息出来时它会贴底 */
+.conversation-body:has(.conversation-thread) {
+  overflow: hidden;
+  padding: 0;
+}
 .conversation-thread {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
+  min-height: 0;
+}
+.message-list {
+  flex: 1;
+  min-height: 0;
+}
+.message-list .ant-bubble-list-scroll-box {
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px max(24px, calc((100% - 860px) / 2)) 8px;
 }
 .conversation-welcome {
   width: 100%;
@@ -443,6 +459,7 @@ textarea {
 .conversation-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
@@ -458,6 +475,7 @@ textarea {
 .artifact-panel {
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   border-left: 1px solid var(--ant-color-border-secondary);
   background: var(--ant-color-fill-quaternary);
 }
@@ -469,7 +487,7 @@ textarea {
   padding: 0 12px 0 20px;
   background: var(--ant-color-bg-container);
 }
-.artifact-panel-tabs > .ant-tabs-content-holder {
+.artifact-panel-tabs > .ant-tabs-body-holder {
   min-height: 0;
   overflow-y: auto;
 }
@@ -528,14 +546,42 @@ textarea {
 }
 
 /* 消息 */
-.message-list .ant-bubble-list-scroll-box,
-.message-list {
+.message-list .ant-bubble-list-scroll-content {
   gap: 16px;
 }
 .message-text {
   line-height: 1.75;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.bubble-ai .message-text {
+  white-space: normal;
+}
+.message-text p,
+.message-text ul,
+.message-text ol {
+  margin: 0 0 10px;
+}
+.message-text > :last-child {
+  margin-bottom: 0;
+}
+.message-text ul,
+.message-text ol {
+  padding-inline-start: 22px;
+}
+.message-text li + li {
+  margin-top: 2px;
+}
+.message-text h4 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.message-text code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--ant-color-fill-tertiary);
+  font-size: 13px;
 }
 .bubble-user .ant-bubble-content {
   max-width: min(82%, 640px);
@@ -1181,7 +1227,8 @@ textarea {
   .conversation-title {
     max-width: 50%;
   }
-  .conversation-body {
+  .conversation-body,
+  .message-list .ant-bubble-list-scroll-box {
     padding: 16px 16px 8px;
   }
   .conversation-composer {

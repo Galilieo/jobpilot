@@ -43,3 +43,8 @@ if (!globalThis.IntersectionObserver) {
     }
   }
 }
+
+// jsdom 没有元素滚动；Bubble.List 滚到底部时会调用。
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => undefined
+}

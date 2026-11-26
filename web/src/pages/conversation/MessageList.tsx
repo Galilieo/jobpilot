@@ -4,9 +4,10 @@
 import { FileTextOutlined } from '@ant-design/icons'
 import { Bubble } from '@ant-design/x'
 import type { BubbleItemType } from '@ant-design/x'
+import type { BubbleListRef } from '@ant-design/x/es/bubble'
 import { useMutation } from '@tanstack/react-query'
 import { Alert, App } from 'antd'
-import type { ReactElement, ReactNode } from 'react'
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
 import { conversations } from '../../api/endpoints'
 import type {
   AgentActionCard,
@@ -15,6 +16,7 @@ import type {
   ConversationDetail,
 } from '../../api/types'
 import { CardResult, PendingCard, type CardOutcome } from './ActionCards'
+import { MessageText } from './MessageText'
 import type { LiveTurn } from './runControl'
 import { buildTimeline, hasCard, type TimelineItem } from './timeline'
 import { ToolSteps, type StepView } from './ToolSteps'
@@ -74,6 +76,13 @@ function userBubble(key: string, content: string, attachments: AgentTextAttachme
 export function MessageList(props: MessageListProps): ReactElement {
   const { message } = App.useApp()
   const { detail, live, title } = props
+  const listRef = useRef<BubbleListRef>(null)
+  const liveStarted = live !== null
+
+  // 自己刚发出消息或提交决定时滚到底部；只在已经贴底时自动跟随是 Bubble.List 的默认行为。
+  useEffect(() => {
+    if (liveStarted) listRef.current?.scrollTo({ top: 'bottom' })
+  }, [liveStarted])
 
   const undo = useMutation({
     mutationFn: (actionId: string) => conversations.undo(actionId),
@@ -115,7 +124,7 @@ export function MessageList(props: MessageListProps): ReactElement {
         return {
           key: item.key,
           role: 'ai',
-          content: <div className="message-text">{item.content}</div>,
+          content: <MessageText text={item.content} />,
         }
       case 'steps':
         return {
@@ -147,7 +156,7 @@ export function MessageList(props: MessageListProps): ReactElement {
   for (const hint of props.localHints)
     items.push({ key: hint.key, role: 'system', content: hint.text })
   if (live) items.push(...liveItems(live, detail, cardBubble))
-  return <Bubble.List className="message-list" items={items} role={ROLES} />
+  return <Bubble.List ref={listRef} className="message-list" items={items} role={ROLES} />
 }
 
 function liveItems(
@@ -185,7 +194,7 @@ function liveItems(
       key: 'live:text',
       role: 'ai',
       streaming: true,
-      content: <div className="message-text">{live.text}</div>,
+      content: <MessageText text={live.text} />,
     })
   } else if (!live.card && !live.steps.some((step) => step.status === 'loading')) {
     items.push({ key: 'live:loading', role: 'ai', loading: true, content: '' })

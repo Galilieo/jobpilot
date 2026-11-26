@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { StrictMode } from 'react'
 import { Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ConversationDetail } from '../api/types'
@@ -132,5 +133,29 @@ describe('对话页发消息', () => {
     expect(calls.find((c) => c.route === 'PUT /api/conversations/c1')?.body).toEqual({
       current_job_id: null,
     })
+  })
+
+  it('从新对话页带来的消息在开发模式重挂载后仍能读完流，不会卡在进行中', async () => {
+    const pendingMessage = { clientMessageId: crypto.randomUUID(), content: 'JD', attachments: [] }
+    const calls = stubFetch({
+      'GET /api/conversations/c1': () => jsonResponse(200, DETAIL),
+      'GET /api/jobs': () => jsonResponse(200, []),
+      'POST /api/conversations/c1/messages': () =>
+        sseResponse([['done', { run_id: 'r1', status: 'succeeded', stop_reason: null }]]),
+    })
+    renderWithProviders(
+      <StrictMode>
+        <Routes>
+          <Route path="/conversations/:conversationId" element={<ConversationPage />} />
+        </Routes>
+      </StrictMode>,
+      { initialEntries: [{ pathname: '/conversations/c1', state: { pendingMessage } }] },
+    )
+
+    await waitFor(() => expect(screen.getByPlaceholderText(/发 JD/)).toBeInTheDocument())
+    const sent = calls.filter((c) => c.route === 'POST /api/conversations/c1/messages')
+    expect(
+      new Set(sent.map((c) => (c.body as { client_message_id: string }).client_message_id)),
+    ).toEqual(new Set([pendingMessage.clientMessageId]))
   })
 })

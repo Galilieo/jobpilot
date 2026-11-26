@@ -1,11 +1,14 @@
 // 对话页：新对话显示欢迎页，发出第一条消息时才建对话；已有对话左边是消息和输入框，
 // 右边是当前岗位的产物面板。运行控制在 conversation/useConversationRun。
 import { Prompts, Welcome } from '@ant-design/x'
+import { useQueryClient } from '@tanstack/react-query'
 import { App, Button, Drawer, Grid, Skeleton, Typography, theme } from 'antd'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { conversations } from '../api/endpoints'
+import type { ConversationDetail } from '../api/types'
 import { EmptyHint } from '../components/EmptyHint'
+import { CONVERSATIONS_QUERY } from '../queryKeys'
 import { ArtifactPanel } from './conversation/ArtifactPanel'
 import { Composer, type Draft } from './conversation/Composer'
 import { JobTag } from './conversation/JobTag'
@@ -74,6 +77,7 @@ function Heading({ title, children }: { title: string; children?: ReactNode }): 
 function NewConversation(): ReactElement {
   const { message } = App.useApp()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [creating, setCreating] = useState(false)
 
@@ -82,6 +86,7 @@ function NewConversation(): ReactElement {
     setCreating(true)
     try {
       const created = await conversations.create(titleFrom(input))
+      void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY })
       // 交给对话页去发：发消息用的 ID 跟着走，刷新后重发也只会接上同一轮。
       void navigate(`/conversations/${created.conversation_id}`, {
         state: { pendingMessage: input } satisfies PendingState,
@@ -129,6 +134,11 @@ function blockedReasonOf(run: ReturnType<typeof useConversationRun>): string | n
   if (data?.pending_action) return '先处理上面的卡片，再发新消息'
   if (data?.confirmation_status) return '正在执行你的决定…'
   return null
+}
+
+function writeKeyOf(detail: ConversationDetail): string {
+  const action = detail.latest_decided_action
+  return action ? `${action.action_id}:${action.status}` : 'none'
 }
 
 function usePanel(isNarrow: boolean) {
@@ -180,10 +190,10 @@ function ConversationView({ conversationId }: { conversationId: string }): React
   useEffect(() => {
     const input = pending.current
     if (!input) return
-    pending.current = null
     void navigate('.', { replace: true, state: null })
     void submit(input)
-    // 只在进入页面时发一次从新对话页带来的消息。
+    // 只在进入页面时发从新对话页带来的消息。不清掉 pending：开发模式下组件会卸载再挂载一次，
+    // 第一次的流随卸载中止，第二次用同一个 client_message_id 重发，后端接上同一轮。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -213,6 +223,7 @@ function ConversationView({ conversationId }: { conversationId: string }): React
   const panelContent = jobId && (
     <ArtifactPanel
       jobId={jobId}
+      writeKey={writeKeyOf(detail.data)}
       activeTab={panel.tab}
       onTabChange={panel.setTab}
       expanded={!isNarrow && panel.expanded}
