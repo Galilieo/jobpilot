@@ -237,7 +237,7 @@ E3 用 E1 的事实、求职条件、教育标注以及合成 JD 的要求标注
 - **依据**：`evidence` 使用 E1 `facts` 的零基下标，以及 `criteria.onsite_days_per_week`、`criteria.internship_months` 或 `education.<零基下标>`。支持同一结论的多个有效出处可以同时列出。覆盖或部分覆盖至少一项，未覆盖留空。只用 E1 已拆出的事实、条件和教育，原简历用于核对出处。
 - **表达缺口**：生产匹配在「覆盖」的依据全部来自用户补充时才会派生表达缺口。本集的事实来源全部设为简历，沿用匹配服务的单元测试保护该行为。
 
-[开发集标注](datasets/e3/labels-dev.jsonl)按要求一行，键为 `(pair_id, requirement_id)`，`pair_id` 为 `<resume_id>__<jd_id>`。开发集抽查见 [E3 三组抽查](reports/e3-dev-review.md)。抽查通过后按同一口径封存测试集，然后再运行模型。
+[开发集标注](datasets/e3/labels-dev.jsonl)按要求一行，键为 `(pair_id, requirement_id)`，`pair_id` 为 `<resume_id>__<jd_id>`。开发集抽查见 [E3 三组抽查](reports/e3-dev-review.md)。2026-11-26 用户同意三组抽查口径，并授权开发集和测试集调用真实模型。按此口径封存 [测试集标注](datasets/e3/labels-test.jsonl)（25 组、200 条，提交 `52b1048`）。封存早于首次模型评测。
 
 ### 运行前预测（2026-11-26）
 
