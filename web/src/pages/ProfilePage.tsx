@@ -1,14 +1,14 @@
 // 「我的」：顶部三张概览卡，下方经历（0 条事实时内联导入，否则按钮弹窗导入）、简历列表与记忆三个标签页。
 import { useQuery } from '@tanstack/react-query'
-import { Card, Space, Tabs } from 'antd'
+import { Space, Tabs } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { useSearchParams } from 'react-router'
-import { facts, tailoring } from '../api/endpoints'
-import { EmptyHint } from '../components/EmptyHint'
+import { facts, memories, tailoring } from '../api/endpoints'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
-import { LIBRARY_QUERY, TAILORED_RESUMES_QUERY } from '../queryKeys'
+import { LIBRARY_QUERY, MEMORIES_QUERY, TAILORED_RESUMES_QUERY } from '../queryKeys'
 import { FactLibrary } from './profile/FactLibrary'
+import { MemoryList } from './profile/MemoryList'
 import { ImportResumeModal, ResumeImport } from './profile/ResumeImport'
 import { TailoredResumeList } from './profile/TailoredResumeList'
 
@@ -31,6 +31,13 @@ export function ProfilePage(): ReactElement {
     queryKey: TAILORED_RESUMES_QUERY,
     queryFn: ({ signal }) => tailoring.listAll(signal),
   })
+  const memoriesQuery = useQuery({
+    queryKey: MEMORIES_QUERY,
+    queryFn: ({ signal }) => memories.list(signal),
+  })
+
+  const memoryItems = memoriesQuery.data ?? []
+  const filledMemories = memoryItems.filter((item) => item.value !== null && !item.deleted).length
 
   const publishedCount = library.data?.facts.length ?? 0
   const version = library.data?.fact_set?.version
@@ -64,7 +71,11 @@ export function ProfilePage(): ReactElement {
           unit={`条 · ${version ? `v${version}` : '未发布'}${pendingCount > 0 ? ` · ${pendingCount} 条待确认` : ''}`}
         />
         <StatCard label="定制简历" value={resumes.isPending ? '—' : resumeCount} unit="份" />
-        <StatCard label="记忆" unit="之后开放" />
+        <StatCard
+          label="记忆"
+          value={memoriesQuery.isPending ? '—' : filledMemories}
+          unit={memoriesQuery.isPending ? undefined : `/ ${memoryItems.length || 7} 栏`}
+        />
       </div>
 
       <Tabs
@@ -89,11 +100,7 @@ export function ProfilePage(): ReactElement {
           {
             key: 'memories',
             label: '记忆',
-            children: (
-              <Card>
-                <EmptyHint description="偏好记忆将在后续版本开放。记忆只保存求职与写作偏好，不保存经历。" />
-              </Card>
-            ),
+            children: <MemoryList />,
           },
         ]}
       />

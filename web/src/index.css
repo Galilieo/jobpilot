@@ -1148,6 +1148,111 @@ textarea {
 .card-result-icon {
   color: var(--ant-color-success);
 }
+
+/* 长期记忆卡与「我的 → 记忆」 */
+.memory-card-body {
+  display: grid;
+  gap: 8px;
+}
+.memory-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.memory-card-label {
+  font-weight: 600;
+}
+.memory-op-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--jp-radius-sm);
+  font-size: 12px;
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary);
+  border: 1px solid var(--ant-color-primary-border);
+}
+.memory-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.memory-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--jp-radius-sm);
+  font-size: 13px;
+  background: var(--ant-color-bg-layout);
+  border: 1px solid var(--ant-color-border);
+  color: var(--ant-color-text);
+}
+.memory-chip.is-added {
+  background: var(--ant-color-success-bg);
+  border-color: var(--ant-color-success-border);
+  color: var(--ant-color-success);
+  font-weight: 500;
+}
+.memory-text-value {
+  font-size: 13.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.memory-quote {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ant-color-text-secondary);
+}
+.memory-group-rows {
+  display: grid;
+}
+.memory-row {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+.memory-row:first-child {
+  padding-top: 2px;
+}
+.memory-row:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+.memory-row-label {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--ant-color-text-secondary);
+  padding-top: 2px;
+}
+.memory-row-body {
+  min-width: 0;
+}
+.memory-value-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.memory-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.memory-editor {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+}
+.memory-list-editor {
+  display: grid;
+  gap: 4px;
+}
+.memory-limit-hint {
+  font-size: 12px;
+}
 .card-result .ant-btn-link.card-result-undo {
   height: auto;
   padding: 0 2px;
@@ -1752,5 +1857,12 @@ textarea {
     align-items: flex-start;
     gap: 0;
     font-size: 20px;
+  }
+  .memory-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .memory-row-actions {
+    justify-content: flex-start;
   }
 }

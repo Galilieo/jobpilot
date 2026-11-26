@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { App, Button, Input, Space, Typography } from 'antd'
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { tailoring } from '../../api/endpoints'
+import { memories, tailoring } from '../../api/endpoints'
 import type {
   AgentActionCard,
   AgentDecidedAction,
@@ -17,7 +17,7 @@ import type {
 import { FactBadge } from '../../components/FactBadge'
 import { indexResumeFacts, type IndexedFact } from '../../factIndex'
 import { toolLabel } from '../../labels'
-import { tailorResumeQuery } from '../../queryKeys'
+import { MEMORIES_QUERY, tailorResumeQuery } from '../../queryKeys'
 import type { ToolResultStep } from './timeline'
 
 type Decide = (decision: AgentDecision) => Promise<string | null>
@@ -30,6 +30,24 @@ const JOB_CHOICE_LABEL: Record<AgentJobChoice, string> = {
   new: '新开对话',
   switch: '切换到新岗位',
   keep: '保持不变',
+}
+
+const MEMORY_OP_LABEL: Record<string, string> = {
+  set: '设为',
+  add: '增加',
+  replace: '替换',
+  remove: '删除几项',
+  clear: '清空',
+}
+
+const MEMORY_LABEL_FALLBACK: Record<string, string> = {
+  target_direction: '目标方向',
+  cities: '城市',
+  excluded_types: '排除类型',
+  job_notes: '其他求职偏好',
+  tone: '语气',
+  bullet_length: '每条长度',
+  tech_terms: '技术名写法',
 }
 
 /** 点下后立即禁用（React 对点击同步更新），失败才恢复；同一张卡不会因为连点提交两次。 */
@@ -138,6 +156,64 @@ function ResumeEditBody({ args }: { args: Record<string, unknown> }): ReactEleme
   )
 }
 
+function MemoryActionBody({ args }: { args: Record<string, unknown> }): ReactElement {
+  const key = typeof args.key === 'string' ? args.key : ''
+  const label = typeof args.label === 'string' ? args.label : (MEMORY_LABEL_FALLBACK[key] ?? key)
+  const op = typeof args.op === 'string' ? args.op : 'set'
+  const quote = typeof args.quote === 'string' ? args.quote : ''
+  const value = args.value
+  const memoriesQuery = useQuery({
+    queryKey: MEMORIES_QUERY,
+    queryFn: ({ signal }) => memories.list(signal),
+    enabled: op === 'add',
+  })
+
+  const addedItems = useMemo(() => {
+    if (op !== 'add' || !Array.isArray(value)) return new Set<string>()
+    const existing = memoriesQuery.data?.find((item) => item.key === key)?.value
+    if (Array.isArray(existing)) {
+      const prior = new Set(existing)
+      return new Set(value.map(String).filter((item) => !prior.has(item)))
+    }
+    return new Set(value.map(String).filter((item) => quote.includes(item)))
+  }, [key, memoriesQuery.data, op, quote, value])
+
+  return (
+    <div className="action-card-content memory-card-body">
+      <div className="memory-card-head">
+        <span className="memory-card-label">{label}</span>
+        <span className="memory-op-badge">{MEMORY_OP_LABEL[op] ?? op}</span>
+      </div>
+      <div className="memory-card-value">
+        {op === 'clear' || value === null || value === undefined ? (
+          <Typography.Text type="secondary">清空这一栏的内容</Typography.Text>
+        ) : Array.isArray(value) ? (
+          value.length > 0 ? (
+            <div className="memory-chips">
+              {value.map((item) => {
+                const text = String(item)
+                return (
+                  <span
+                    key={text}
+                    className={addedItems.has(text) ? 'memory-chip is-added' : 'memory-chip'}
+                  >
+                    {text}
+                  </span>
+                )
+              })}
+            </div>
+          ) : (
+            <Typography.Text type="secondary">清空这一栏的内容</Typography.Text>
+          )
+        ) : (
+          <span className="memory-text-value">{String(value)}</span>
+        )}
+      </div>
+      {quote && <p className="memory-quote">来源：你刚才说的『{quote}』</p>}
+    </div>
+  )
+}
+
 function GenericBody({ card }: { card: AgentActionCard }): ReactElement {
   return (
     <dl className="generic-args">
@@ -173,6 +249,15 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
       body: <ResumeEditBody args={args} />,
       confirm: '确认修改',
       reject: '不改了',
+    }
+  }
+  if (card.tool === 'remember' || card.tool === 'forget') {
+    const isRemember = card.tool === 'remember'
+    return {
+      kind: isRemember ? '记住偏好' : '忘掉偏好',
+      body: <MemoryActionBody args={args} />,
+      confirm: isRemember ? '确认记住' : '确认忘掉',
+      reject: isRemember ? '不记了' : '留着',
     }
   }
   return {
@@ -328,7 +413,7 @@ export function PendingCard(props: {
 
 // ---------- 决定之后 ----------
 
-const UNDOABLE_TOOLS = new Set(['set_current_job', 'edit_resume_item'])
+const UNDOABLE_TOOLS = new Set(['set_current_job', 'edit_resume_item', 'remember', 'forget'])
 
 function canUndo(action: AgentDecidedAction): boolean {
   if (action.status !== 'executed') return false
@@ -342,6 +427,17 @@ function executedText(tool: string, result: Record<string, unknown>, title: JobT
   if (tool === 'set_current_job')
     return jobId ? `已把当前岗位设为「${title(jobId)}」` : '已解除当前岗位'
   if (tool === 'edit_resume_item') return '已修改这条简历条目'
+  if (tool === 'remember' || tool === 'forget') {
+    const key = typeof result.key === 'string' ? result.key : ''
+    const label = MEMORY_LABEL_FALLBACK[key]
+    return tool === 'remember'
+      ? label
+        ? `已记住「${label}」`
+        : '已记住这条偏好'
+      : label
+        ? `已忘掉「${label}」`
+        : '已忘掉这项偏好'
+  }
   if (tool === 'ask_user') {
     if (result.decision === 'switch') return `已切换到新岗位「${jobId && title(jobId)}」`
     if (result.decision === 'keep') return '保持原来的当前岗位'

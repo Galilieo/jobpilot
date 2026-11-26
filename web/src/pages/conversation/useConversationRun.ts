@@ -9,6 +9,7 @@ import type { AgentDecision, ConversationDetail } from '../../api/types'
 import {
   CONVERSATIONS_QUERY,
   JOBS_QUERY,
+  MEMORIES_QUERY,
   OVERVIEW_QUERY,
   TAILORED_RESUMES_QUERY,
   conversationQuery,
@@ -26,6 +27,7 @@ import {
 const AFFECTED_QUERIES = [
   CONVERSATIONS_QUERY,
   JOBS_QUERY,
+  MEMORIES_QUERY,
   OVERVIEW_QUERY,
   TAILORED_RESUMES_QUERY,
   ['tailor-run'],
