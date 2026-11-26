@@ -82,4 +82,20 @@ describe('对话时间线', () => {
     expect(items[0]).toMatchObject({ type: 'card', outcome: { tool: 'set_current_job' } })
     expect(items.at(-1)).toMatchObject({ type: 'hint', text: '已解除当前岗位' })
   })
+
+  it('同一轮工具步骤中间夹着空助手消息时合并成一组，不同轮次才分开', () => {
+    const m1 = message('m1', 'tool', [{ tool: 'parse_jd', job_id: 'j1' }])
+    const m2 = message('m2', 'assistant', [], '   ')
+    const m3 = message('m3', 'tool', [{ tool: 'match_job', report_id: 'r1' }])
+    const m4 = {
+      ...message('m4', 'tool', [{ tool: 'tailor_resume', run_id: 'tr1' }]),
+      run_id: 'r2',
+    }
+
+    const items = buildTimeline(detailOf([m1, m2, m3, m4]), (id) => titles[id])
+    const stepGroups = items.filter((item) => item.type === 'steps')
+    expect(stepGroups).toHaveLength(2)
+    expect(stepGroups[0].steps.map((s) => s.tool)).toEqual(['parse_jd', 'match_job'])
+    expect(stepGroups[1].steps.map((s) => s.tool)).toEqual(['tailor_resume'])
+  })
 })

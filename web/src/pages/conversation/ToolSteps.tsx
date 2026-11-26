@@ -1,14 +1,16 @@
-// 一串工具调用折叠成一行进度（「✓ 已完成 4 步」），展开看每一步的工具名和简短结果。
+// 一轮里的多个工具调用合并成一行进度（「解析岗位、匹配、生成简历 3 步，用时 21 秒」），点开是时间轴。
 import { ThoughtChain } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { STOP_REASON, toolLabel } from '../../labels'
+import { formatStepDuration, formatStepsSummary, formatTotalDuration, toolAction } from './naming'
 
 export interface StepView {
   key: string
   tool: string
   status: 'loading' | 'success' | 'error'
   result: Record<string, unknown> | null
+  durationMs?: number
 }
 
 /** 一步的简短结果：出错就说原因，其他只给计数或「完成」，不把原始 JSON 摆出来。 */
@@ -23,21 +25,67 @@ function stepSummary(step: StepView): string {
   return '完成'
 }
 
-function headline(steps: StepView[]): { title: string; status: ThoughtChainItemType['status'] } {
-  const running = steps.find((step) => step.status === 'loading')
-  if (running) return { title: `正在${toolLabel(running.tool)}…`, status: 'loading' }
-  const failed = steps.filter((step) => step.status === 'error').length
-  const done = `已完成 ${steps.length} 步`
-  return failed > 0
-    ? { title: `${done}，${failed} 步没成功`, status: 'error' }
-    : { title: done, status: 'success' }
+function totalDurationMs(steps: StepView[]): number | null {
+  let total = 0
+  let hasAny = false
+  for (const step of steps) {
+    if (typeof step.durationMs === 'number') {
+      total += step.durationMs
+      hasAny = true
+    }
+  }
+  return hasAny ? total : null
+}
+
+function headlineStatus(steps: StepView[]): ThoughtChainItemType['status'] {
+  if (steps.some((step) => step.status === 'loading')) return 'loading'
+  if (steps.some((step) => step.status === 'error')) return 'error'
+  return 'success'
 }
 
 export function ToolSteps({ steps }: { steps: StepView[] }): ReactElement {
-  const { title, status } = headline(steps)
+  const [open, setOpen] = useState(false)
+  const status = headlineStatus(steps)
+  const running = steps.find((step) => step.status === 'loading')
+  const failed = steps.filter((step) => step.status === 'error').length
+  const totalMs = totalDurationMs(steps)
+  const actionsText = formatStepsSummary(steps.map((step) => step.tool))
+
+  const title = running ? (
+    <button
+      type="button"
+      className="tool-steps-trigger"
+      aria-expanded={open}
+      onClick={(event) => {
+        event.stopPropagation()
+        setOpen((current) => !current)
+      }}
+    >
+      <span className="tool-steps-actions">正在{toolAction(running.tool)}…</span>
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="tool-steps-trigger"
+      aria-expanded={open}
+      onClick={(event) => {
+        event.stopPropagation()
+        setOpen((current) => !current)
+      }}
+    >
+      <span className="tool-steps-actions">{actionsText}</span>
+      <span className="tool-steps-meta tabular-num">
+        {steps.length} 步{totalMs !== null ? `，用时 ${formatTotalDuration(totalMs)}` : ''}
+        {failed > 0 ? `，${failed} 步没成功` : ''}
+      </span>
+    </button>
+  )
+
   return (
     <ThoughtChain
       className="tool-steps"
+      expandedKeys={open ? ['steps'] : []}
+      onExpand={(keys) => setOpen(keys.includes('steps'))}
       items={[
         {
           key: 'steps',
@@ -46,13 +94,26 @@ export function ToolSteps({ steps }: { steps: StepView[] }): ReactElement {
           collapsible: true,
           blink: status === 'loading',
           content: (
-            <ol className="tool-step-list">
-              {steps.map((step) => (
-                <li key={step.key} className={step.status === 'error' ? 'is-error' : undefined}>
-                  <span className="tool-step-name">{toolLabel(step.tool)}</span>
-                  <span className="tool-step-result">{stepSummary(step)}</span>
-                </li>
-              ))}
+            <ol className="tool-step-timeline">
+              {steps.map((step) => {
+                const summary = stepSummary(step)
+                const showSummary =
+                  step.status === 'error' ||
+                  step.status === 'loading' ||
+                  summary !== '完成' ||
+                  step.durationMs === undefined
+                return (
+                  <li key={step.key} className={step.status === 'error' ? 'is-error' : undefined}>
+                    <span className="tool-step-name">{toolLabel(step.tool)}</span>
+                    {showSummary && <span className="tool-step-result">{summary}</span>}
+                    {step.durationMs !== undefined && (
+                      <time className="tool-step-time tabular-num">
+                        {formatStepDuration(step.durationMs)}
+                      </time>
+                    )}
+                  </li>
+                )
+              })}
             </ol>
           ),
         },

@@ -21,6 +21,8 @@ export interface LiveStep {
   tool: string
   status: 'loading' | 'success' | 'error'
   result: Record<string, unknown> | null
+  startedAt?: number
+  durationMs?: number
 }
 
 export interface LiveInput {
@@ -53,17 +55,36 @@ export function applyEvent(turn: LiveTurn, item: AgentStreamEvent): LiveTurn {
         text: '',
         steps: [
           ...turn.steps,
-          { id: item.data.tool_call_id, tool: item.data.tool, status: 'loading', result: null },
+          {
+            id: item.data.tool_call_id,
+            tool: item.data.tool,
+            status: 'loading',
+            result: null,
+            startedAt: Date.now(),
+          },
         ],
       }
     case 'tool_end': {
       const { tool, tool_call_id: id = `${tool}-${turn.steps.length}`, ...result } = item.data
-      const step: LiveStep = { id, tool, status: result.error ? 'error' : 'success', result }
-      const known = turn.steps.some((existing) => existing.id === id)
+      const existing = turn.steps.find((step) => step.id === id)
+      const durationMs =
+        typeof result.duration_ms === 'number'
+          ? result.duration_ms
+          : existing?.startedAt
+            ? Math.max(0, Date.now() - existing.startedAt)
+            : undefined
+      const step: LiveStep = {
+        id,
+        tool,
+        status: result.error ? 'error' : 'success',
+        result,
+        startedAt: existing?.startedAt,
+        durationMs,
+      }
       return {
         ...turn,
-        steps: known
-          ? turn.steps.map((existing) => (existing.id === id ? step : existing))
+        steps: existing
+          ? turn.steps.map((itemStep) => (itemStep.id === id ? step : itemStep))
           : [...turn.steps, step], // 重放的流只有 tool_end
       }
     }

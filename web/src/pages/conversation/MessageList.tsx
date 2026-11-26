@@ -137,6 +137,7 @@ export function MessageList(props: MessageListProps): ReactElement {
                 tool: step.tool,
                 status: step.error ? 'error' : 'success',
                 result: step,
+                durationMs: typeof step.duration_ms === 'number' ? step.duration_ms : undefined,
               }))}
             />
           ),

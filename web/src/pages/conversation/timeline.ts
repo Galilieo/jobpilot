@@ -65,7 +65,7 @@ export function buildTimeline(detail: ConversationDetail, title: JobTitle): Time
   const items: TimelineItem[] = []
   const messages = detail.messages
   let bound: string | null = null
-  let group: { type: 'steps'; key: string; steps: ToolResultStep[] } | null = null
+  let group: { type: 'steps'; key: string; runId: string; steps: ToolResultStep[] } | null = null
   // 岗位提示放在这一串工具步骤之后，不把步骤切成几段。
   let hints: TimelineItem[] = []
 
@@ -87,8 +87,8 @@ export function buildTimeline(detail: ConversationDetail, title: JobTitle): Time
       return
     }
     if (message.role === 'assistant') {
-      closeGroup()
-      if (message.content) {
+      if (message.content.trim()) {
+        closeGroup()
         items.push({ type: 'assistant', key: message.message_id, content: message.content })
       }
       return
@@ -101,8 +101,9 @@ export function buildTimeline(detail: ConversationDetail, title: JobTitle): Time
         items.push({ type: 'card', key, card: step.confirm, outcome })
         continue
       }
-      if (!group) {
-        group = { type: 'steps', key, steps: [] }
+      if (!group || group.runId !== message.run_id) {
+        if (group) closeGroup()
+        group = { type: 'steps', key, runId: message.run_id, steps: [] }
         items.push(group)
       }
       group.steps.push(step)

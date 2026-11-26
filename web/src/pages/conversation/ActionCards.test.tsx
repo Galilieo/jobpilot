@@ -46,8 +46,14 @@ describe('确认卡', () => {
         },
       },
     }
-    renderWithProviders(<PendingCard card={card} title={title} decide={vi.fn()} />)
+    const { container } = renderWithProviders(
+      <PendingCard card={card} title={title} decide={vi.fn()} />,
+    )
 
+    expect(container.querySelector('.action-card.is-pending')).toBeInTheDocument()
+    expect(screen.getByText('等你确认')).toBeInTheDocument()
+    expect(screen.getByText('现在')).toBeInTheDocument()
+    expect(screen.getByText('改成')).toBeInTheDocument()
     expect(screen.getByText('负责接口开发')).toBeInTheDocument()
     expect(screen.getByText('负责接口开发与联调')).toBeInTheDocument()
     expect(screen.getByText('「主导」超出你确认的职责程度')).toBeInTheDocument()

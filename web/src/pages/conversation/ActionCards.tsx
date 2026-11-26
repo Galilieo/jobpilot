@@ -1,7 +1,7 @@
 // 确认卡、提问卡和卡片决定后的一行结果。卡片处于哪种状态由调用方按详情判断后传进来。
 // 写入确认按工具分别渲染，认不出的工具用通用的键值对兜底，以后新加的工具也能确认。
-import { CheckCircleFilled, ExclamationCircleFilled, LoadingOutlined } from '@ant-design/icons'
-import { App, Button, Input, Space, Tag, Typography } from 'antd'
+import { CheckOutlined, ExclamationCircleFilled, LoadingOutlined } from '@ant-design/icons'
+import { App, Button, Input, Space, Typography } from 'antd'
 import { useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type {
@@ -42,13 +42,23 @@ function useOnceSubmit(decide: Decide) {
   return { submitting, submit }
 }
 
-function CardFrame({ kind, children }: { kind: string; children: ReactNode }): ReactElement {
+function CardFrame({
+  kind,
+  subtitle,
+  children,
+}: {
+  kind: string
+  subtitle?: string
+  children: ReactNode
+}): ReactElement {
   return (
-    <section className="action-card" aria-label={kind}>
-      <Typography.Text type="secondary" className="action-card-kind">
-        {kind}
-      </Typography.Text>
-      {children}
+    <section className="action-card is-pending" aria-label={kind}>
+      <div className="action-card-head">
+        <strong>{kind}</strong>
+        {subtitle && <span className="action-card-sub">{subtitle}</span>}
+        <span className="action-card-state">等你确认</span>
+      </div>
+      <div className="action-card-body">{children}</div>
     </section>
   )
 }
@@ -56,9 +66,10 @@ function CardFrame({ kind, children }: { kind: string; children: ReactNode }): R
 function GroundingVerdict({ check }: { check: BulletCheck }): ReactElement {
   if (check.issues.length === 0) {
     return (
-      <Typography.Text type="success" className="grounding-verdict">
-        <CheckCircleFilled /> 依据检查通过，能追溯到你确认过的事实
-      </Typography.Text>
+      <div className="grounding-verdict is-ok">
+        <CheckOutlined className="grounding-verdict-icon" />
+        <span>依据检查通过：每处说法都有你确认过的事实</span>
+      </div>
     )
   }
   return (
@@ -81,11 +92,11 @@ function ResumeEditBody({ args }: { args: Record<string, unknown> }): ReactEleme
     <>
       <div className="before-after">
         <div>
-          <Typography.Text type="secondary">改前</Typography.Text>
-          <p>{String(args.previous_text ?? '')}</p>
+          <small>现在</small>
+          <del>{String(args.previous_text ?? '')}</del>
         </div>
         <div className="is-after">
-          <Typography.Text type="secondary">改后</Typography.Text>
+          <small>改成</small>
           <p>{check?.text ?? String(args.text ?? '')}</p>
         </div>
       </div>
@@ -114,17 +125,32 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
     const name = typeof args.title === 'string' ? args.title : jobId && title(jobId)
     return {
       kind: '切换当前岗位',
-      body: <p>{jobId ? `把当前岗位设为「${name}」` : '解除这段对话的当前岗位'}</p>,
+      body: (
+        <div className="action-card-content">
+          <p>{jobId ? `把当前岗位设为「${name}」` : '解除这段对话的当前岗位'}</p>
+        </div>
+      ),
       confirm: jobId ? '确认切换' : '确认解除',
+      reject: '拒绝',
     }
   }
   if (card.tool === 'edit_resume_item') {
-    return { kind: '修改简历条目', body: <ResumeEditBody args={args} />, confirm: '确认修改' }
+    return {
+      kind: '修改简历条目',
+      body: <ResumeEditBody args={args} />,
+      confirm: '确认修改',
+      reject: '不改了',
+    }
   }
   return {
     kind: `执行「${toolLabel(card.tool)}」`,
-    body: <GenericBody card={card} />,
+    body: (
+      <div className="action-card-content">
+        <GenericBody card={card} />
+      </div>
+    ),
     confirm: '确认执行',
+    reject: '拒绝',
   }
 }
 
@@ -138,7 +164,15 @@ function ConfirmationCard(props: {
   return (
     <CardFrame kind={view.kind}>
       {view.body}
-      <Space className="action-card-buttons">
+      <div className="action-card-actions">
+        <Button
+          type="text"
+          disabled={submitting !== null}
+          loading={submitting === 'reject'}
+          onClick={() => void submit('reject', { decision: 'reject' })}
+        >
+          {view.reject}
+        </Button>
         <Button
           type="primary"
           disabled={submitting !== null}
@@ -147,14 +181,7 @@ function ConfirmationCard(props: {
         >
           {view.confirm}
         </Button>
-        <Button
-          disabled={submitting !== null}
-          loading={submitting === 'reject'}
-          onClick={() => void submit('reject', { decision: 'reject' })}
-        >
-          拒绝
-        </Button>
-      </Space>
+      </div>
     </CardFrame>
   )
 }
@@ -173,33 +200,35 @@ function QuestionsCard(props: {
 
   return (
     <CardFrame kind="需要你补充">
-      {props.questions.map((question) => {
-        const value = answers[question.question_id] ?? ''
-        const skipped = value === SKIPPED_ANSWER
-        return (
-          <div key={question.question_id} className="question-row">
-            <Typography.Text>{question.text}</Typography.Text>
-            <Input.TextArea
-              aria-label={question.text}
-              value={skipped ? '' : value}
-              placeholder={skipped ? '已跳过这一问' : '写下你的回答'}
-              disabled={skipped || submitting !== null}
-              autoSize={{ minRows: 1, maxRows: 4 }}
-              maxLength={2000}
-              onChange={(event) => answer(question.question_id, event.target.value)}
-            />
-            <Button
-              type="link"
-              size="small"
-              disabled={submitting !== null}
-              onClick={() => answer(question.question_id, skipped ? '' : SKIPPED_ANSWER)}
-            >
-              {skipped ? '改为回答' : '先跳过'}
-            </Button>
-          </div>
-        )
-      })}
-      <Space className="action-card-buttons">
+      <div className="action-card-content action-card-questions">
+        {props.questions.map((question) => {
+          const value = answers[question.question_id] ?? ''
+          const skipped = value === SKIPPED_ANSWER
+          return (
+            <div key={question.question_id} className="question-row">
+              <Typography.Text>{question.text}</Typography.Text>
+              <Input.TextArea
+                aria-label={question.text}
+                value={skipped ? '' : value}
+                placeholder={skipped ? '已跳过这一问' : '写下你的回答'}
+                disabled={skipped || submitting !== null}
+                autoSize={{ minRows: 1, maxRows: 4 }}
+                maxLength={2000}
+                onChange={(event) => answer(question.question_id, event.target.value)}
+              />
+              <Button
+                type="link"
+                size="small"
+                disabled={submitting !== null}
+                onClick={() => answer(question.question_id, skipped ? '' : SKIPPED_ANSWER)}
+              >
+                {skipped ? '改为回答' : '先跳过'}
+              </Button>
+            </div>
+          )
+        })}
+      </div>
+      <div className="action-card-actions">
         <Button
           type="primary"
           disabled={!complete || submitting !== null}
@@ -213,7 +242,7 @@ function QuestionsCard(props: {
         >
           提交回答
         </Button>
-      </Space>
+      </div>
     </CardFrame>
   )
 }
@@ -226,8 +255,12 @@ function JobChoiceCard(props: {
   const { submitting, submit } = useOnceSubmit(props.decide)
   return (
     <CardFrame kind="又收到一个岗位">
-      <p>新岗位「{props.title(props.args.job_id)}」已存入岗位库。要怎么处理这段对话的当前岗位？</p>
-      <Space className="action-card-buttons" wrap>
+      <div className="action-card-content">
+        <p>
+          新岗位「{props.title(props.args.job_id)}」已存入岗位库。要怎么处理这段对话的当前岗位？
+        </p>
+      </div>
+      <Space className="action-card-actions" wrap>
         {props.args.choices.map((choice, index) => (
           <Button
             key={choice}
@@ -335,12 +368,22 @@ export function CardResult(props: {
   const undoable = outcome.state === 'decided' && canUndo(outcome.action) && props.onUndo
   return (
     <div className="card-result">
-      {busy ? <LoadingOutlined /> : <Tag variant="filled">{toolLabel(props.tool)}</Tag>}
+      {busy ? (
+        <LoadingOutlined />
+      ) : (
+        <CheckOutlined className="card-result-icon" aria-label={toolLabel(props.tool)} />
+      )}
       <Typography.Text type="secondary">
         {outcomeText(props.tool, outcome, props.title)}
       </Typography.Text>
       {undoable && (
-        <Button type="link" size="small" loading={props.undoing} onClick={props.onUndo}>
+        <Button
+          type="link"
+          size="small"
+          className="card-result-undo"
+          loading={props.undoing}
+          onClick={props.onUndo}
+        >
           撤销
         </Button>
       )}
