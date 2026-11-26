@@ -573,6 +573,12 @@ export type MemoryGroup = 'job' | 'writing'
 export type MemoryValueType = 'text' | 'list' | 'enum'
 export type MemoryValue = string | string[]
 
+export interface CompactResult {
+  run_id: string | null
+  status: string
+  focus_applied: boolean
+}
+
 export interface MemoryItem {
   key: MemoryKey
   value: MemoryValue | null

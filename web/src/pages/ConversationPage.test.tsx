@@ -189,3 +189,76 @@ describe('新对话页', () => {
     expect(calls.some((c) => c.route === 'POST /api/conversations')).toBe(false)
   })
 })
+
+describe('压缩上下文按钮与弹窗', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function openCompactModal(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: '更多' }))
+    await user.click(await screen.findByRole('menuitem', { name: /压缩上下文/ }))
+  }
+
+  it('空重点时省略 focus 提交，202 focus_applied=true 只提示正在压缩较早的对话', async () => {
+    const user = userEvent.setup()
+    const calls = stubFetch({
+      'GET /api/conversations/c1': () => jsonResponse(200, DETAIL),
+      'GET /api/jobs': () => jsonResponse(200, []),
+      'POST /api/conversations/c1/compact': () =>
+        jsonResponse(202, { run_id: 'cr1', status: 'running', focus_applied: true }),
+    })
+    renderPage()
+
+    await openCompactModal(user)
+    const focusInput = await screen.findByPlaceholderText(/优先保留/)
+    await user.type(focusInput, '   ')
+    await user.click(screen.getByRole('button', { name: /开始压缩/ }))
+
+    await waitFor(() => {
+      const compactCall = calls.find((c) => c.route === 'POST /api/conversations/c1/compact')
+      expect(compactCall?.body).toEqual({})
+    })
+    expect(await screen.findByText('正在压缩较早的对话')).toBeInTheDocument()
+    expect(screen.queryByText(/这次的重点没有用上/)).not.toBeInTheDocument()
+  })
+
+  it('202 focus_applied=false、200 not_needed 与 409 分别给出对应提示', async () => {
+    const user = userEvent.setup()
+    let mode: 'busy_compact' | 'not_needed' | 'conflict' = 'busy_compact'
+    const calls = stubFetch({
+      'GET /api/conversations/c1': () => jsonResponse(200, DETAIL),
+      'GET /api/jobs': () => jsonResponse(200, []),
+      'POST /api/conversations/c1/compact': () => {
+        if (mode === 'busy_compact') {
+          return jsonResponse(202, { run_id: 'cr1', status: 'running', focus_applied: false })
+        }
+        if (mode === 'not_needed') {
+          return jsonResponse(200, { run_id: null, status: 'not_needed', focus_applied: false })
+        }
+        return jsonResponse(409, { detail: '正在运行中' })
+      },
+    })
+    renderPage()
+
+    await openCompactModal(user)
+    await user.type(await screen.findByPlaceholderText(/优先保留/), ' 保留技术细节 ')
+    await user.click(screen.getByRole('button', { name: /开始压缩/ }))
+
+    await waitFor(() => {
+      const compactCall = calls.find((c) => c.route === 'POST /api/conversations/c1/compact')
+      expect(compactCall?.body).toEqual({ focus: '保留技术细节' })
+    })
+    expect(await screen.findByText(/已经有一次压缩在进行，这次的重点没有用上/)).toBeInTheDocument()
+
+    mode = 'not_needed'
+    await openCompactModal(user)
+    await user.click(screen.getByRole('button', { name: /开始压缩/ }))
+    expect(await screen.findByText('对话还不长，不需要压缩')).toBeInTheDocument()
+
+    mode = 'conflict'
+    await openCompactModal(user)
+    await user.click(screen.getByRole('button', { name: /开始压缩/ }))
+    expect(await screen.findByText('对话正在进行，等这一轮结束再压缩')).toBeInTheDocument()
+  })
+})

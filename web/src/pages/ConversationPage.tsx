@@ -2,17 +2,19 @@
 // 右边是当前岗位的产物面板。运行控制在 conversation/useConversationRun。
 import {
   CheckOutlined,
+  EllipsisOutlined,
   PlusOutlined,
   SolutionOutlined,
   UnorderedListOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { App, Button, Drawer, Grid, Skeleton, Typography, theme } from 'antd'
+import { App, Button, Drawer, Dropdown, Grid, Skeleton, Typography, theme } from 'antd'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import type { ConversationDetail } from '../api/types'
 import { EmptyHint } from '../components/EmptyHint'
 import { ArtifactPanel } from './conversation/ArtifactPanel'
+import { CompactModal } from './conversation/CompactModal'
 import { Composer, type Draft } from './conversation/Composer'
 import { JobTag } from './conversation/JobTag'
 import { MessageList } from './conversation/MessageList'
@@ -179,6 +181,7 @@ function ConversationView({ conversationId }: { conversationId: string }): React
   const panel = usePanel(isNarrow)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [hints, setHints] = useState<{ key: string; text: string }[]>([])
+  const [compactOpen, setCompactOpen] = useState(false)
   const pending = useRef(
     (location.state as PendingConversationState | null)?.pendingMessage ?? null,
   )
@@ -260,11 +263,24 @@ function ConversationView({ conversationId }: { conversationId: string }): React
             onView={() => panel.show('job')}
             onChanged={jobChanged}
           />
-          {jobId && (isNarrow || !panel.open) && (
-            <Button size="small" className="view-result" onClick={() => panel.show()}>
-              查看结果
-            </Button>
-          )}
+          <div className="conversation-heading-extra">
+            {jobId && (isNarrow || !panel.open) && (
+              <Button size="small" className="view-result" onClick={() => panel.show()}>
+                查看结果
+              </Button>
+            )}
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: [{ key: 'compact', label: '压缩上下文' }],
+                onClick: ({ key }) => {
+                  if (key === 'compact') setCompactOpen(true)
+                },
+              }}
+            >
+              <Button size="small" type="text" icon={<EllipsisOutlined />} aria-label="更多" />
+            </Dropdown>
+          </div>
         </Heading>
         <div className="conversation-body">
           <div className="conversation-thread">
@@ -305,6 +321,11 @@ function ConversationView({ conversationId }: { conversationId: string }): React
           {panelContent}
         </Drawer>
       )}
+      <CompactModal
+        conversationId={conversationId}
+        open={compactOpen}
+        onClose={() => setCompactOpen(false)}
+      />
     </div>
   )
 }

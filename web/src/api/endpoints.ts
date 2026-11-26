@@ -4,6 +4,7 @@ import type {
   AgentDecision,
   AgentMessageInput,
   AgentUndoResult,
+  CompactResult,
   Conversation,
   ConversationDetail,
   CriterionField,
@@ -234,6 +235,10 @@ export const conversations = {
   ) => postForStream(`/api/conversations/${conversationId}/actions/${actionId}`, decision, signal),
   undo: (actionId: string) =>
     request<AgentUndoResult>(`/api/actions/${actionId}/undo`, { method: 'POST' }),
+  compact: (conversationId: string, focus?: string) =>
+    request<CompactResult>(`/api/conversations/${conversationId}/compact`, {
+      json: focus ? { focus } : {},
+    }),
 }
 
 // ---------- 长期记忆 ----------
