@@ -670,6 +670,7 @@ class Conversation(Base):
     )
     title: Mapped[str] = mapped_column(String(200))
     current_job_id: Mapped[UUID | None] = mapped_column(Uuid)
+    job_binding_revision: Mapped[int] = mapped_column(BigInteger, server_default="0")
     summary: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
