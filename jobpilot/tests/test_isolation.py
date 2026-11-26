@@ -213,7 +213,12 @@ OWNED_RESOURCES: list[OwnedResource] = [
             Attempt("PUT", "/api/conversations/{id}", {"title": "A 的修改"}),
             Attempt("DELETE", "/api/conversations/{id}"),
             Attempt(
-                "POST", "/api/conversations/{id}/messages", {"content": "A 的消息"}
+                "POST",
+                "/api/conversations/{id}/messages",
+                {
+                    "content": "A 的消息",
+                    "client_message_id": "cc8f3e6c-6b1b-46f4-83fe-c272878628e1",
+                },
             ),
             Attempt(
                 "POST", "/api/conversations/{id}/actions/{id}", {"decision": "confirm"}

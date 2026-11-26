@@ -40,6 +40,8 @@ logger = logging.getLogger("uvicorn.error").getChild("jobpilot")
 
 async def _start_resources(app: FastAPI, resources: AsyncExitStack) -> None:
     """初始化服务，资源就绪后立即登记退出时的释放动作。"""
+    app.state.run_launcher = RunLauncher()
+    app.state.agent_runtime = AgentRuntime()
     engine = create_database_engine(
         settings.database_url,
         connect_timeout_seconds=settings.database_connect_timeout_seconds,
@@ -55,6 +57,11 @@ async def _start_resources(app: FastAPI, resources: AsyncExitStack) -> None:
     )
     resources.push_async_callback(app.state.model_client.close)
     await purge_with_logging(app.state.db_session_factory)
+    await app.state.agent_runtime.recover_decided_runs(
+        app.state.db_session_factory,
+        app.state.model_client,
+        app.state.run_launcher.launch,
+    )
 
 
 @asynccontextmanager

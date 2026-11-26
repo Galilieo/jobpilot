@@ -7,6 +7,35 @@ export interface User {
   deletion_deadline: string | null
 }
 
+export interface AgentTextAttachment {
+  kind?: 'text' | 'jd' | 'ocr'
+  name?: string | null
+  text: string
+}
+
+export interface AgentMessageInput {
+  client_message_id: string
+  content?: string
+  attachments?: AgentTextAttachment[]
+}
+
+export interface AgentActionCard {
+  action_id: string
+  run_id: string
+  tool: string
+  kind: 'question' | 'confirmation'
+  status: 'pending' | 'confirmed' | 'rejected' | 'executed' | 'failed' | 'undone'
+  args: Record<string, unknown>
+}
+
+export interface AgentMessageConflict {
+  detail: {
+    message: string
+    run_id: string
+    pending_action: AgentActionCard | null
+  }
+}
+
 // ---------- 工作台汇总 ----------
 
 export interface FactsOverview {

@@ -11,7 +11,13 @@ import uvicorn
 from jobpilot.api.deps import get_model_client
 from jobpilot.config import settings
 from jobpilot.main import app
-from jobpilot.tests.test_agent_api import batch, conversation, reply, sign_in
+from jobpilot.tests.test_agent_api import (
+    batch,
+    conversation,
+    message_body,
+    reply,
+    sign_in,
+)
 from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
 from jobpilot.tests.test_jobs_api import JD, OUTPUT
 
@@ -40,7 +46,7 @@ async def _disconnect_at_tool(
 ) -> None:
     reader, writer = await asyncio.open_connection("127.0.0.1", port)
     try:
-        body = dumps({"content": JD}).encode()
+        body = dumps(message_body(JD)).encode()
         request = (
             f"POST {path}/messages HTTP/1.1\r\nHost: localhost\r\n"
             f"Cookie: {settings.cookie_name}={token}\r\n"

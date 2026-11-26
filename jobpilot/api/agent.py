@@ -6,7 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func
-from sqlalchemy.ext.asyncio import AsyncEngine
 from starlette.responses import StreamingResponse
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
@@ -21,12 +20,15 @@ from jobpilot.db.conversations import (
     latest_confirmation,
     owned_agent_run,
     pending_action,
+    run_for_client_message,
+    run_messages,
 )
 from jobpilot.db.models import (
     ActionStatus,
     AgentAction,
     AiRun,
     Conversation,
+    Message,
     MessageRole,
     RunStatus,
 )
@@ -53,6 +55,7 @@ class TextAttachment(BaseModel):
 class MessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    client_message_id: UUID
     content: str = Field(default="", max_length=20000)
     attachments: list[TextAttachment] = Field(default_factory=list, max_length=5)
 
@@ -79,9 +82,22 @@ def _response(stream: EventStream) -> StreamingResponse:
 
 
 def _replay(
-    run: AiRun, *, card: AgentAction | None = None, action: AgentAction | None = None
+    run: AiRun,
+    *,
+    card: AgentAction | None = None,
+    action: AgentAction | None = None,
+    messages: tuple[Message, ...] = (),
 ) -> StreamingResponse:
     stream = EventStream()
+    for message in messages:
+        if message.role == MessageRole.ASSISTANT and message.content:
+            event = "error" if run.status == RunStatus.FAILED else "text"
+            key = "message" if event == "error" else "text"
+            stream.emit(event, {key: message.content})
+        elif message.role == MessageRole.TOOL:
+            for step in message.steps_json:
+                if "tool" in step:
+                    stream.emit("tool_end", step)
     if card:
         stream.emit("confirm", card_payload(card))
     if action and action.result_json and "error" in action.result_json:
@@ -89,6 +105,16 @@ def _replay(
     stream.emit("done", done_event(run, action))
     stream.close()
     return _response(stream)
+
+
+async def _reattach(db: DbSession, runtime: Runtime, run: AiRun) -> StreamingResponse:
+    if running := runtime.streams.get(run.run_id):
+        await db.commit()
+        return _response(running)
+    card = await pending_action(run.user_id, db, run.run_id)
+    messages = await run_messages(run.user_id, db, run.run_id)
+    await db.commit()
+    return _replay(run, card=card, messages=tuple(messages))
 
 
 def _launch(
@@ -100,18 +126,9 @@ def _launch(
     *,
     action_id: UUID | None = None,
 ) -> StreamingResponse:
-    running = runtime.streams.get(run.run_id)
-    if running is not None and running.action_id == action_id:
-        return _response(running)
-    engine = sessions.kw["bind"]
-    if not isinstance(engine, AsyncEngine):
-        raise RuntimeError("对话 Agent 需要异步数据库引擎")
-    stream = runtime.open(run.run_id, action_id)
-    launcher.launch(
-        run.run_id,
-        runtime.run(sessions, engine.url, model, run, stream, action_id=action_id),
+    return _response(
+        runtime.start(sessions, model, run, launcher.launch, action_id=action_id)
     )
-    return _response(stream)
 
 
 async def _lock_conversation(
@@ -138,12 +155,20 @@ async def send_message(
 ) -> StreamingResponse:
     user_id = user.user_id
     conversation = await _lock_conversation(user_id, db, conversation_id)
+    if original := await run_for_client_message(
+        user_id, db, conversation_id, body.client_message_id
+    ):
+        return await _reattach(db, runtime, original)
     if active := await latest_agent_run(user_id, db, conversation_id, active_only=True):
         card = await pending_action(user_id, db, active.run_id)
-        await db.commit()
-        if running := runtime.streams.get(active.run_id):
-            return _response(running)
-        return _replay(active, card=card)
+        raise HTTPException(
+            409,
+            {
+                "message": "这条消息没有保存",
+                "run_id": str(active.run_id),
+                "pending_action": card_payload(card) if card else None,
+            },
+        )
     run = AiRun(
         kind="agent",
         user_id=user_id,
@@ -158,6 +183,7 @@ async def send_message(
         MessageRole.USER,
         "input",
         body.content,
+        client_message_id=body.client_message_id,
         attachments=[
             attachment.model_dump(mode="json") for attachment in body.attachments
         ],

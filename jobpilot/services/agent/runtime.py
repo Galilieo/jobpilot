@@ -2,16 +2,18 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Coroutine
 from dataclasses import replace
+from enum import StrEnum
 from time import monotonic
+from typing import Any
 from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, StateSnapshot
 from openai import AsyncOpenAI
 from sqlalchemy import URL
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from jobpilot.config import settings
 from jobpilot.db.checkpoints import checkpoint_saver
@@ -20,7 +22,9 @@ from jobpilot.db.conversations import (
     conversation_thread,
     find_action,
     find_conversation,
+    latest_confirmation,
     owned_agent_run,
+    waiting_agent_runs,
 )
 from jobpilot.db.models import (
     ActionStatus,
@@ -39,6 +43,31 @@ from jobpilot.services.agent.types import AgentDeps, Payload
 logger = logging.getLogger("uvicorn.error").getChild("agent")
 _TIMEOUT_REPLY = "本轮已达到时长上限。已完成的步骤保留在对话中。"
 _ERROR_REPLY = "本轮对话未完成。可以查看已完成步骤，或重新发消息。"
+LaunchTask = Callable[[UUID, Coroutine[Any, Any, None]], None]
+
+
+class ConfirmationStatus(StrEnum):
+    WAITING_DECISION = "waiting_decision"
+    DECISION_SAVED = "decision_saved"
+    RECOVERING = "recovering"
+
+
+def confirmation_status(
+    run: AiRun,
+    card: AgentAction | None,
+    recovery_action_id: UUID | None = None,
+) -> ConfirmationStatus | None:
+    """从已公开的卡和进程中的恢复任务推导状态。"""
+    if run.status != RunStatus.WAITING_CONFIRMATION or card is None:
+        return None
+    if card.status == ActionStatus.PENDING:
+        return ConfirmationStatus.WAITING_DECISION
+    if card.decision_json is None:
+        return None
+    # 业务写入后，图仍可能尚未提交下一张卡或最终回复。
+    if recovery_action_id == card.action_id:
+        return ConfirmationStatus.RECOVERING
+    return ConfirmationStatus.DECISION_SAVED
 
 
 class EventStream:
@@ -117,6 +146,48 @@ class AgentRuntime:
         stream = EventStream(action_id)
         self.streams[run_id] = stream
         return stream
+
+    def start(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        client: AsyncOpenAI,
+        run: AiRun,
+        launch: LaunchTask,
+        *,
+        action_id: UUID | None = None,
+    ) -> EventStream:
+        """认领当前执行片段，重复请求订阅已存在的执行。"""
+        current = self.streams.get(run.run_id)
+        if current is not None and current.action_id == action_id:
+            return current
+        engine = sessions.kw["bind"]
+        if not isinstance(engine, AsyncEngine):
+            raise RuntimeError("对话 Agent 需要异步数据库引擎")
+        stream = self.open(run.run_id, action_id)
+        launch(
+            run.run_id,
+            self.run(sessions, engine.url, client, run, stream, action_id=action_id),
+        )
+        return stream
+
+    async def recover_decided_runs(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        client: AsyncOpenAI,
+        launch: LaunchTask,
+    ) -> None:
+        """启动时补做已经保存的决定。仍待用户决定的卡保持等待。"""
+        async with sessions() as session:
+            for run in await waiting_agent_runs(session):
+                card = await latest_confirmation(run.user_id, session, run.run_id)
+                current = self.streams.get(run.run_id)
+                if (
+                    confirmation_status(
+                        run, card, current.action_id if current else None
+                    )
+                    == ConfirmationStatus.DECISION_SAVED
+                ):
+                    self.start(sessions, client, run, launch, action_id=card.action_id)
 
     async def run(
         self,

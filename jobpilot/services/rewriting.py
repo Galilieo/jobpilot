@@ -24,7 +24,7 @@ from jobpilot.db.models import BulletSection
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.grounding import GroundingFact, GroundingIssue
 from jobpilot.services.llm_gateway import (
-    ModelBudget,
+    ModelQuota,
     request_completion,
     wrap_untrusted_text,
 )
@@ -193,7 +193,7 @@ async def rewrite_section(
     run_id: UUID,
     *,
     client: AsyncOpenAI,
-    budget: ModelBudget,
+    budget: ModelQuota,
     task: RewriteTask,
 ) -> list[DraftBullet]:
     """一次调用写出一段经历（或技能概述）的条目。调用前需已提交所属 ai_run。"""
@@ -223,7 +223,7 @@ async def revise_bullet(
     run_id: UUID,
     *,
     client: AsyncOpenAI,
-    budget: ModelBudget,
+    budget: ModelQuota,
     bullet: DraftBullet,
     facts: Sequence[GroundingFact],
     issues: Sequence[GroundingIssue],

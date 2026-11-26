@@ -99,8 +99,6 @@ async def build_context(agent: AgentDeps) -> AgentState:
         "action_id": "",
         "switch_job_id": None,
         "budget_exhausted": False,
-        "model_calls": limits.model_calls,
-        "model_tokens": limits.model_tokens,
         "tools_left": limits.tool_calls,
         "seconds_left": agent.seconds_left,
     }

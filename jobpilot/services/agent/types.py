@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from typing_extensions import TypedDict
 
-from jobpilot.services.llm_gateway import ModelBudget
+from jobpilot.services.llm_gateway import AgentModelBudget
 
 Payload = dict[str, Any]
 SendEvent = Callable[[str, Payload], None]
@@ -58,8 +58,6 @@ class AgentState(TypedDict, total=False):
     run_id: str
     messages: list[ChatCompletionMessageParam]
     calls: list[ToolCall]
-    model_calls: int
-    model_tokens: int
     tools_left: int
     seconds_left: float
     next_tool: str
@@ -89,8 +87,11 @@ class AgentDeps:
 @dataclass(frozen=True)
 class ToolContext:
     agent: AgentDeps
-    budget: ModelBudget
     call: ToolCall
+
+    @property
+    def budget(self) -> AgentModelBudget:
+        return AgentModelBudget(self.agent.run_id)
 
 
 class ToolError(ValueError):

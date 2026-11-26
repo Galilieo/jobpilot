@@ -1,6 +1,7 @@
 """创建异步数据库引擎，并为 HTTP 请求提供独立的 ORM session。"""
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import Request
 from sqlalchemy import URL, text
@@ -42,3 +43,15 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 async def check_database(session: AsyncSession) -> None:
     """执行轻量查询，连接或查询失败时让数据库异常交给调用方处理。"""
     await session.execute(text("SELECT 1"))
+
+
+@asynccontextmanager
+async def read_snapshot(
+    sessions: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncSession]:
+    """在一份只读快照内查询多条互相关联的业务记录。"""
+    async with sessions.begin() as session:
+        await session.execute(
+            text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        )
+        yield session

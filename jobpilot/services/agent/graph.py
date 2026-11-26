@@ -45,9 +45,9 @@ from jobpilot.services.agent.types import (
 )
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.llm_gateway import (
+    AgentModelBudget,
     BudgetExhaustedError,
     EmptyModelResponseError,
-    ModelBudget,
     request_completion,
 )
 from jobpilot.services.matching import MatchValidationError
@@ -66,18 +66,6 @@ _TOOL_FAILURES = (
     MatchValidationError,
     TailorInputError,
 )
-
-
-def _budget(state: AgentState) -> ModelBudget:
-    return ModelBudget(state["model_calls"], state["model_tokens"])
-
-
-def _budget_update(agent: AgentDeps, budget: ModelBudget) -> AgentState:
-    return {
-        "model_calls": budget.remaining_calls,
-        "model_tokens": budget.remaining_tokens,
-        "seconds_left": agent.seconds_left,
-    }
 
 
 def _exhausted() -> AgentState:
@@ -121,7 +109,6 @@ def _validate_completion(completion: ChatCompletion) -> None:
 
 
 async def _call_model(agent: AgentDeps, state: AgentState) -> AgentState:
-    budget = _budget(state)
     prompt = load_prompt("agent")
     try:
         completion = await request_completion(
@@ -133,16 +120,16 @@ async def _call_model(agent: AgentDeps, state: AgentState) -> AgentState:
             prompt_version=prompt.label,
             messages=state["messages"],
             json_output=False,
-            budget=budget,
+            budget=AgentModelBudget(agent.run_id),
             validate=_validate_completion,
             tools=TOOL_DEFINITIONS,
             on_text=lambda text: agent.emit("text", {"text": text}),
         )
     except BudgetExhaustedError:
-        return {**_budget_update(agent, budget), **_exhausted()}
+        return {"seconds_left": agent.seconds_left, **_exhausted()}
     output, calls = _model_message(completion, len(state["messages"]))
     return {
-        **_budget_update(agent, budget),
+        "seconds_left": agent.seconds_left,
         "messages": [*state["messages"], output],
         "calls": calls,
         "reply": output["content"] or "",
@@ -176,13 +163,13 @@ async def _owned_run(
 
 
 async def _record(agent: AgentDeps, call: ToolCall, result: Payload) -> None:
-    summary = summarize_tool(call["name"], result)
+    summary = {**summarize_tool(call["name"], result), "tool_call_id": call["call_id"]}
     async with agent.sessions.begin() as session:
         run = await _owned_run(agent, session, lock=True)
         await add_message(
             session, run, MessageRole.TOOL, "tool:" + call["key"], "", steps=[summary]
         )
-    agent.emit("tool_end", {**summary, "tool_call_id": call["call_id"]})
+    agent.emit("tool_end", summary)
 
 
 def _tool_message(call: ToolCall, result: Payload) -> Payload:
@@ -197,12 +184,12 @@ def _tool_start(agent: AgentDeps, call: ToolCall) -> None:
     agent.emit("tool_start", {"tool": call["name"], "tool_call_id": call["call_id"]})
 
 
-async def _result_for(agent: AgentDeps, budget: ModelBudget, call: ToolCall) -> Payload:
+async def _result_for(agent: AgentDeps, call: ToolCall) -> Payload:
     tool = TOOLS.get(call["name"])
     if tool is None:
         return {"status": 422, "error": "未知工具"}
     try:
-        return await tool.invoke(ToolContext(agent, budget, call))
+        return await tool.invoke(ToolContext(agent, call))
     except ToolError as error:
         return {"status": error.status, "error": str(error)}
     except ResumeNotFoundError:
@@ -268,19 +255,18 @@ def _switch_question(call: ToolCall) -> tuple[Payload, ToolCall]:
 async def _execute_tool(agent: AgentDeps, state: AgentState) -> AgentState:
     call, *remaining = state["calls"]
     _tool_start(agent, call)
-    budget = _budget(state)
     try:
         if call["name"] == "parse_jd" and not await _validate_jd_source(agent, call):
             result = {"status": 422, "error": "请使用本轮用户提供的 JD 原文"}
         else:
-            result = await _result_for(agent, budget, call)
+            result = await _result_for(agent, call)
     except BudgetExhaustedError:
         await _record(agent, call, {"status": "budget_exhausted"})
-        return {**_budget_update(agent, budget), **_exhausted()}
+        return {"seconds_left": agent.seconds_left, **_exhausted()}
     await _record(agent, call, result)
     messages = [*state["messages"], _tool_message(call, result)]
     updates: AgentState = {
-        **_budget_update(agent, budget),
+        "seconds_left": agent.seconds_left,
         "messages": messages,
         "calls": remaining,
         "tools_left": state["tools_left"] - 1,
@@ -318,12 +304,10 @@ def _next_call(state: AgentState) -> AgentState:
     return _select_tool(state)
 
 
-async def _ask_arguments(
-    agent: AgentDeps, state: AgentState, budget: ModelBudget
-) -> Payload:
+async def _ask_arguments(agent: AgentDeps, state: AgentState) -> Payload:
     questions = []
     for call in state["calls"][: state["tools_left"]]:
-        result = await _result_for(agent, budget, call)
+        result = await _result_for(agent, call)
         questions.extend(result.get("questions", []))
     args: Payload = {"questions": list(dict.fromkeys(questions))[:10]}
     if state.get("switch_job_id"):
@@ -337,25 +321,24 @@ async def _ask_arguments(
 async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
     call = state["calls"][0]
     _tool_start(agent, call)
-    budget = _budget(state)
     ask = call["name"] == "ask_user"
     try:
         if ask:
             args = (
                 {"error": "本轮已经询问过用户"}
                 if state["asked"]
-                else await _ask_arguments(agent, state, budget)
+                else await _ask_arguments(agent, state)
             )
         else:
-            args = await _result_for(agent, budget, call)
+            args = await _result_for(agent, call)
     except BudgetExhaustedError:
         await _record(agent, call, {"status": "budget_exhausted"})
-        return {**_budget_update(agent, budget), **_exhausted()}
+        return {"seconds_left": agent.seconds_left, **_exhausted()}
     if "error" in args or (ask and not args["questions"]):
         result = args if "error" in args else {"error": "提问参数无效", "status": 422}
         await _record(agent, call, result)
         return {
-            **_budget_update(agent, budget),
+            "seconds_left": agent.seconds_left,
             "next_tool": "select_tool",
             "calls": state["calls"][1:],
             "tools_left": state["tools_left"] - 1,
@@ -365,7 +348,7 @@ async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
         run = await _owned_run(agent, session, lock=True)
         action = await propose_action(session, run, call["name"], call["key"], args)
     return {
-        **_budget_update(agent, budget),
+        "seconds_left": agent.seconds_left,
         "next_tool": "await_confirmation",
         "action_id": str(action.action_id),
     }

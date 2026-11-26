@@ -59,6 +59,34 @@ async def conversation_messages(
     return list(await session.scalars(query))
 
 
+async def run_messages(
+    user_id: UUID, session: AsyncSession, run_id: UUID
+) -> list[Message]:
+    return list(
+        await session.scalars(
+            select(Message)
+            .where(Message.user_id == user_id, Message.run_id == run_id)
+            .order_by(Message.seq)
+        )
+    )
+
+
+async def run_for_client_message(
+    user_id: UUID, session: AsyncSession, conversation_id: UUID, client_message_id: UUID
+) -> AiRun | None:
+    return await session.scalar(
+        select(AiRun)
+        .join(Message, Message.run_id == AiRun.run_id)
+        .where(
+            Message.user_id == user_id,
+            Message.conversation_id == conversation_id,
+            Message.client_message_id == client_message_id,
+            Message.role == MessageRole.USER,
+        )
+        .with_for_update(of=AiRun)
+    )
+
+
 async def latest_agent_run(
     user_id: UUID,
     session: AsyncSession,
@@ -145,6 +173,33 @@ async def pending_action(
     return action if action and action.status == ActionStatus.PENDING else None
 
 
+async def latest_decided_action(
+    user_id: UUID, session: AsyncSession, conversation_id: UUID
+) -> AgentAction | None:
+    """已决定卡可跨轮回读，包含后来撤销的动作。"""
+    return await session.scalar(
+        select(AgentAction)
+        .where(
+            AgentAction.user_id == user_id,
+            AgentAction.conversation_id == conversation_id,
+            AgentAction.decided_at.is_not(None),
+        )
+        .order_by(AgentAction.decided_at.desc(), AgentAction.action_id.desc())
+        .limit(1)
+    )
+
+
+async def waiting_agent_runs(session: AsyncSession) -> list[AiRun]:
+    """启动时查找仍停在持久化确认点的运行。"""
+    return list(
+        await session.scalars(
+            select(AiRun).where(
+                AiRun.kind == "agent", AiRun.status == RunStatus.WAITING_CONFIRMATION
+            )
+        )
+    )
+
+
 async def add_message(
     session: AsyncSession,
     run: AiRun,
@@ -152,6 +207,7 @@ async def add_message(
     key: str,
     content: str,
     *,
+    client_message_id: UUID | None = None,
     attachments: list[dict[str, Any]] | None = None,
     steps: list[dict[str, Any]] | None = None,
 ) -> None:
@@ -163,6 +219,7 @@ async def add_message(
             run_id=run.run_id,
             role=role,
             event_key=key,
+            client_message_id=client_message_id,
             content=content,
             attachments_json=attachments or [],
             steps_json=steps or [],

@@ -237,13 +237,20 @@ class ModelCall(Base):
         CheckConstraint(
             "completion_tokens >= 0", name="ck_model_call_completion_tokens"
         ),
+        CheckConstraint("reserved_tokens > 0", name="ck_model_call_reserved_tokens"),
         Index("ix_model_call_run_id_user_id", "run_id", "user_id"),
+        Index("ix_model_call_budget_run_id", "budget_run_id"),
         Index("ix_model_call_user_id_created_at", "user_id", "created_at"),
     )
 
     call_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     run_id: Mapped[UUID | None] = mapped_column(Uuid)
     user_id: Mapped[UUID | None] = mapped_column(Uuid)
+    # 子运行删除后仍要计入对话预算。对话运行删除时才解除这个关联。
+    budget_run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("ai_run.run_id", ondelete="SET NULL")
+    )
+    reserved_tokens: Mapped[int | None]
     purpose: Mapped[str] = mapped_column(String(32))
     model: Mapped[str] = mapped_column(Text)
     # 如 parse_jd@3；修复重发记为 parse_jd@3+repair_json@1。旧记录为空。
@@ -689,6 +696,9 @@ class Message(Base):
             "role IN ('user', 'assistant', 'tool')", name="ck_message_role"
         ),
         UniqueConstraint("run_id", "event_key", name="uq_message_run_event"),
+        UniqueConstraint(
+            "conversation_id", "client_message_id", name="uq_message_client_id"
+        ),
         Index("ix_message_conversation_id_seq", "conversation_id", "seq"),
     )
 
@@ -696,6 +706,7 @@ class Message(Base):
     conversation_id: Mapped[UUID] = mapped_column(Uuid)
     user_id: Mapped[UUID] = mapped_column(Uuid)
     run_id: Mapped[UUID] = mapped_column(Uuid)
+    client_message_id: Mapped[UUID | None] = mapped_column(Uuid)
     event_key: Mapped[str] = mapped_column(Text)
     seq: Mapped[int] = mapped_column(BigInteger, Identity())
     role: Mapped[str] = mapped_column(String(16))

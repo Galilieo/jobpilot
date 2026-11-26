@@ -4,24 +4,31 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from jobpilot.api.deps import CurrentUser, DbSession
+from jobpilot.api.deps import CurrentUser, DbSession, SessionFactory
 from jobpilot.db.checkpoints import delete_checkpoint_threads
 from jobpilot.db.conversations import (
     conversation_messages,
     conversation_thread,
     find_conversation,
     latest_agent_run,
+    latest_confirmation,
+    latest_decided_action,
     pending_action,
 )
 from jobpilot.db.conversations import (
     list_conversations as list_owned_conversations,
 )
 from jobpilot.db.jobs import get_user_job
-from jobpilot.db.models import Conversation, MessageRole, RunStatus
-from jobpilot.services.agent.runtime import card_payload
+from jobpilot.db.models import ActionStatus, Conversation, MessageRole, RunStatus
+from jobpilot.db.session import read_snapshot
+from jobpilot.services.agent.runtime import (
+    ConfirmationStatus,
+    card_payload,
+    confirmation_status,
+)
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 Title = Annotated[
@@ -58,6 +65,7 @@ class MessageOut(BaseModel):
 
     message_id: UUID
     run_id: UUID
+    client_message_id: UUID | None
     role: MessageRole
     content: str
     attachments_json: list[dict[str, Any]]
@@ -77,6 +85,8 @@ class ConversationDetail(ConversationOut):
     messages: list[MessageOut]
     run: AgentRunOut | None
     pending_action: dict[str, Any] | None
+    latest_decided_action: dict[str, Any] | None
+    confirmation_status: ConfirmationStatus | None
 
 
 async def require_conversation(
@@ -114,21 +124,36 @@ async def create_conversation(
 
 @router.get("/{conversation_id}")
 async def get_conversation(
-    conversation_id: UUID, user: CurrentUser, db: DbSession
+    conversation_id: UUID, user: CurrentUser, sessions: SessionFactory, request: Request
 ) -> ConversationDetail:
-    conversation = await require_conversation(user.user_id, db, conversation_id)
-    messages = await conversation_messages(user.user_id, db, conversation_id)
-    run = await latest_agent_run(user.user_id, db, conversation_id)
-    card = (
-        await pending_action(user.user_id, db, run.run_id)
-        if run and run.status == RunStatus.WAITING_CONFIRMATION
-        else None
-    )
+    async with read_snapshot(sessions) as db:
+        conversation = await require_conversation(user.user_id, db, conversation_id)
+        messages = await conversation_messages(user.user_id, db, conversation_id)
+        run = await latest_agent_run(user.user_id, db, conversation_id)
+        card = await latest_confirmation(user.user_id, db, run.run_id) if run else None
+        decided = await latest_decided_action(user.user_id, db, conversation_id)
+    stream = request.app.state.agent_runtime.streams.get(run.run_id) if run else None
     return ConversationDetail(
         **ConversationOut.model_validate(conversation).model_dump(),
         messages=[MessageOut.model_validate(message) for message in messages],
         run=AgentRunOut.model_validate(run) if run else None,
-        pending_action=card_payload(card) if card else None,
+        pending_action=(
+            card_payload(card)
+            if card
+            and card.status == ActionStatus.PENDING
+            and run.status == RunStatus.WAITING_CONFIRMATION
+            else None
+        ),
+        latest_decided_action=(
+            {**card_payload(decided), "result": decided.result_json}
+            if decided
+            else None
+        ),
+        confirmation_status=(
+            confirmation_status(run, card, stream.action_id if stream else None)
+            if run
+            else None
+        ),
     )
 
 

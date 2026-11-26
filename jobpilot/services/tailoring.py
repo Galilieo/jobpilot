@@ -29,7 +29,7 @@ from jobpilot.services.grounding import (
 from jobpilot.services.llm_gateway import (
     BudgetExhaustedError,
     EmptyModelResponseError,
-    ModelBudget,
+    ModelQuota,
 )
 from jobpilot.services.rewriting import (
     DraftBullet,
@@ -90,7 +90,7 @@ class WriteContext:
     user_id: UUID
     run_id: UUID
     client: AsyncOpenAI
-    budget: ModelBudget
+    budget: ModelQuota
     limiter: asyncio.Semaphore  # 同时进行的模型请求上限
     available: Mapping[UUID, GroundingFact]  # 本次运行固定的事实库
     known_organizations: frozenset[str]

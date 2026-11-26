@@ -18,7 +18,7 @@ from jobpilot.db.models import JobPosting, UserJob
 from jobpilot.services.facts import TruncatedOutputError, locate_quote
 from jobpilot.services.keywords import normalize_keywords
 from jobpilot.services.llm_gateway import (
-    ModelBudget,
+    ModelQuota,
     request_completion,
     wrap_untrusted_text,
 )
@@ -157,7 +157,7 @@ async def parse_job(
     run_id: UUID,
     *,
     client: AsyncOpenAI,
-    budget: ModelBudget,
+    budget: ModelQuota,
     raw_text: str,
 ) -> ParsedJob:
     """调用模型解析 JD。raw_text 是规范化后的正文；调用前需已提交所属 ai_run。"""

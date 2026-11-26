@@ -13,7 +13,13 @@ from jobpilot.db.conversations import conversation_thread
 from jobpilot.main import app
 from jobpilot.services.accounts import PurgeResult, purge_accounts
 from jobpilot.tests.test_account_archive import _expire
-from jobpilot.tests.test_agent_api import batch, card_of, conversation, sign_in
+from jobpilot.tests.test_agent_api import (
+    batch,
+    card_of,
+    conversation,
+    message_body,
+    sign_in,
+)
 from jobpilot.tests.test_call_accounting import fake_upstream
 from jobpilot.tests.test_tailoring_graph import Factory
 
@@ -24,7 +30,7 @@ async def _wait_for_card(
     await sign_in(client, email)
     user_id = UUID((await client.get("/api/me")).json()["user_id"])
     path = await conversation(client)
-    card = card_of(await client.post(f"{path}/messages", json={"content": "请问情况"}))
+    card = card_of(await client.post(f"{path}/messages", json=message_body("请问情况")))
     assert card["kind"] == "question"
     return user_id, path, conversation_thread(user_id, UUID(path.split("/")[-1]))
 

@@ -21,6 +21,7 @@ from jobpilot.tests.test_agent_api import (
     conversation,
     done_of,
     events,
+    message_body,
     reply,
     sign_in,
 )
@@ -119,7 +120,7 @@ async def test_resume_edit_rejects_stale_confirmation_and_preserves_other_save(
         app.dependency_overrides[get_model_client] = lambda: fake
         card = card_of(
             await async_client.post(
-                f"{path}/messages", json={"content": "提议修改这条经历"}
+                f"{path}/messages", json=message_body("提议修改这条经历")
             )
         )
         assert card["args"]["base_version_id"] == resume.current["version_id"]
@@ -154,7 +155,7 @@ async def test_resume_commit_before_checkpoint_replays_once_and_undo_appends_ver
         app.dependency_overrides[get_model_client] = lambda: fake
         card = card_of(
             await async_client.post(
-                f"{path}/messages", json={"content": "请把完成改成参与"}
+                f"{path}/messages", json=message_body("请把完成改成参与")
             )
         )
         assert card["args"]["check"]["layers"] == "full"
@@ -249,7 +250,7 @@ async def test_tool_ids_and_decisions_cannot_access_other_users(
     async with fake_upstream(respond) as fake:
         app.dependency_overrides[get_model_client] = lambda: fake
         card = card_of(
-            await user_b.post(f"{path_b}/messages", json={"content": "B 的确认卡"})
+            await user_b.post(f"{path_b}/messages", json=message_body("B 的确认卡"))
         )
         before_b = (await user_b.get(path_b)).json()
         product_b = (await user_b.get(resume_b.path)).json()
@@ -262,7 +263,9 @@ async def test_tool_ids_and_decisions_cannot_access_other_users(
             await user_a.post(f"/api/actions/{card['action_id']}/undo")
         ).status_code == 404
 
-        result = await user_a.post(f"{path_a}/messages", json={"content": "尝试跨用户"})
+        result = await user_a.post(
+            f"{path_a}/messages", json=message_body("尝试跨用户")
+        )
         steps = [body for name, body in events(result) if name == "tool_end"]
         assert len(steps) == len(crosses)
         assert [step.get("status") for step in steps] == [404] * len(crosses)

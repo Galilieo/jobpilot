@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.models import STOP_REASON_STATUS, AiRun, RunStatus, StopReason
 
-_ACTIVE_STATUSES = (RunStatus.RUNNING, RunStatus.WAITING_CONFIRMATION)
+ACTIVE_RUN_STATUSES = (RunStatus.RUNNING, RunStatus.WAITING_CONFIRMATION)
 
 
 async def set_run_status(
@@ -19,11 +19,11 @@ async def set_run_status(
         .where(
             AiRun.user_id == user_id,
             AiRun.run_id == run_id,
-            AiRun.status.in_(_ACTIVE_STATUSES),
+            AiRun.status.in_(ACTIVE_RUN_STATUSES),
         )
         .values(
             status=status,
-            finished_at=None if status in _ACTIVE_STATUSES else func.now(),
+            finished_at=None if status in ACTIVE_RUN_STATUSES else func.now(),
         )
         .returning(AiRun.run_id)
     )
@@ -40,7 +40,7 @@ async def finish_run(
     session: AsyncSession, user_id: UUID, run_id: UUID, status: RunStatus
 ) -> None:
     """在产物的事务里取得终态；发生冲突时调用方必须回滚该事务。"""
-    if status in _ACTIVE_STATUSES:
+    if status in ACTIVE_RUN_STATUSES:
         raise ValueError("收尾需要终态")
     if await set_run_status(session, user_id, run_id, status):
         return
@@ -75,7 +75,7 @@ async def cancel_account_runs(session: AsyncSession, user_id: UUID) -> list[UUID
         update(AiRun)
         .where(
             AiRun.user_id == user_id,
-            AiRun.status.in_(_ACTIVE_STATUSES),
+            AiRun.status.in_(ACTIVE_RUN_STATUSES),
         )
         .values(status=RunStatus.CANCELLED, finished_at=func.now())
         .returning(AiRun.run_id)

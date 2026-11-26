@@ -23,11 +23,13 @@ from openai.types.chat import (
     ChatCompletionToolUnionParam,
 )
 from pydantic import ValidationError
-from sqlalchemy import update
+from sqlalchemy import func, insert, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelSettings, settings
-from jobpilot.db.models import CallOutcome, ModelCall
+from jobpilot.db.accounts import lock_active_account
+from jobpilot.db.models import AiRun, CallOutcome, ModelCall
+from jobpilot.db.runs import ACTIVE_RUN_STATUSES
 from jobpilot.services.prompts import Prompt, load_prompt
 
 _DATA_LABEL_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
@@ -84,6 +86,10 @@ class BudgetExhaustedError(RuntimeError):
     """剩余额度不足以发送下一次模型请求。"""
 
 
+class ModelRunInactiveError(RuntimeError):
+    """运行已取消或结束，不能再发送模型请求。"""
+
+
 @dataclass
 class ModelBudget:
     """保存同一次业务运行共享的剩余调用次数和 token 额度。"""
@@ -102,6 +108,16 @@ class ModelBudget:
         self.remaining_tokens -= estimated_tokens
 
 
+@dataclass(frozen=True)
+class AgentModelBudget:
+    """业务调用可以共用一轮对话的持久化预算，包括改写子图的并发调用。"""
+
+    run_id: UUID
+
+
+ModelQuota = ModelBudget | AgentModelBudget
+
+
 async def request_completion(
     session_factory: async_sessionmaker[AsyncSession],
     user_id: UUID,
@@ -112,7 +128,7 @@ async def request_completion(
     prompt_version: str,
     messages: Sequence[ChatCompletionMessageParam],
     json_output: bool,
-    budget: ModelBudget,
+    budget: ModelQuota,
     validate: Callable[[ChatCompletion], None] | None = None,
     tools: Sequence[ChatCompletionToolUnionParam] = (),
     on_text: Callable[[str], None] | None = None,
@@ -206,7 +222,7 @@ async def _send_once(
     prompt_version: str,
     messages: Sequence[ChatCompletionMessageParam],
     json_output: bool,
-    budget: ModelBudget,
+    budget: ModelQuota,
     validate: Callable[[ChatCompletion], None] | None,
     tools: Sequence[ChatCompletionToolUnionParam],
     on_text: Callable[[str], None] | None,
@@ -222,7 +238,6 @@ async def _send_once(
     estimated = _estimate_tokens(sanitized_messages, model_settings.max_tokens)
     if tools:
         estimated += len(dumps(list(tools), ensure_ascii=False).encode("utf-8"))
-    budget.reserve(estimated)
     call_id = await _register_call(
         session_factory,
         user_id,
@@ -230,6 +245,8 @@ async def _send_once(
         purpose,
         prompt_version,
         model_settings.model_name,
+        budget,
+        estimated,
     )
 
     started = monotonic()
@@ -384,22 +401,97 @@ async def _register_call(
     purpose: str,
     prompt_version: str,
     model_name: str,
+    budget: ModelQuota,
+    estimated_tokens: int,
 ) -> UUID:
     """发送前用独立事务登记一行 unknown，返回供结算使用的 call_id。"""
+    budget_run_id = budget.run_id if isinstance(budget, AgentModelBudget) else None
+    if isinstance(budget, ModelBudget):
+        budget.reserve(estimated_tokens)
     call_id = uuid4()
+    # 共享行锁让登记和取消有明确的先后。模型请求在短事务提交后才发出。
+    eligible_run = (
+        select(
+            literal(call_id),
+            AiRun.user_id,
+            AiRun.run_id,
+            literal(purpose),
+            literal(prompt_version),
+            literal(model_name),
+            literal(CallOutcome.UNKNOWN),
+            literal(budget_run_id, type_=AiRun.run_id.type),
+            literal(estimated_tokens),
+        )
+        .where(
+            AiRun.user_id == user_id,
+            AiRun.run_id == run_id,
+            AiRun.status.in_(ACTIVE_RUN_STATUSES),
+        )
+        .with_for_update(read=True, of=AiRun)
+    )
     async with session_factory.begin() as session:
-        session.add(
-            ModelCall(
-                call_id=call_id,
-                user_id=user_id,
-                run_id=run_id,
-                purpose=purpose,
-                prompt_version=prompt_version,
-                model=model_name,
-                outcome=CallOutcome.UNKNOWN,
+        if budget_run_id is not None:
+            await _check_agent_budget(session, user_id, budget_run_id, estimated_tokens)
+        registered = await session.scalar(
+            insert(ModelCall)
+            .from_select(
+                [
+                    "call_id",
+                    "user_id",
+                    "run_id",
+                    "purpose",
+                    "prompt_version",
+                    "model",
+                    "outcome",
+                    "budget_run_id",
+                    "reserved_tokens",
+                ],
+                eligible_run,
+            )
+            .returning(ModelCall.call_id)
+        )
+        if registered is None:
+            raise ModelRunInactiveError("运行已取消或结束")
+    return registered
+
+
+async def _check_agent_budget(
+    session: AsyncSession, user_id: UUID, run_id: UUID, estimated_tokens: int
+) -> None:
+    """锁住父运行，确保并行子调用不能共享同一份剩余额度。"""
+    # 与删号事务使用相同的加锁顺序（账号，再到运行）。
+    if not await lock_active_account(session, user_id):
+        raise ModelRunInactiveError("运行已取消或结束")
+    active = await session.scalar(
+        select(AiRun.run_id)
+        .where(
+            AiRun.user_id == user_id,
+            AiRun.run_id == run_id,
+            AiRun.kind == "agent",
+            AiRun.status.in_(ACTIVE_RUN_STATUSES),
+        )
+        .with_for_update(key_share=True)
+    )
+    if active is None:
+        raise ModelRunInactiveError("运行已取消或结束")
+    limits = settings.agent_limits
+    # 旧记录没有预扣值。缺少实际用量时保守地用本轮 token 上限。
+    reserved = func.coalesce(
+        ModelCall.reserved_tokens,
+        ModelCall.prompt_tokens + ModelCall.completion_tokens,
+        limits.model_tokens,
+    )
+    calls, tokens = (
+        await session.execute(
+            select(func.count(), func.coalesce(func.sum(reserved), 0)).where(
+                (ModelCall.budget_run_id == run_id)
+                | ((ModelCall.run_id == run_id) & (ModelCall.user_id == user_id)),
             )
         )
-    return call_id
+    ).one()
+    ModelBudget(limits.model_calls - calls, limits.model_tokens - tokens).reserve(
+        estimated_tokens
+    )
 
 
 async def _settle_call(

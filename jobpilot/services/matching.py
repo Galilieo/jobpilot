@@ -29,7 +29,7 @@ from jobpilot.services.criteria_match import (
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.jobs import BasicFields, ParsedJob, Requirement, RequirementType
 from jobpilot.services.llm_gateway import (
-    ModelBudget,
+    ModelQuota,
     request_completion,
     wrap_untrusted_text,
 )
@@ -425,7 +425,7 @@ async def match_job(
     *,
     fact_set_id: UUID,
     client: AsyncOpenAI,
-    budget: ModelBudget,
+    budget: ModelQuota,
     snapshot: ParsedJob,
     facts: Sequence[FactCandidate],
     criteria: Sequence[CriterionCandidate] = (),

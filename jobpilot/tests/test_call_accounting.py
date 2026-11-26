@@ -20,10 +20,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose, ModelSettings, settings
-from jobpilot.db.models import AiRun, ModelCall, User
+from jobpilot.db.models import AiRun, ModelCall, RunStatus, User
+from jobpilot.db.runs import set_run_status
 from jobpilot.services.llm_gateway import (
     BudgetExhaustedError,
     ModelBudget,
+    ModelRunInactiveError,
     request_completion,
 )
 
@@ -135,6 +137,20 @@ def outcomes_and_usage(
 
 
 # ---------- 记账：每次发送一行，发送前登记、结束后结算 ----------
+
+
+async def test_terminal_run_cannot_register_or_send(
+    session_factory: async_sessionmaker[AsyncSession], run: AiRun
+) -> None:
+    """面板单独启动的业务运行同样受网关的条件登记保护。"""
+    async with session_factory.begin() as session:
+        await set_run_status(session, run.user_id, run.run_id, RunStatus.CANCELLED)
+    upstream = Mock(return_value=completion_response())
+    async with fake_upstream(upstream) as client:
+        with pytest.raises(ModelRunInactiveError):
+            await send(session_factory, run, client)
+    upstream.assert_not_called()
+    assert await calls_of(session_factory, run) == []
 
 
 @pytest.mark.parametrize(

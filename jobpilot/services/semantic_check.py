@@ -26,7 +26,7 @@ from jobpilot.config import ModelPurpose
 from jobpilot.services.grounding import GroundingFact, GroundingIssue, IssueKind
 from jobpilot.services.llm_gateway import (
     EmptyModelResponseError,
-    ModelBudget,
+    ModelQuota,
     request_completion,
     wrap_untrusted_text,
 )
@@ -124,7 +124,7 @@ async def ground_check(
     run_id: UUID,
     *,
     client: AsyncOpenAI,
-    budget: ModelBudget,
+    budget: ModelQuota,
     sentence: str,
     facts: Sequence[GroundingFact],
 ) -> SemanticResult:

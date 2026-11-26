@@ -16,6 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Send
 from openai import AsyncOpenAI
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import (
@@ -26,9 +27,9 @@ from jobpilot.db.models import (
     StopReason,
 )
 from jobpilot.db.reports import add_match_report
-from jobpilot.db.runs import finish_run
+from jobpilot.db.runs import RunAlreadyFinishedError, finish_run
 from jobpilot.services.grounding import organizations_of
-from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelBudget
+from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelQuota
 from jobpilot.services.matching import (
     MatchItem,
     MatchValidationError,
@@ -60,7 +61,7 @@ class TailorDeps:
 
     session_factory: async_sessionmaker[AsyncSession]
     client: AsyncOpenAI
-    budget: ModelBudget
+    budget: ModelQuota
     limiter: asyncio.Semaphore
     check_level: CheckLevel = CheckLevel.FULL
 
@@ -261,6 +262,12 @@ async def run_tailoring(
     section_overrides: dict[str, SectionKind] | None = None,
 ) -> None:
     """执行一次已创建的改写运行，直到写入终态。调用前需已提交 ai_run。"""
+    async with deps.session_factory() as session:
+        status = await session.scalar(
+            select(AiRun.status).where(AiRun.user_id == user_id, AiRun.run_id == run_id)
+        )
+    if status is not None and status != RunStatus.RUNNING:
+        raise RunAlreadyFinishedError(status)
     graph = build_tailor_graph(deps)
     return await graph.ainvoke(
         TailorState(

@@ -504,9 +504,9 @@ async def test_run_finished_elsewhere_writes_nothing(
     run = await read_run(session_factory, seeded.run_id)
     assert (run.status, run.stop_reason, run.plan_json) == ("failed", None, None)
     assert (await read_bullets(session_factory, seeded.run_id))[0] == []
-    # 模型调用照样记账
+    # 运行先结束，迟到的任务不再登记或发送模型调用。
     calls = select(ModelCall).where(ModelCall.run_id == seeded.run_id)
-    assert await count(session_factory, calls) == 6
+    assert await count(session_factory, calls) == 0
     assert await versions_of(session_factory, seeded.run_id) == []  # 没有完整简历
 
 
