@@ -586,9 +586,8 @@ async def test_bad_tool_json_does_not_fail_other_tools_or_model_accounting(
         ]
 
 
-async def test_prompt_uses_recent_turns_and_keeps_database_history(
+async def test_prompt_keeps_all_turns_under_window_and_keeps_database_history(
     async_client: httpx.AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     await sign_in(async_client)
     path = await conversation(async_client)
@@ -606,14 +605,14 @@ async def test_prompt_uses_recent_turns_and_keeps_database_history(
             )
             assert done_of(result)["status"] == "succeeded"
         assert [msg["content"] for msg in captured[-1] if msg["role"] == "user"] == [
-            f"第 {index} 轮" for index in range(2, 12)
+            f"第 {index} 轮" for index in range(12)
         ]
-        monkeypatch.setattr(settings.agent_limits, "history_tokens", 1)
         result = await async_client.post(
             f"{path}/messages", json=message_body("保留本轮")
         )
         assert done_of(result)["status"] == "succeeded"
     assert [msg["content"] for msg in captured[-1] if msg["role"] == "user"] == [
-        "保留本轮"
+        *(f"第 {index} 轮" for index in range(12)),
+        "保留本轮",
     ]
     assert len((await async_client.get(path)).json()["messages"]) == 26

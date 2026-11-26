@@ -1,16 +1,30 @@
 """Agent 读取工具从登录身份加载岗位、发布事实、报告和简历。"""
 
 from dataclasses import asdict
+from hashlib import sha256
+from json import dumps
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.conversations import find_conversation
+from jobpilot.db.conversations import (
+    find_conversation,
+    latest_agent_run,
+    latest_confirmation,
+)
 from jobpilot.db.jobs import get_user_job, list_user_jobs
-from jobpilot.db.models import AiRun, FactSet, JobPosting, MatchReport, UserJob
-from jobpilot.db.reports import latest_match_reports_by_job
+from jobpilot.db.models import (
+    AiRun,
+    Conversation,
+    FactSet,
+    JobPosting,
+    MatchReport,
+    ResumeVersion,
+    TailoredResume,
+    UserJob,
+)
 from jobpilot.services import drafts
 from jobpilot.services.agent.arguments import (
     FactsArgs,
@@ -20,7 +34,7 @@ from jobpilot.services.agent.arguments import (
 )
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext, ToolError
 from jobpilot.services.jobs import effective_parsed_job
-from jobpilot.services.matching import load_match_inputs, summarize_stored_match
+from jobpilot.services.matching import load_match_inputs
 from jobpilot.services.resume_versions import ResumeNotFoundError, load_resume
 
 _MAX_ROWS = 30
@@ -133,23 +147,97 @@ async def read_resume(context: ToolContext, args: ResumeArgs) -> Payload:
     }
 
 
+def _job_version(snapshot: dict[str, Any]) -> str:
+    # 岗位个人覆盖没有独立修订列，用确定性快照标识区分报告基于哪个版本。
+    serialized = dumps(
+        snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return sha256(serialized.encode()).hexdigest()[:16]
+
+
+async def _latest_report(
+    session: AsyncSession, user_id: UUID, job_id: UUID
+) -> tuple[MatchReport, AiRun] | None:
+    result = await session.execute(
+        select(MatchReport, AiRun)
+        .join(AiRun, AiRun.run_id == MatchReport.run_id)
+        .where(MatchReport.user_id == user_id, AiRun.user_job_id == job_id)
+        .order_by(MatchReport.seq.desc())
+        .limit(1)
+    )
+    row = result.first()
+    return (row[0], row[1]) if row else None
+
+
+async def _latest_resume(
+    session: AsyncSession, user_id: UUID, job_id: UUID
+) -> Payload | None:
+    row = (
+        await session.execute(
+            select(TailoredResume.run_id, ResumeVersion.version)
+            .join(AiRun, AiRun.run_id == TailoredResume.run_id)
+            .join(
+                ResumeVersion,
+                ResumeVersion.resume_version_id == TailoredResume.current_version_id,
+            )
+            .where(TailoredResume.user_id == user_id, AiRun.user_job_id == job_id)
+            .order_by(AiRun.started_at.desc(), AiRun.run_id.desc())
+            .limit(1)
+        )
+    ).first()
+    return {"run_id": str(row.run_id), "version": row.version} if row else None
+
+
 async def current_job_summary(
-    user_id: UUID, session: AsyncSession, job_id: UUID | None
-) -> dict[str, Any] | None:
+    user_id: UUID,
+    session: AsyncSession,
+    conversation: Conversation,
+) -> Payload:
+    """只放对象标识和版本，详情由读取工具按需取得。"""
+    job_id = conversation.current_job_id
+    fact = await drafts.latest_fact_set(session, user_id)
+    latest = await latest_agent_run(
+        user_id, session, conversation.conversation_id, active_only=True
+    )
+    action = (
+        await latest_confirmation(user_id, session, latest.run_id) if latest else None
+    )
+    state = {
+        "binding_revision": conversation.job_binding_revision,
+        "facts": {"id": str(fact.fact_set_id), "version": fact.version}
+        if fact
+        else None,
+        "active_card": {"id": str(action.action_id), "status": action.status}
+        if action
+        else None,
+    }
     row = await get_user_job(session, user_id, job_id) if job_id else None
-    if row is None:
-        return None
+    if row is None or job_id is None:
+        return {**state, "job": None, "match": "未匹配", "resume": None}
     parsed = effective_parsed_job(*row)
-    reports = await latest_match_reports_by_job(session, user_id)
-    snapshot, items = reports.get(job_id, (None, []))
-    summary = summarize_stored_match(snapshot, items) if snapshot else None
+    snapshot = parsed.model_dump(mode="json")
+    latest_report = await _latest_report(session, user_id, job_id)
+    match: Payload | str = "未匹配"
+    if latest_report is not None:
+        report, run = latest_report
+        based_on = run.job_snapshot_json or {}
+        stale = (
+            based_on != snapshot or fact is None or fact.fact_set_id != run.fact_set_id
+        )
+        match = {
+            "report_id": str(report.report_id),
+            "job_version": _job_version(based_on),
+            "fact_set_id": str(run.fact_set_id),
+            "status": "基于旧版本" if stale else "当前版本",
+        }
     return {
-        "job_id": str(job_id),
-        "title": parsed.basic_fields.title,
-        "hard_requirements": [
-            requirement.text
-            for requirement in parsed.requirements
-            if requirement.type == "hard"
-        ],
-        "match": summary.model_dump(mode="json") if summary is not None else None,
+        **state,
+        "job": {
+            "id": str(job_id),
+            "version": _job_version(snapshot),
+            "title": (parsed.basic_fields.title or "")[:80],
+            "company": (parsed.basic_fields.company or "")[:80],
+        },
+        "match": match,
+        "resume": await _latest_resume(session, user_id, job_id),
     }

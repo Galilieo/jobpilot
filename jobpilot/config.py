@@ -71,8 +71,6 @@ class AgentLimits(BaseModel):
     model_tokens: int = Field(default=250_000, gt=0)
     tool_calls: int = Field(default=12, ge=1, le=30)
     seconds: float = Field(default=180, gt=0)
-    history_turns: int = Field(default=10, gt=0)
-    history_tokens: int = Field(default=8000, gt=0)
     context_window_ratio: float = Field(default=0.5, gt=0, le=1)
     context_window_cap_tokens: int | None = Field(default=32_000, gt=0)
     compact_trigger_ratio: float = Field(default=0.8, gt=0, lt=1)
@@ -168,8 +166,9 @@ class Settings(BaseSettings):
     def effective_window(self, purpose: str) -> int:
         window = self.model_profile(purpose).context_window
         reduced = int(window * self.agent_limits.context_window_ratio)
-        return min(
-            window, reduced, self.agent_limits.context_window_cap_tokens or window
+        return max(
+            1,
+            min(window, reduced, self.agent_limits.context_window_cap_tokens or window),
         )
 
     @model_validator(mode="after")

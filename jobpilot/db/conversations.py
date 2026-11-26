@@ -262,28 +262,6 @@ async def propose_action(
     return action
 
 
-async def recent_messages(
-    user_id: UUID, session: AsyncSession, conversation_id: UUID, turns: int
-) -> list[Message]:
-    owned = select(Message).where(
-        Message.user_id == user_id, Message.conversation_id == conversation_id
-    )
-    oldest = (
-        select(Message.seq)
-        .where(
-            Message.user_id == user_id,
-            Message.conversation_id == conversation_id,
-            Message.role == MessageRole.USER,
-        )
-        .order_by(Message.seq.desc())
-        .limit(turns)
-    ).subquery()
-    query = owned.where(
-        Message.seq >= select(func.min(oldest.c.seq)).scalar_subquery()
-    ).order_by(Message.seq)
-    return list(await session.scalars(query))
-
-
 async def agent_input(
     user_id: UUID, session: AsyncSession, run_id: UUID
 ) -> Message | None:

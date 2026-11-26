@@ -36,10 +36,16 @@ from jobpilot.db.models import (
 )
 from jobpilot.db.runs import finish_run
 from jobpilot.diagnostics import describe_error, error_locations
+from jobpilot.services.agent.compaction import (
+    CompactConflict,
+    CompactSchedule,
+    schedule_compaction,
+)
 from jobpilot.services.agent.context import serialize
 from jobpilot.services.agent.graph import build_agent_graph
 from jobpilot.services.agent.questions import load_question_card
 from jobpilot.services.agent.types import AgentDeps, Payload
+from jobpilot.services.agent.window_messages import CurrentInputOverflow
 
 logger = logging.getLogger("uvicorn.error").getChild("agent")
 _TIMEOUT_REPLY = "本轮已达到时长上限。已完成的步骤保留在对话中。"
@@ -173,7 +179,15 @@ class AgentRuntime:
         stream = self.open(run.run_id, action_id)
         launch(
             run.run_id,
-            self.run(sessions, engine.url, client, run, stream, action_id=action_id),
+            self.run(
+                sessions,
+                engine.url,
+                client,
+                run,
+                stream,
+                action_id=action_id,
+                launch=launch,
+            ),
         )
         return stream
 
@@ -205,9 +219,27 @@ class AgentRuntime:
         stream: EventStream,
         *,
         action_id: UUID | None = None,
+        launch: LaunchTask | None = None,
     ) -> None:
         try:
-            await _drive(sessions, database_url, client, run, stream, action_id)
+            finished = await _drive(
+                sessions, database_url, client, run, stream, action_id
+            )
+            if finished and launch is not None:
+                await _auto_compact(
+                    CompactSchedule(
+                        sessions,
+                        client,
+                        launch,
+                        run.user_id,
+                        run.conversation_id,
+                        automatic=True,
+                    )
+                )
+        except CurrentInputOverflow as error:
+            await _finish(
+                sessions, run, stream, RunStatus.FAILED, str(error), action_id
+            )
         except TimeoutError:
             await _finish(
                 sessions,
@@ -234,6 +266,15 @@ class AgentRuntime:
             stream.close()
 
 
+async def _auto_compact(schedule: CompactSchedule) -> None:
+    try:
+        await schedule_compaction(schedule)
+    except CompactConflict:
+        return
+    except Exception as error:
+        logger.warning("自动压缩安排失败（%s）", describe_error(error))
+
+
 def _graph_config(run: AiRun) -> RunnableConfig:
     limits = settings.agent_limits
     return {
@@ -255,7 +296,7 @@ async def _drive(
     run: AiRun,
     stream: EventStream,
     action_id: UUID | None,
-) -> None:
+) -> bool:
     expected_thread = conversation_thread(run.user_id, run.conversation_id)
     if run.thread_id != expected_thread:
         raise ValueError("对话运行的检查点线程不匹配")
@@ -282,7 +323,7 @@ async def _drive(
             current_card = _interrupted_action(snapshot)
             if current_card is not None and current_card != action_id:
                 await _pause(sessions, run, stream, current_card, action_id)
-                return
+                return False
             seconds = snapshot.values["seconds_left"]
             agent = replace(agent, started=monotonic(), seconds=seconds)
             graph = build_agent_graph(agent, saver)
@@ -294,7 +335,7 @@ async def _drive(
             snapshot = await graph.aget_state(config)
     if interrupted := _interrupted_action(snapshot):
         await _pause(sessions, run, stream, interrupted, action_id)
-        return
+        return False
     exhausted = snapshot.values.get("budget_exhausted", False)
     await _finish(
         sessions,
@@ -305,6 +346,7 @@ async def _drive(
         action_id,
         StopReason.BUDGET_EXHAUSTED if exhausted else None,
     )
+    return True
 
 
 async def _pause(

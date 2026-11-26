@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from jobpilot.api.account import router as account_router
 from jobpilot.api.agent import router as agent_router
 from jobpilot.api.auth import router as auth_router
+from jobpilot.api.compaction import router as compaction_router
 from jobpilot.api.conversations import router as conversation_router
 from jobpilot.api.error_boundary import RequestErrorBoundary
 from jobpilot.api.facts import router as facts_router
@@ -98,6 +99,7 @@ app.add_exception_handler(IdempotentReplay, replay_response)
 app.include_router(auth_router)
 app.include_router(conversation_router)
 app.include_router(agent_router)
+app.include_router(compaction_router)
 app.include_router(account_router)
 app.include_router(memories_router)
 app.include_router(ocr_router)

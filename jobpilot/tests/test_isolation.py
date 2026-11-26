@@ -215,6 +215,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
             Attempt("GET", "/api/conversations/{id}"),
             Attempt("PUT", "/api/conversations/{id}", {"title": "A 的修改"}),
             Attempt("DELETE", "/api/conversations/{id}"),
+            Attempt("POST", "/api/conversations/{id}/compact"),
             Attempt(
                 "POST",
                 "/api/conversations/{id}/messages",
@@ -235,6 +236,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("PUT", "/api/conversations/{conversation_id}"),
                 ("DELETE", "/api/conversations/{conversation_id}"),
                 ("POST", "/api/conversations/{conversation_id}/messages"),
+                ("POST", "/api/conversations/{conversation_id}/compact"),
                 ("POST", "/api/conversations/{conversation_id}/actions/{action_id}"),
                 ("POST", "/api/actions/{action_id}/undo"),
             }

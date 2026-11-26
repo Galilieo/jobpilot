@@ -61,7 +61,15 @@ class ToolCall(TypedDict):
     key: str
 
 
+class HistoryBoundary(TypedDict):
+    count: int
+    first_seq: int
+    last_seq: int
+
+
 class AgentState(TypedDict, total=False):
+    history_boundaries: list[HistoryBoundary]
+    work_summary: Payload | None
     run_id: str
     messages: list[ChatCompletionMessageParam]
     calls: list[ToolCall]

@@ -47,7 +47,13 @@ async def test_next_turn_sends_prior_steps_and_only_current_attachment(
             assert done_of(response)["status"] == "succeeded"
 
     assert requests[-1] == [
-        {"role": "system", "content": load_prompt("agent").text},
+        {
+            "role": "system",
+            "content": load_prompt("agent").text + "\n任务状态\n"
+            '<untrusted_data label="task_state">\n'
+            '{"binding_revision":0,"facts":null,"active_card":null,"job":null,'
+            '"match":"未匹配","resume":null}\n</untrusted_data>',
+        },
         {"role": "user", "content": "先看看岗位"},
         {
             "role": "assistant",

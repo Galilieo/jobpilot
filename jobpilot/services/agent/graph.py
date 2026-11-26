@@ -1,6 +1,6 @@
 """用 LangGraph 分离模型、工具提议、等待决定和执行节点。"""
 
-from json import dumps
+from json import dumps, loads
 from uuid import UUID
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -8,7 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 from openai import APIError
-from openai.types.chat import ChatCompletion
+from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,7 +39,6 @@ from jobpilot.services.agent.context import (
     serialize_tool_result,
     summarize_tool,
 )
-from jobpilot.services.agent.memory_actions import MEMORY_TOOLS
 from jobpilot.services.agent.questions import (
     JOB_CHOICE_QUESTION,
     JobSelection,
@@ -60,15 +59,22 @@ from jobpilot.services.agent.types import (
     ToolContext,
     ToolError,
 )
+from jobpilot.services.agent.window_messages import (
+    AgentRequest,
+    AgentWindow,
+    CurrentInputOverflow,
+)
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.llm_gateway import (
     AgentModelBudget,
     BudgetExhaustedError,
+    ContextOverflowError,
     EmptyModelResponseError,
     request_completion,
 )
 from jobpilot.services.matching import MatchValidationError
 from jobpilot.services.prompts import load_prompt
+from jobpilot.services.request_window import InputTokenHistory, estimate_request_tokens
 from jobpilot.services.resume_versions import ResumeNotFoundError
 from jobpilot.services.tailoring_store import TailorInputError
 
@@ -130,29 +136,118 @@ def _uses_body_as_jd(call: ToolCall) -> bool:
         return False
 
 
-async def _call_model(agent: AgentDeps, state: AgentState) -> AgentState:
+def _shrink_tool_results(
+    state: AgentState,
+    messages: list[ChatCompletionMessageParam],
+) -> list[ChatCompletionMessageParam]:
+    prior_end = 1 + sum(item["count"] for item in state.get("history_boundaries", []))
+    adapted = list(messages)
+    limit = max(128, settings.agent_limits.tool_result_bytes // 8)
+    for index in range(prior_end, len(adapted)):
+        message = adapted[index]
+        if message["role"] == "tool" and isinstance(message["content"], str):
+            adapted[index] = {
+                **message,
+                "content": serialize_tool_result(
+                    loads(message["content"]), limit=limit
+                ),
+            }
+    return adapted
+
+
+def _request_for(
+    state: AgentState,
+    messages: list[ChatCompletionMessageParam],
+    window: AgentWindow,
+    *,
+    smaller_than: int | None = None,
+) -> AgentRequest | None:
+    history = state.get("history_boundaries", [])
+    request = window.request(messages, history, smaller_than=smaller_than)
+    if request is not None:
+        return request
+    trimmed = _shrink_tool_results(state, messages)
+    return window.request(trimmed, history, smaller_than=smaller_than)
+
+
+async def _send_main(
+    agent: AgentDeps,
+    state: AgentState,
+    messages: list[ChatCompletionMessageParam],
+    window: AgentWindow,
+) -> ChatCompletion:
+    request = _request_for(state, messages, window)
+    if request is None:
+        raise CurrentInputOverflow("本轮输入超出模型窗口，请拆分消息或附件再发送。")
     prompt = load_prompt("agent")
-    try:
-        completion = await request_completion(
+    emitted = False
+
+    def emit(text: str) -> None:
+        nonlocal emitted
+        emitted = True
+        agent.emit("text", {"text": text})
+
+    async def send(outbound: AgentRequest) -> ChatCompletion:
+        return await request_completion(
             agent.sessions,
             agent.user_id,
             agent.run_id,
             client=agent.client,
             purpose=ModelPurpose.AGENT,
             prompt_version=prompt.label,
-            messages=state["messages"],
+            messages=outbound.messages,
             json_output=False,
             budget=AgentModelBudget(agent.run_id),
             validate=_validate_completion,
             tools=TOOL_DEFINITIONS,
-            on_text=lambda text: agent.emit("text", {"text": text}),
+            on_text=emit,
+            max_output_tokens=outbound.output_tokens,
         )
+
+    try:
+        completion = await send(request)
+    except ContextOverflowError:
+        window.tokens.clear()
+        if emitted:
+            raise
+        rejected_size = estimate_request_tokens(
+            window.outbound(request.messages), TOOL_DEFINITIONS
+        )
+        retry = _request_for(state, messages, window, smaller_than=rejected_size)
+        if retry is None:
+            raise CurrentInputOverflow(
+                "模型窗口不足，请拆分本轮消息或附件再发送。"
+            ) from None
+        request = retry
+        completion = await send(retry)
+    usage = completion.usage
+    window.record(request, usage.prompt_tokens if usage is not None else None)
+    return completion
+
+
+async def _call_model(
+    agent: AgentDeps, state: AgentState, window: AgentWindow
+) -> AgentState:
+    async with agent.sessions() as session, session.begin():
+        await session.connection(
+            execution_options={"isolation_level": "REPEATABLE READ"}
+        )
+        system = await agent_system_message(
+            agent, session, summary=state.get("work_summary")
+        )
+    messages = [system, *state["messages"][1:]]
+    try:
+        completion = await _send_main(agent, state, messages, window)
     except BudgetExhaustedError:
+        window.tokens.clear()
         return {"seconds_left": agent.seconds_left, **_exhausted()}
-    output, calls = _model_message(completion, len(state["messages"]))
+    except Exception:
+        window.tokens.clear()
+        raise
+    output, calls = _model_message(completion, len(messages))
     return {
         "seconds_left": agent.seconds_left,
-        "messages": [*state["messages"], output],
+        "messages": [*messages, output],
         "calls": calls,
         "message_used_as_jd": state.get("message_used_as_jd", False)
         or any(_uses_body_as_jd(call) for call in calls),
@@ -481,18 +576,13 @@ async def _apply(agent: AgentDeps, state: AgentState) -> AgentState:
             )
         else:
             result = await apply_write(session, action)
-    messages = state["messages"]
-    if call["name"] in MEMORY_TOOLS and "revision" in result:
-        async with agent.sessions() as session:
-            system = await agent_system_message(agent, session)
-        messages = [system, *messages[1:]]
     replies = []
     for item in calls:
         item_result = _question_tool_result(item, result) if ask else result
         await _record(agent, item, item_result)
         replies.append(_tool_message(item, item_result))
     return {
-        "messages": [*messages, *replies],
+        "messages": [*state["messages"], *replies],
         "calls": state["calls"][len(calls) :],
         "tools_left": state["tools_left"] - len(calls),
         "asked": state["asked"] or ask,
@@ -518,8 +608,10 @@ def build_agent_graph(
     async def context(_state: AgentState) -> AgentState:
         return await build_context(agent)
 
+    window = AgentWindow(InputTokenHistory(), TOOL_DEFINITIONS)
+
     async def model(state: AgentState) -> AgentState:
-        return await _call_model(agent, state)
+        return await _call_model(agent, state, window)
 
     async def execute(state: AgentState) -> AgentState:
         return await _execute_tool(agent, state)

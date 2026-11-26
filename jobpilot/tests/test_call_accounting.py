@@ -519,10 +519,25 @@ async def test_model_adapters_distinguish_overflow_from_bad_request(
 
     async with fake_upstream(respond) as client:
         with pytest.raises(APIStatusError) as caught:
-            await send(session_factory, run, client, max_output_tokens=800)
+            await send(
+                session_factory,
+                run,
+                client,
+                max_output_tokens=800,
+                messages=[
+                    {
+                        "role": "assistant",
+                        "content": "内容",
+                        "reasoning_content": "推理摘要",
+                    }
+                ],
+            )
     assert isinstance(caught.value, ContextOverflowError) is overflow
     assert len(requests) == 1 and requests[0]["max_tokens"] == 800
     assert ("thinking" in requests[0]) is (adapter == ProtocolAdapter.DEEPSEEK)
+    assert ("reasoning_content" in requests[0]["messages"][0]) is (
+        adapter == ProtocolAdapter.DEEPSEEK
+    )
     assert outcomes_and_usage(await calls_of(session_factory, run)) == {
         ("http_error", None, None)
     }

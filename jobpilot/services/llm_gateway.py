@@ -129,7 +129,14 @@ class AgentModelBudget:
     run_id: UUID
 
 
-ModelQuota = ModelBudget | AgentModelBudget
+@dataclass(frozen=True)
+class CompactModelBudget:
+    """独立压缩运行的额度，不从对话 Agent 扣减。"""
+
+    run_id: UUID
+
+
+ModelQuota = ModelBudget | AgentModelBudget | CompactModelBudget
 
 
 async def request_completion(
@@ -147,6 +154,7 @@ async def request_completion(
     tools: Sequence[ChatCompletionToolUnionParam] = (),
     on_text: Callable[[str], None] | None = None,
     max_output_tokens: int | None = None,
+    max_input_tokens: int | None = None,
 ) -> ChatCompletion:
     """完成一次逻辑请求，返回通过 validate 的响应。
 
@@ -187,6 +195,7 @@ async def request_completion(
                 tools=tools,
                 on_text=emit_text if on_text is not None else None,
                 max_output_tokens=max_output_tokens,
+                max_input_tokens=max_input_tokens,
             )
 
         except ValidationError as error:
@@ -243,6 +252,7 @@ async def _send_once(
     tools: Sequence[ChatCompletionToolUnionParam],
     on_text: Callable[[str], None] | None,
     max_output_tokens: int | None,
+    max_input_tokens: int | None,
 ) -> ChatCompletion:
     """实际发送一次：查配置并脱敏 → 扣额度 → 登记 unknown → 发送并校验 → 结算。
 
@@ -256,10 +266,12 @@ async def _send_once(
     if max_output_tokens is not None:
         output = min(output, max_output_tokens)
     model_settings = model_settings.model_copy(update={"max_tokens": output})
-    sanitized_messages = request_messages_for_model(messages)
+    sanitized_messages = request_messages_for_model(messages, adapter=profile.adapter)
     estimated = _estimate_tokens(sanitized_messages, model_settings.max_tokens)
     if tools:
         estimated += len(dumps(list(tools), ensure_ascii=False).encode("utf-8"))
+    if max_input_tokens is not None and estimated - output > max_input_tokens:
+        raise BudgetExhaustedError("本次模型输入超过额度")
     call_id = await _register_call(
         session_factory,
         user_id,
@@ -315,13 +327,17 @@ async def _send_once(
 
 def request_messages_for_model(
     messages: Sequence[ChatCompletionMessageParam],
+    *,
+    adapter: ProtocolAdapter = ProtocolAdapter.DEEPSEEK,
 ) -> list[ChatCompletionMessageParam]:
     """返回脱敏后的消息副本，不改动调用方传入的列表和字典。"""
-    return [_sanitize_message(message) for message in messages]
+    return [_sanitize_message(message, adapter=adapter) for message in messages]
 
 
 def _sanitize_message(
     message: ChatCompletionMessageParam,
+    *,
+    adapter: ProtocolAdapter,
 ) -> ChatCompletionMessageParam:
     """复制单条消息并遮蔽其中的文本，兼容字符串和分段 content 两种形式。"""
     copied: dict[str, Any] = dict(message)
@@ -332,6 +348,8 @@ def _sanitize_message(
         copied["content"] = redact_pii(content)
     elif isinstance(content, list):
         copied["content"] = [_sanitize_part(part) for part in content]
+    if adapter == ProtocolAdapter.OPENAI:
+        copied.pop("reasoning_content", None)
     if isinstance(reasoning := copied.get("reasoning_content"), str):
         copied["reasoning_content"] = redact_pii(reasoning)
     if copied.get("tool_calls"):
@@ -462,7 +480,7 @@ async def _register_call(
     estimated_tokens: int,
 ) -> UUID:
     """发送前用独立事务登记一行 unknown，返回供结算使用的 call_id。"""
-    budget_run_id = budget.run_id if isinstance(budget, AgentModelBudget) else None
+    budget_run_id = budget.run_id if not isinstance(budget, ModelBudget) else None
     if isinstance(budget, ModelBudget):
         budget.reserve(estimated_tokens)
     call_id = uuid4()
@@ -488,7 +506,7 @@ async def _register_call(
     )
     async with session_factory.begin() as session:
         if budget_run_id is not None:
-            await _check_agent_budget(session, user_id, budget_run_id, estimated_tokens)
+            await _check_persisted_budget(session, user_id, budget, estimated_tokens)
         registered = await session.scalar(
             insert(ModelCall)
             .from_select(
@@ -512,19 +530,25 @@ async def _register_call(
     return registered
 
 
-async def _check_agent_budget(
-    session: AsyncSession, user_id: UUID, run_id: UUID, estimated_tokens: int
+async def _check_persisted_budget(
+    session: AsyncSession,
+    user_id: UUID,
+    budget: AgentModelBudget | CompactModelBudget,
+    estimated_tokens: int,
 ) -> None:
     """锁住父运行，确保并行子调用不能共享同一份剩余额度。"""
     # 与删号事务使用相同的加锁顺序（账号，再到运行）。
     if not await lock_active_account(session, user_id):
         raise ModelRunInactiveError("运行已取消或结束")
+    run_id = budget.run_id
+    compact = isinstance(budget, CompactModelBudget)
+    kind = "compact" if compact else "agent"
     active = await session.scalar(
         select(AiRun.run_id)
         .where(
             AiRun.user_id == user_id,
             AiRun.run_id == run_id,
-            AiRun.kind == "agent",
+            AiRun.kind == kind,
             AiRun.status.in_(ACTIVE_RUN_STATUSES),
         )
         .with_for_update(key_share=True)
@@ -532,11 +556,17 @@ async def _check_agent_budget(
     if active is None:
         raise ModelRunInactiveError("运行已取消或结束")
     limits = settings.agent_limits
+    call_limit = limits.compact_model_calls if compact else limits.model_calls
+    output = min(
+        settings.compact.max_tokens, settings.model_profile("compact").max_output_tokens
+    )
+    compact_tokens = (limits.compact_input_tokens + output) * call_limit
+    token_limit = compact_tokens if compact else limits.model_tokens
     # 旧记录没有预扣值。缺少实际用量时保守地用本轮 token 上限。
     reserved = func.coalesce(
         ModelCall.reserved_tokens,
         ModelCall.prompt_tokens + ModelCall.completion_tokens,
-        limits.model_tokens,
+        token_limit,
     )
     calls, tokens = (
         await session.execute(
@@ -546,9 +576,7 @@ async def _check_agent_budget(
             )
         )
     ).one()
-    ModelBudget(limits.model_calls - calls, limits.model_tokens - tokens).reserve(
-        estimated_tokens
-    )
+    ModelBudget(call_limit - calls, token_limit - tokens).reserve(estimated_tokens)
 
 
 async def _settle_call(
