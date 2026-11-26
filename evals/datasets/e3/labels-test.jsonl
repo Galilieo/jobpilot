@@ -1,0 +1,200 @@
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r01", "verdict": "covered", "evidence": [0], "note": "用 Python 实现了工单分类与分派建议。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r07", "verdict": "covered", "evidence": [1, 2, 4], "note": "有模型输出校验失败转人工、复核后写入和人工复核案例。"}
+{"pair_id": "resume-006__jd-syn-01", "resume_id": "resume-006", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r08", "verdict": "covered", "evidence": [0, 3, 4], "note": "用合成工单对分类分派流程做离线回放并记录人工复核案例。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-02", "resume_id": "resume-006", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r02", "verdict": "covered", "evidence": [0], "note": "在项目里实际用 Python 编写分类分派代码。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-03", "resume_id": "resume-006", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-04", "resume_id": "resume-006", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r02", "verdict": "partial", "evidence": [0], "note": "有 Python 应用开发，未交代服务或接口的实现。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r04", "verdict": "covered", "evidence": [1, 2], "note": "使用 Pydantic 校验模型输出，另校验部门白名单。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-006__jd-syn-05", "resume_id": "resume-006", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-01", "resume_id": "resume-007", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-02", "resume_id": "resume-007", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-03", "resume_id": "resume-007", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r01", "verdict": "partial", "evidence": [3], "note": "明确做过 React 项目，未分别证明 JavaScript、HTML、CSS 基础。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r02", "verdict": "covered", "evidence": [3], "note": "用 TypeScript 实现了列表和详情页面。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r03", "verdict": "partial", "evidence": [6], "note": "覆盖网络失败提示的自动化测试能证明处理场景的实践，未明确实现过失败处理。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r04", "verdict": "covered", "evidence": [6], "note": "写了 12 条 Playwright 自动化用例。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r06", "verdict": "covered", "evidence": [6], "note": "实际用 Playwright 编写跨视口测试。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r07", "verdict": "covered", "evidence": [5], "note": "添加键盘操作和焦点恢复。"}
+{"pair_id": "resume-007__jd-syn-04", "resume_id": "resume-007", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r08", "verdict": "covered", "evidence": [7, 8], "note": "测量的是首屏脚本 gzip 体积，符合资源体积要求。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r07", "verdict": "partial", "evidence": [0, 3], "note": "有前端交付和页面实现，未说明线上发布。"}
+{"pair_id": "resume-007__jd-syn-05", "resume_id": "resume-007", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r03", "verdict": "partial", "evidence": [0, 2, 3], "note": "具备文档段落检索和融合实践，未说明做过生成答案的问答链路。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-01", "resume_id": "resume-009", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r08", "verdict": "missing", "evidence": [], "note": "评测对象是检索融合排序，未说明评估模型生成或判断输出。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-02", "resume_id": "resume-009", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r04", "verdict": "partial", "evidence": [1, 5], "note": "有留出验证集和检索方案 Recall@5，未明确报告单独的模型召回。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-03", "resume_id": "resume-009", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-04", "resume_id": "resume-009", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r03", "verdict": "covered", "evidence": [2, 3], "note": "分别生成关键词和向量结果，并用 RRF 融合。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r05", "verdict": "covered", "evidence": [0, 1, 5], "note": "有人工标注，留出 60 条验证并报告 Recall@5。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r06", "verdict": "partial", "evidence": [1, 4], "note": "有调参和低排名归因，未说明具体调整是由该归因驱动。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-009__jd-syn-05", "resume_id": "resume-009", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r01", "verdict": "partial", "evidence": [5, 17, 26], "note": "简历列出 Python 和应用开发工作，未把 Python 与一项具体实现关联。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r02", "verdict": "partial", "evidence": [16, 26], "note": "有上线接口且列出 FastAPI，未写接口用 FastAPI 实现。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r03", "verdict": "partial", "evidence": [4, 12, 13], "note": "有文档召回与候选复排，未写本人做过问答链路的生成部分。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r04", "verdict": "covered", "evidence": ["criteria.onsite_days_per_week"], "note": "每周 5 天达到 4 天门槛。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r05", "verdict": "partial", "evidence": ["criteria.internship_months"], "note": "确认的 5 个月超出 3～4 个月区间。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r07", "verdict": "missing", "evidence": [], "note": "索引失败后的人工重试不属于复核模型输出。"}
+{"pair_id": "resume-012__jd-syn-01", "resume_id": "resume-012", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r08", "verdict": "partial", "evidence": [10, 12, 13, 28], "note": "有排序和离线命中对照，未交代如何隔离或评测模型本身的输出。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r02", "verdict": "partial", "evidence": [26], "note": "列出 PostgreSQL、SQL，未给出在项目中应用关系库的依据。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r04", "verdict": "partial", "evidence": [21, 27], "note": "补过回归样例且能写 pytest 回归测试，未说明编写过接口自动化测试。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r05", "verdict": "covered", "evidence": ["criteria.onsite_days_per_week"], "note": "每周 5 天达到下限。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r06", "verdict": "covered", "evidence": ["criteria.internship_months"], "note": "5 个月超过 4 个月下限。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-02", "resume_id": "resume-012", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r01", "verdict": "partial", "evidence": ["education.0"], "note": "本科在读，学历未达到硕士。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r02", "verdict": "partial", "evidence": [5, 17, 26], "note": "列出 Python 并有开发实践，代码与 Python 的具体联系未写明。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r04", "verdict": "partial", "evidence": [10, 13, 29], "note": "有固定 Top-5 和检索命中计数，未说明独立留出及模型召回率。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r05", "verdict": "covered", "evidence": ["criteria.internship_months"], "note": "5 个月达到下限。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-03", "resume_id": "resume-012", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r05", "verdict": "covered", "evidence": ["criteria.onsite_days_per_week"], "note": "每周 5 天达到 4 天门槛。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-04", "resume_id": "resume-012", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r01", "verdict": "covered", "evidence": ["education.0"], "note": "本科在读满足本科门槛，未满足硕士优先。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r02", "verdict": "partial", "evidence": [16, 26], "note": "接口上线且有 Python 和 FastAPI 技能，未说明这段服务使用 Python。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r03", "verdict": "covered", "evidence": [12], "note": "在关键词召回后实际做过复排，满足一个选项。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r05", "verdict": "partial", "evidence": [10, 13, 29], "note": "有检索评估以及 Top-5 数据，未写明独立留出或完整召回率。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r06", "verdict": "partial", "evidence": [7, 8, 9, 11, 12], "note": "有错误跟踪、版本标注和检索调整，但缺少可追溯的归因推动调整链条。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r07", "verdict": "covered", "evidence": [14, 16], "note": "实习所做的索引功能对应接口随版本上线。"}
+{"pair_id": "resume-012__jd-syn-05", "resume_id": "resume-012", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r08", "verdict": "partial", "evidence": [26], "note": "明确列出 OpenSearch，缺少实际使用的动作。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r04", "verdict": "covered", "evidence": ["criteria.onsite_days_per_week"], "note": "每周 4 天达到下限。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-01", "resume_id": "resume-017", "jd_id": "jd-syn-01", "requirement_id": "jd-syn-01-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r01", "verdict": "covered", "evidence": [2, 9, 17], "note": "做过 Go 报名服务和归档工具，满足 Go 分支。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r02", "verdict": "covered", "evidence": [3, 17], "note": "用 MySQL 处理报名名额更新。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r03", "verdict": "covered", "evidence": [3, 6, 7], "note": "用 MySQL 事务锁处理并发抢占，并在测试库验证。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r04", "verdict": "partial", "evidence": [6, 18], "note": "有接口场景验证和表驱动测试能力，未写出自动化接口用例。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r05", "verdict": "partial", "evidence": ["criteria.onsite_days_per_week"], "note": "每周 4 天低于岗位要求的 5 天。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r07", "verdict": "covered", "evidence": [20], "note": "明确做过课程项目中的 Redis 缓存读写。"}
+{"pair_id": "resume-017__jd-syn-02", "resume_id": "resume-017", "jd_id": "jd-syn-02", "requirement_id": "jd-syn-02-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r01", "verdict": "partial", "evidence": ["education.0"], "note": "在读本科未达到硕士学历。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-03", "resume_id": "resume-017", "jd_id": "jd-syn-03", "requirement_id": "jd-syn-03-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r01", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r05", "verdict": "covered", "evidence": ["criteria.onsite_days_per_week"], "note": "每周 4 天达到下限。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r07", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-04", "resume_id": "resume-017", "jd_id": "jd-syn-04", "requirement_id": "jd-syn-04-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r01", "verdict": "covered", "evidence": ["education.0"], "note": "本科在读满足本科门槛，未满足硕士优先，专科经历单独不满足。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r02", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r03", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r04", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r05", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r06", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r07", "verdict": "partial", "evidence": [2, 8], "note": "社团已实际使用报名工具，未交代生产发布或上线环境。"}
+{"pair_id": "resume-017__jd-syn-05", "resume_id": "resume-017", "jd_id": "jd-syn-05", "requirement_id": "jd-syn-05-r08", "verdict": "missing", "evidence": [], "note": "E1 标注没有这项要求的相关依据。"}
