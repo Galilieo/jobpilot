@@ -1,9 +1,11 @@
 // 依据追溯与底稿没写到的要求：展示改写条目引用的事实、原文片段和检查结论，以及底稿没写到、可以写进去的岗位要求。
 import { CheckCircleOutlined, ExclamationCircleOutlined, WarningOutlined } from '@ant-design/icons'
 import { Card, Space, Tag, Typography, theme } from 'antd'
-import { useState, type ReactElement } from 'react'
+import { useMemo, useState, type ReactElement } from 'react'
 import type { CitedFact, PlanBlock, ResumeBullet, TailoredResumeData } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
+import { FactBadge } from '../../components/FactBadge'
+import { indexResumeFacts, type FactIndex } from '../../factIndex'
 import { isUnwritten, UNWRITTEN_LABEL } from './unwritten'
 
 interface BulletEntry {
@@ -67,8 +69,18 @@ function bulletTriggerClass(bullet: ResumeBullet, isSelected: boolean): string {
   return classes.join(' ')
 }
 
-export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): ReactElement {
+export function ResumeEvidence({
+  resume,
+  factIndex: providedIndex,
+}: {
+  resume: TailoredResumeData
+  factIndex?: FactIndex
+}): ReactElement {
   const entries = collectBullets(resume)
+  const factIndex = useMemo(
+    () => providedIndex ?? indexResumeFacts(resume),
+    [providedIndex, resume],
+  )
   const [selectedId, setSelectedId] = useState<string | null>(entries[0]?.bullet.bullet_id ?? null)
 
   if (entries.length === 0) {
@@ -84,8 +96,14 @@ export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): Reac
         {entries.map(({ experienceTitle, bullet }) => {
           const isSelected = bullet.bullet_id === selectedId
           const cited = bullet.fact_ids
-            .map((id) => ({ id, fact: resume.facts[id] }))
-            .filter((item): item is { id: string; fact: CitedFact } => Boolean(item.fact))
+            .map((id) => ({
+              id,
+              code: factIndex.byFactId.get(id)?.code,
+              fact: resume.facts[id],
+            }))
+            .filter((item): item is { id: string; code: string | undefined; fact: CitedFact } =>
+              Boolean(item.fact),
+            )
           return (
             <li key={bullet.bullet_id} className="evidence-item">
               <button
@@ -101,7 +119,12 @@ export function ResumeEvidence({ resume }: { resume: TailoredResumeData }): Reac
                     {bullet.edited && <Tag color="processing">已手动修改</Tag>}
                   </Space>
                 </div>
-                <Typography.Text>{bullet.text}</Typography.Text>
+                <Typography.Text>
+                  {bullet.text}
+                  {factIndex.bulletFacts(bullet.bullet_id).map((item) => (
+                    <FactBadge key={item.factId} code={item.code} text={item.fact.text} />
+                  ))}
+                </Typography.Text>
               </button>
               {isSelected && <BulletDetail bullet={bullet} cited={cited} />}
             </li>
@@ -117,7 +140,7 @@ function BulletDetail({
   cited,
 }: {
   bullet: ResumeBullet
-  cited: { id: string; fact: CitedFact }[]
+  cited: { id: string; code: string | undefined; fact: CitedFact }[]
 }): ReactElement {
   const { token } = theme.useToken()
   return (
@@ -136,9 +159,10 @@ function BulletDetail({
             </Typography.Paragraph>
           ) : (
             <ul className="evidence-facts-list">
-              {cited.map(({ id, fact }) => (
+              {cited.map(({ id, code, fact }) => (
                 <li key={id}>
                   <div>
+                    {code && <FactBadge code={code} text={fact.text} />}{' '}
                     <Typography.Text>{fact.text}</Typography.Text>{' '}
                     <Tag>{fact.source === 'user' ? '你补充的' : '来自简历'}</Tag>
                     <Typography.Text type="secondary">（{fact.experience}）</Typography.Text>

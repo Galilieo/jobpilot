@@ -174,6 +174,9 @@ describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', (
       if (url === '/api/facts') {
         return jsonResponse(200, LIBRARY)
       }
+      if (url === '/api/tailored-resumes') {
+        return jsonResponse(200, [])
+      }
       throw new Error(`未预期的请求: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -215,22 +218,28 @@ describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', (
       if (url === '/api/tailor-runs/run-1') return jsonResponse(200, RUN_SUCCEEDED)
       if (url === '/api/tailor-runs/run-1/resume') return jsonResponse(200, RESUME_DATA)
       if (url === '/api/facts') return jsonResponse(200, LIBRARY)
+      if (url === '/api/tailored-resumes') return jsonResponse(200, [])
       throw new Error(`未预期的请求: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
 
     renderWithProviders(<ResumePanel jobId="job-1" />)
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(/改写 3 条 · 通过 1 条 · 回退原文 1 条 · 待处理 1 条/),
-      ).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.getByText(/改写 3 条/)).toBeInTheDocument())
+    expect(screen.getByText('基于事实库 v1')).toBeInTheDocument()
 
-    // 进入依据追溯
-    await user.click(screen.getByRole('tab', { name: '依据追溯' }))
+    // 不再有内层四标签，工具条有显示依据开关、更多、导出 PDF
+    expect(screen.queryByRole('tab', { name: '预览与编辑' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '依据追溯' })).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: '显示依据' })).toBeChecked()
+    expect(screen.getByRole('button', { name: '导出 PDF' })).toBeInTheDocument()
+
+    // 从「更多」打开依据追溯抽屉，里面带 F1/F2 编号
+    await user.click(screen.getByRole('button', { name: /更\s?多/ }))
+    await user.click(await screen.findByRole('menuitem', { name: '依据追溯' }))
     expect(await screen.findByText(/原文片段：负责用 FastAPI 实现问答接口/)).toBeInTheDocument()
     expect(screen.getByText('来自简历')).toBeInTheDocument()
+    expect(screen.getAllByText('F1').length).toBeGreaterThanOrEqual(1)
 
     // 点开回退条目
     await user.click(screen.getByRole('button', { name: /主导三人小组交付设备手册问答原型/ }))
@@ -242,14 +251,14 @@ describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', (
     expect(await screen.findByText(/需要你手动修改或删除/)).toBeInTheDocument()
     expect(screen.getByText('数字「10 倍」找不到依据')).toBeInTheDocument()
 
-    // 底稿没写到：别的简历写过的、你补充的都列出；底稿已写到的不列
-    await user.click(screen.getByRole('tab', { name: '底稿没写到 (2)' }))
+    // 切到「底稿没写到」抽屉
+    await user.click(screen.getByRole('button', { name: /更\s?多/ }))
+    await user.click(await screen.findByRole('menuitem', { name: '底稿没写到 (2)' }))
     expect(await screen.findByText('补充 pgvector 混合检索指标')).toBeInTheDocument()
     expect(screen.getByText('别的简历写过')).toBeInTheDocument()
     expect(screen.getByText('有 LangGraph 项目经验')).toBeInTheDocument()
     expect(screen.getByText('你补充的，待核对')).toBeInTheDocument()
     expect(screen.queryByText('熟悉 FastAPI 接口开发')).not.toBeInTheDocument()
-    // 说明部分覆盖、未覆盖去哪里看
     expect(screen.getByText(/部分覆盖、未覆盖的要求见匹配报告/)).toBeInTheDocument()
   })
 
@@ -295,12 +304,14 @@ describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', (
       if (url === '/api/tailor-runs/run-1') return jsonResponse(200, RUN_SUCCEEDED)
       if (url === '/api/tailor-runs/run-1/resume') return jsonResponse(200, withUserChoice)
       if (url === '/api/facts') return jsonResponse(200, LIBRARY)
+      if (url === '/api/tailored-resumes') return jsonResponse(200, [])
       throw new Error(`未预期的请求: ${url}`)
     })
     vi.stubGlobal('fetch', fetchMock)
 
     renderWithProviders(<ResumePanel jobId="job-1" />)
-    await user.click(await screen.findByRole('tab', { name: '依据追溯' }))
+    await user.click(await screen.findByRole('button', { name: /更\s?多/ }))
+    await user.click(await screen.findByRole('menuitem', { name: '依据追溯' }))
 
     // 第一条为自动回退
     expect(await screen.findByText(/检查结论：改写没通过检查，用了事实原文/)).toBeInTheDocument()
@@ -310,5 +321,44 @@ describe('ResumePanel 轮询停止、依据追溯与底稿没写到的要求', (
     await user.click(screen.getByRole('button', { name: /负责用 FastAPI 实现问答接口/ }))
     expect(await screen.findByText(/检查结论：你选择了改用事实原文/)).toBeInTheDocument()
     expect(screen.getByText('已改用事实原文')).toBeInTheDocument()
+  })
+
+  it('事实库已更新时把绿色保证条换成过期提示', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/jobs/job-1/tailor-runs') {
+          return jsonResponse(200, [{ ...SUMMARY_RUNNING, status: 'succeeded', has_resume: true }])
+        }
+        if (url === '/api/tailor-runs/run-1') return jsonResponse(200, RUN_SUCCEEDED)
+        if (url === '/api/tailor-runs/run-1/resume') return jsonResponse(200, RESUME_DATA)
+        if (url === '/api/facts') {
+          return jsonResponse(200, { ...LIBRARY, fact_set: { fact_set_id: 'set-2', version: 2 } })
+        }
+        if (url === '/api/tailored-resumes') {
+          return jsonResponse(200, [
+            {
+              resume_id: 'res-1',
+              run_id: 'run-1',
+              job_id: 'job-1',
+              job_title: '后端实习',
+              job_company: '公司',
+              fact_set_version: 1,
+              latest_fact_set_version: 2,
+              current_version: 1,
+              status: 'generated',
+              updated_at: '2026-11-25T10:00:12Z',
+            },
+          ])
+        }
+        throw new Error(`未预期的请求: ${url}`)
+      }),
+    )
+
+    renderWithProviders(<ResumePanel jobId="job-1" embedded />)
+    expect(
+      await screen.findByText('这份简历基于事实库 v1 生成，事实库已更新到 v2'),
+    ).toBeInTheDocument()
   })
 })

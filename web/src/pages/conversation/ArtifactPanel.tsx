@@ -3,12 +3,13 @@
 import { CloseOutlined, CompressOutlined, ExpandOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Skeleton, Tabs, Tooltip } from 'antd'
-import type { ReactElement } from 'react'
+import { useMemo, type ReactElement } from 'react'
 import { jobs, tailoring } from '../../api/endpoints'
+import { indexResumeFacts, type FactIndex } from '../../factIndex'
 import { JobInfo } from '../job/JobInfo'
 import { MatchPanel } from '../job/MatchPanel'
 import { ResumePanel } from '../job/ResumePanel'
-import { TAILORED_RESUMES_QUERY, jobQuery, matchesQuery } from '../../queryKeys'
+import { TAILORED_RESUMES_QUERY, jobQuery, matchesQuery, tailorResumeQuery } from '../../queryKeys'
 import { PANEL_TAB_LABEL, panelTabs, type PanelTab } from './panelTabs'
 
 interface ArtifactPanelProps {
@@ -31,9 +32,14 @@ function JobTab({ jobId }: { jobId: string }): ReactElement {
   return job.data ? <JobInfo job={job.data} /> : <Skeleton active />
 }
 
-function tabContent(tab: PanelTab, jobId: string, writeKey: string): ReactElement {
-  if (tab === 'resume') return <ResumePanel key={writeKey} jobId={jobId} />
-  if (tab === 'match') return <MatchPanel jobId={jobId} embedded />
+function tabContent(
+  tab: PanelTab,
+  jobId: string,
+  writeKey: string,
+  factIndex?: FactIndex,
+): ReactElement {
+  if (tab === 'resume') return <ResumePanel key={writeKey} jobId={jobId} embedded />
+  if (tab === 'match') return <MatchPanel jobId={jobId} embedded factIndex={factIndex} />
   return <JobTab jobId={jobId} />
 }
 
@@ -47,10 +53,20 @@ export function ArtifactPanel(props: ArtifactPanelProps): ReactElement {
     queryKey: TAILORED_RESUMES_QUERY,
     queryFn: ({ signal }) => tailoring.listAll(signal),
   })
+  const latestResume = resumes.data?.find((item) => item.job_id === jobId)
+  const resumeDetail = useQuery({
+    queryKey: tailorResumeQuery(latestResume?.run_id ?? ''),
+    queryFn: ({ signal }) => tailoring.resume(latestResume!.run_id, undefined, signal),
+    enabled: Boolean(latestResume?.run_id),
+  })
+  const factIndex = useMemo(
+    () => (resumeDetail.data ? indexResumeFacts(resumeDetail.data) : undefined),
+    [resumeDetail.data],
+  )
 
   const tabs = panelTabs({
     hasMatch: (matches.data?.length ?? 0) > 0,
-    hasResume: (resumes.data ?? []).some((item) => item.job_id === jobId),
+    hasResume: Boolean(latestResume),
   })
   const active = props.activeTab && tabs.includes(props.activeTab) ? props.activeTab : tabs[0]
 
@@ -91,9 +107,14 @@ export function ArtifactPanel(props: ArtifactPanelProps): ReactElement {
       items={tabs.map((tab) => ({
         key: tab,
         label: PANEL_TAB_LABEL[tab],
-        children: (
-          <div className="artifact-panel-body">{tabContent(tab, jobId, props.writeKey)}</div>
-        ),
+        children:
+          tab === 'resume' ? (
+            tabContent(tab, jobId, props.writeKey, factIndex)
+          ) : (
+            <div className="artifact-panel-body">
+              {tabContent(tab, jobId, props.writeKey, factIndex)}
+            </div>
+          ),
       }))}
     />
   )

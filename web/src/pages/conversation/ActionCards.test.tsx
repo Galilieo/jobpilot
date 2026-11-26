@@ -1,7 +1,8 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
-import type { AgentActionCard } from '../../api/types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentActionCard, TailoredResumeData } from '../../api/types'
+import { jsonResponse, stubFetch } from '../../test/fetchMock'
 import { renderWithProviders } from '../../test/render'
 import { PendingCard, SKIPPED_ANSWER } from './ActionCards'
 
@@ -9,6 +10,9 @@ const base = { action_id: 'a1', run_id: 'r1', status: 'pending' as const }
 const title = () => '后端实习生'
 
 describe('确认卡', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
   it('确认按钮点一次就禁用，连点也只提交一次', async () => {
     const user = userEvent.setup()
     let finish: (value: string | null) => void = () => undefined
@@ -57,6 +61,86 @@ describe('确认卡', () => {
     expect(screen.getByText('负责接口开发')).toBeInTheDocument()
     expect(screen.getByText('负责接口开发与联调')).toBeInTheDocument()
     expect(screen.getByText('「主导」超出你确认的职责程度')).toBeInTheDocument()
+  })
+
+  it('修改简历条目依据检查通过时在绿底上列出白底事实编号', async () => {
+    const resume: TailoredResumeData = {
+      resume_id: 'res-1',
+      run_id: 'run-edit',
+      version_id: 'v1',
+      version: 1,
+      current_version_id: 'v1',
+      versions: [],
+      content: {
+        header: ['林同学'],
+        style: { font: 'default', size_pt: 10.5, leading: 1.5 },
+        sections: [
+          {
+            title: '项目经历',
+            kind: 'project',
+            entries: [
+              {
+                entry_id: 'e1',
+                experience: '问答',
+                heading: '问答',
+                title: '问答',
+                time: null,
+                lines: [],
+                bullets: [
+                  {
+                    bullet_id: 'bul-1',
+                    text: '用 FastAPI 实现问答接口',
+                    fact_ids: ['f-1', 'f-2'],
+                    origin: 'passed',
+                    edited: false,
+                    check: { text: '用 FastAPI 实现问答接口', layers: 'full', issues: [] },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      facts: {
+        'f-1': {
+          experience: '问答',
+          text: '用 FastAPI 实现问答接口',
+          source: 'resume',
+          source_quote: null,
+        },
+        'f-2': {
+          experience: '问答',
+          text: '整理 48 条评测集',
+          source: 'resume',
+          source_quote: null,
+        },
+      },
+    }
+    stubFetch({
+      'GET /api/tailor-runs/run-edit/resume': () => jsonResponse(200, resume),
+    })
+
+    const card: AgentActionCard = {
+      ...base,
+      kind: 'confirmation',
+      tool: 'edit_resume_item',
+      args: {
+        run_id: 'run-edit',
+        bullet_id: 'bul-1',
+        previous_text: '实现问答接口',
+        text: '用 FastAPI 实现问答接口',
+        check: { text: '用 FastAPI 实现问答接口', layers: 'full', issues: [] },
+      },
+    }
+    const { container } = renderWithProviders(
+      <PendingCard card={card} title={title} decide={vi.fn()} />,
+    )
+
+    expect(await screen.findByText('F1')).toBeInTheDocument()
+    expect(screen.getByText('F2')).toBeInTheDocument()
+    expect(
+      container.querySelector('.grounding-verdict.is-ok .fact-badge.is-on-green'),
+    ).toBeInTheDocument()
   })
 
   it('不认识的工具用通用渲染：工具名和参数键值对，仍可确认', async () => {

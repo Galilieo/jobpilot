@@ -17,15 +17,19 @@ import { jobs } from '../../api/endpoints'
 import { newIdempotencyKey } from '../../api/http'
 import type { Coverage, MatchReport, MatchSummary } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
+import { FactBadge } from '../../components/FactBadge'
+import type { FactIndex } from '../../factIndex'
 import { VERDICT, formatDateTime } from '../../labels'
 import { JOBS_QUERY, OVERVIEW_QUERY, matchReportQuery, matchesQuery } from '../../queryKeys'
 
 export function MatchPanel({
   jobId,
   embedded = false,
+  factIndex,
 }: {
   jobId: string
   embedded?: boolean
+  factIndex?: FactIndex
 }): ReactElement {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -112,7 +116,7 @@ export function MatchPanel({
               }
             />
           )}
-          <ReportBody report={report.data} showVersion={!embedded} />
+          <ReportBody report={report.data} showVersion={!embedded} factIndex={factIndex} />
           {summaries.data && summaries.data.length > 1 && (
             <MatchHistory
               items={summaries.data}
@@ -193,9 +197,11 @@ function CoverageStat({ title, coverage }: { title: string; coverage: Coverage }
 function ReportBody({
   report,
   showVersion,
+  factIndex,
 }: {
   report: MatchReport
   showVersion: boolean
+  factIndex?: FactIndex
 }): ReactElement {
   const topGaps = report.main_gaps.slice(0, 3)
   const extraGaps = report.main_gaps.slice(3)
@@ -250,7 +256,20 @@ function ReportBody({
             <li key={item.requirement_id}>
               <Space size={8} wrap>
                 <Tag color={VERDICT[item.verdict].color}>{VERDICT[item.verdict].text}</Tag>
-                <Typography.Text strong>{item.requirement_text}</Typography.Text>
+                <Typography.Text strong>
+                  {item.requirement_text}
+                  {factIndex &&
+                    item.facts.map((fact) => {
+                      const indexed = factIndex.byFactId.get(fact.fact_id)
+                      return indexed ? (
+                        <FactBadge
+                          key={indexed.factId}
+                          code={indexed.code}
+                          text={indexed.fact.text}
+                        />
+                      ) : null
+                    })}
+                </Typography.Text>
                 {item.requirement_type === 'preferred' && <Tag>加分项</Tag>}
                 {item.decision_source === 'program' && <Tag color="cyan">按数字比对</Tag>}
                 {item.review_note && <Tag color="warning">待核对</Tag>}

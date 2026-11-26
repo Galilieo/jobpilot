@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MatchReport, MatchSummary } from '../../api/types'
+import type { MatchReport, MatchSummary, TailoredResumeData } from '../../api/types'
+import { indexResumeFacts } from '../../factIndex'
 import { renderWithProviders } from '../../test/render'
 import { MatchPanel } from './MatchPanel'
 
@@ -86,5 +87,80 @@ describe('MatchPanel 求职条件依据与程序判定展示', () => {
     expect(
       screen.getByText('待核对说明：复合要求包含其他内容（熟悉 Python），不由程序单独判定'),
     ).toBeInTheDocument()
+  })
+
+  it('传入 factIndex 时在对应要求旁展示一致的事实编号', async () => {
+    const reportWithFact: MatchReport = {
+      ...REPORT,
+      items: [
+        {
+          requirement_id: 'req-fastapi',
+          requirement_type: 'hard',
+          requirement_text: '能用 FastAPI 写服务接口',
+          verdict: 'covered',
+          facts: [{ fact_id: 'f-1', experience: '问答项目', text: '用 FastAPI 实现问答接口' }],
+          reason: '有对应经历',
+          suggestion: '保留',
+        },
+      ],
+    }
+    const resume: TailoredResumeData = {
+      resume_id: 'r1',
+      run_id: 'run-1',
+      version_id: 'v1',
+      version: 1,
+      current_version_id: 'v1',
+      versions: [],
+      content: {
+        header: ['林同学'],
+        style: { font: 'default', size_pt: 10.5, leading: 1.5 },
+        sections: [
+          {
+            title: '项目',
+            kind: 'project',
+            entries: [
+              {
+                entry_id: 'e1',
+                experience: '问答项目',
+                heading: '问答项目',
+                title: '问答项目',
+                time: null,
+                lines: [],
+                bullets: [
+                  {
+                    bullet_id: 'b1',
+                    text: '用 FastAPI 实现问答接口',
+                    fact_ids: ['f-1'],
+                    origin: 'passed',
+                    edited: false,
+                    check: { text: '用 FastAPI 实现问答接口', layers: 'full', issues: [] },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      facts: {
+        'f-1': {
+          experience: '问答项目',
+          text: '用 FastAPI 实现问答接口',
+          source: 'resume',
+          source_quote: null,
+        },
+      },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/jobs/job-1/matches') return jsonResponse(200, SUMMARIES)
+        if (url === '/api/match-reports/rep-1') return jsonResponse(200, reportWithFact)
+        throw new Error(`未预期的请求: ${url}`)
+      }),
+    )
+
+    renderWithProviders(<MatchPanel jobId="job-1" embedded factIndex={indexResumeFacts(resume)} />)
+    expect(await screen.findByText('F1')).toBeInTheDocument()
   })
 })

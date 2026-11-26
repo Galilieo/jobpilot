@@ -1,9 +1,11 @@
 // 确认卡、提问卡和卡片决定后的一行结果。卡片处于哪种状态由调用方按详情判断后传进来。
 // 写入确认按工具分别渲染，认不出的工具用通用的键值对兜底，以后新加的工具也能确认。
 import { CheckOutlined, ExclamationCircleFilled, LoadingOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import { App, Button, Input, Space, Typography } from 'antd'
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { tailoring } from '../../api/endpoints'
 import type {
   AgentActionCard,
   AgentDecidedAction,
@@ -12,7 +14,10 @@ import type {
   AgentQuestionCardArgs,
   BulletCheck,
 } from '../../api/types'
+import { FactBadge } from '../../components/FactBadge'
+import { indexResumeFacts, type IndexedFact } from '../../factIndex'
 import { toolLabel } from '../../labels'
+import { tailorResumeQuery } from '../../queryKeys'
 import type { ToolResultStep } from './timeline'
 
 type Decide = (decision: AgentDecision) => Promise<string | null>
@@ -63,12 +68,28 @@ function CardFrame({
   )
 }
 
-function GroundingVerdict({ check }: { check: BulletCheck }): ReactElement {
+function GroundingVerdict({
+  check,
+  facts = [],
+}: {
+  check: BulletCheck
+  facts?: IndexedFact[]
+}): ReactElement {
   if (check.issues.length === 0) {
     return (
       <div className="grounding-verdict is-ok">
         <CheckOutlined className="grounding-verdict-icon" />
-        <span>依据检查通过：每处说法都有你确认过的事实</span>
+        <span>
+          依据检查通过：每处说法都有你确认过的事实
+          {facts.map((item) => (
+            <FactBadge
+              key={item.factId}
+              code={item.code}
+              text={item.fact.text}
+              variant="on-green"
+            />
+          ))}
+        </span>
       </div>
     )
   }
@@ -88,6 +109,18 @@ function GroundingVerdict({ check }: { check: BulletCheck }): ReactElement {
 
 function ResumeEditBody({ args }: { args: Record<string, unknown> }): ReactElement {
   const check = args.check as BulletCheck | undefined
+  const runId = typeof args.run_id === 'string' ? args.run_id : ''
+  const bulletId = typeof args.bullet_id === 'string' ? args.bullet_id : ''
+  const resume = useQuery({
+    queryKey: tailorResumeQuery(runId),
+    queryFn: ({ signal }) => tailoring.resume(runId, undefined, signal),
+    enabled: Boolean(runId && bulletId),
+  })
+  const facts = useMemo(() => {
+    if (!resume.data || !bulletId) return []
+    return indexResumeFacts(resume.data).bulletFacts(bulletId)
+  }, [bulletId, resume.data])
+
   return (
     <>
       <div className="before-after">
@@ -100,7 +133,7 @@ function ResumeEditBody({ args }: { args: Record<string, unknown> }): ReactEleme
           <p>{check?.text ?? String(args.text ?? '')}</p>
         </div>
       </div>
-      {check && <GroundingVerdict check={check} />}
+      {check && <GroundingVerdict check={check} facts={facts} />}
     </>
   )
 }
