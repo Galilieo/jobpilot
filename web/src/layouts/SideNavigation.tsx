@@ -1,4 +1,4 @@
-// 导航入口和账号菜单；还未接入会话服务时，最近对话只显示一行浅灰提示文字。
+// 导航入口、最近对话和账号菜单。
 import {
   AppstoreOutlined,
   DownOutlined,
@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
 import { auth } from '../api/endpoints'
 import { ME_QUERY, useCurrentUser } from '../auth'
+import { RecentConversations } from './RecentConversations'
 
 interface SideNavigationProps {
   onNavigate?: () => void
@@ -63,9 +64,7 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
       />
       <section className="recent-conversations" aria-label="最近对话">
         <Typography.Text type="secondary">最近对话</Typography.Text>
-        <Typography.Text type="secondary" className="recent-empty">
-          还没有对话
-        </Typography.Text>
+        <RecentConversations onNavigate={onNavigate} />
       </section>
       <Dropdown
         trigger={['click']}
