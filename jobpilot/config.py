@@ -35,6 +35,17 @@ class ModelSettings(BaseModel):
     max_tokens: int = Field(default=2048, gt=0)
 
 
+class AgentLimits(BaseModel):
+    """同一轮对话及其工具共享的预算与历史窗口。"""
+
+    model_calls: int = Field(default=65, ge=1, le=150)
+    model_tokens: int = Field(default=250_000, gt=0)
+    tool_calls: int = Field(default=12, ge=1, le=30)
+    seconds: float = Field(default=180, gt=0)
+    history_turns: int = Field(default=10, gt=0)
+    history_tokens: int = Field(default=8000, gt=0)
+
+
 class Settings(BaseSettings):
     """加载本地配置；环境变量优先于 .env，同名默认值最后使用。"""
 
@@ -84,6 +95,8 @@ class Settings(BaseSettings):
     ground_check: ModelSettings = Field(default_factory=ModelSettings)
     order_ocr: ModelSettings = Field(default_factory=ModelSettings)
     agent: ModelSettings = Field(default_factory=ModelSettings)
+
+    agent_limits: AgentLimits = Field(default_factory=AgentLimits)
 
     model_max_attempts: int = Field(default=2, ge=1)
     model_retry_delay_seconds: float = Field(default=0.5, ge=0)

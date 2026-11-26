@@ -13,7 +13,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.account import router as account_router
+from jobpilot.api.agent import router as agent_router
 from jobpilot.api.auth import router as auth_router
+from jobpilot.api.conversations import router as conversation_router
 from jobpilot.api.error_boundary import RequestErrorBoundary
 from jobpilot.api.facts import router as facts_router
 from jobpilot.api.idempotency import IdempotentReplay, replay_response
@@ -31,6 +33,7 @@ from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.db.session import check_database, create_database_engine, get_session
 from jobpilot.diagnostics import describe_error, error_locations
 from jobpilot.services.accounts import purge_daily, purge_with_logging
+from jobpilot.services.agent.runtime import AgentRuntime
 
 logger = logging.getLogger("uvicorn.error").getChild("jobpilot")
 
@@ -82,8 +85,11 @@ app = FastAPI(title="JobPilot", lifespan=lifespan)
 app.add_middleware(RequestErrorBoundary)
 # 改写的后台任务。不依赖事件循环；测试客户端不运行 lifespan，也要有它。
 app.state.run_launcher = RunLauncher()
+app.state.agent_runtime = AgentRuntime()
 app.add_exception_handler(IdempotentReplay, replay_response)
 app.include_router(auth_router)
+app.include_router(conversation_router)
+app.include_router(agent_router)
 app.include_router(account_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)

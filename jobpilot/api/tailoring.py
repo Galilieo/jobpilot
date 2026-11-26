@@ -38,7 +38,11 @@ from jobpilot.diagnostics import describe_error, error_locations
 from jobpilot.services import drafts
 from jobpilot.services.jobs import effective_parsed_job
 from jobpilot.services.llm_gateway import ModelBudget
-from jobpilot.services.tailoring_graph import TailorDeps, run_tailoring
+from jobpilot.services.tailoring_graph import (
+    TAILOR_MAX_CONCURRENT_REQUESTS,
+    TailorDeps,
+    run_tailoring,
+)
 from jobpilot.services.tailoring_plan import (
     TailorFact,
     UnresolvedSectionsError,
@@ -51,8 +55,8 @@ router = APIRouter(prefix="/api", tags=["tailoring"])
 # 一次改写运行的额度。先按估算设：5 块 × (1 次改写 + 4 条第三层 + 约 2 次修订和复查)
 # 再加匹配，约 35 次；E5 测出中位数后改成它的 2～3 倍（02 第 3.2 节）。
 _TAILOR_BUDGET = {"remaining_calls": 60, "remaining_tokens": 200_000}
-# 同一次运行同时进行的模型请求上限。
-_MAX_CONCURRENT_REQUESTS = 4
+# E5 runner 从这里读取接口预算与并发配置。
+_MAX_CONCURRENT_REQUESTS = TAILOR_MAX_CONCURRENT_REQUESTS
 
 
 class RunLauncher:
@@ -68,10 +72,11 @@ class RunLauncher:
 
     def _finish(self, run_id: UUID, task: asyncio.Task[None]) -> None:
         """收走终态写入等未处理错误，避免 asyncio 输出原异常。"""
-        self._tasks.pop(run_id)
+        if self._tasks.get(run_id) is task:
+            self._tasks.pop(run_id)
         if not task.cancelled() and (error := task.exception()) is not None:
             logger.error(
-                "改写任务 %s 退出（%s），调用栈：%s",
+                "后台运行 %s 退出（%s），调用栈：%s",
                 run_id,
                 describe_error(error),
                 error_locations(error),

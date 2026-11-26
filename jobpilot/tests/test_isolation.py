@@ -197,7 +197,41 @@ async def _create_tailor_run(
 
 
 # T1.4 起每加一类业务资源，就在这里登记一项。
+async def _create_conversation(client: httpx.AsyncClient, _outputs: list[str]) -> str:
+    response = await client.post("/api/conversations", json={"title": "B 的对话"})
+    assert response.status_code == 201, response.text
+    return response.json()["conversation_id"]
+
+
 OWNED_RESOURCES: list[OwnedResource] = [
+    OwnedResource(
+        name="conversation",
+        create=_create_conversation,
+        read=("GET", "/api/conversations/{id}"),
+        attempts=(
+            Attempt("GET", "/api/conversations/{id}"),
+            Attempt("PUT", "/api/conversations/{id}", {"title": "A 的修改"}),
+            Attempt("DELETE", "/api/conversations/{id}"),
+            Attempt(
+                "POST", "/api/conversations/{id}/messages", {"content": "A 的消息"}
+            ),
+            Attempt(
+                "POST", "/api/conversations/{id}/actions/{id}", {"decision": "confirm"}
+            ),
+        ),
+        routes=frozenset(
+            {
+                ("GET", "/api/conversations"),
+                ("POST", "/api/conversations"),
+                ("GET", "/api/conversations/{conversation_id}"),
+                ("PUT", "/api/conversations/{conversation_id}"),
+                ("DELETE", "/api/conversations/{conversation_id}"),
+                ("POST", "/api/conversations/{conversation_id}/messages"),
+                ("POST", "/api/conversations/{conversation_id}/actions/{action_id}"),
+                ("POST", "/api/actions/{action_id}/undo"),
+            }
+        ),
+    ),
     OwnedResource(
         name="fact",
         create=_create_fact,
@@ -262,6 +296,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
         read=("GET", "/api/jobs/{id}"),
         attempts=(
             Attempt("GET", "/api/jobs/{id}"),
+            Attempt("POST", "/api/conversations", {"current_job_id": "{id}"}),
             Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
             Attempt("DELETE", "/api/jobs/{id}"),
             Attempt("POST", "/api/jobs/{id}/match", headers=new_idempotency_headers()),

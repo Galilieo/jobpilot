@@ -51,6 +51,8 @@ from jobpilot.services.tailoring_store import (
     stop_reason_of,
 )
 
+TAILOR_MAX_CONCURRENT_REQUESTS = 4
+
 
 @dataclass(frozen=True)
 class TailorDeps:

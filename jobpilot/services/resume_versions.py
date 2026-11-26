@@ -460,3 +460,40 @@ async def _resume_of(
     if resume is None:
         raise ResumeNotFoundError(run_id)
     return resume
+
+
+async def save_checked_version(
+    db: AsyncSession,
+    user_id: UUID,
+    run_id: UUID,
+    *,
+    base_version_id: UUID,
+    content: ResumeContent,
+) -> LoadedResume:
+    """保存服务端从指定底稿生成并已完成依据检查的编辑。"""
+    resume = await _locked_resume(db, user_id, run_id, base_version_id)
+    return await _append_version(db, user_id, resume, content)
+
+
+async def restore_snapshot(
+    db: AsyncSession,
+    user_id: UUID,
+    run_id: UUID,
+    *,
+    base_version_id: UUID,
+    restore_version_id: UUID,
+) -> LoadedResume:
+    """确认当前版本未移动，再将原版本内容复制成新版本。"""
+    resume = await _locked_resume(db, user_id, run_id, base_version_id)
+    previous = await db.scalar(
+        select(ResumeVersion).where(
+            ResumeVersion.resume_version_id == restore_version_id,
+            ResumeVersion.resume_id == resume.resume_id,
+            ResumeVersion.user_id == user_id,
+        )
+    )
+    if previous is None:
+        raise ResumeNotFoundError(run_id)
+    return await _append_version(
+        db, user_id, resume, ResumeContent.from_stored(previous.content_json)
+    )
