@@ -7,6 +7,9 @@ export interface User {
   deletion_deadline: string | null
 }
 
+// ---------- 对话 Agent ----------
+// 事件名和数据形状对应 jobpilot/services/agent/runtime.py、graph.py 与 api/conversations.py。
+
 export interface AgentTextAttachment {
   kind?: 'text' | 'jd' | 'ocr'
   name?: string | null
@@ -19,16 +22,19 @@ export interface AgentMessageInput {
   attachments?: AgentTextAttachment[]
 }
 
+export type AgentActionStatus =
+  'pending' | 'confirmed' | 'rejected' | 'executed' | 'failed' | 'undone'
+
 interface AgentActionCardBase {
   action_id: string
   run_id: string
   tool: string
-  status: 'pending' | 'confirmed' | 'rejected' | 'executed' | 'failed' | 'undone'
+  status: AgentActionStatus
 }
 
-type AgentJobChoice = 'new' | 'switch' | 'keep'
+export type AgentJobChoice = 'new' | 'switch' | 'keep'
 
-type AgentQuestionCardArgs =
+export type AgentQuestionCardArgs =
   | { type: 'questions'; questions: { question_id: string; text: string }[] }
   | { type: 'job_choice'; question: string; job_id: string; choices: AgentJobChoice[] }
 
@@ -44,10 +50,14 @@ export type AgentDecision =
   | { decision: 'confirm'; answers: Record<string, string>; job_choice?: never }
   | { decision: 'confirm'; job_choice: AgentJobChoice; answers?: never }
 
+export type AgentConfirmationStatus = 'waiting_decision' | 'decision_saved' | 'recovering'
+
+export type AgentDecidedAction = AgentActionCard & { result: Record<string, unknown> | null }
+
 export interface AgentConfirmationDetails {
-  confirmation_status: 'waiting_decision' | 'decision_saved' | 'recovering' | null
+  confirmation_status: AgentConfirmationStatus | null
   pending_action: AgentActionCard | null
-  latest_decided_action: (AgentActionCard & { result: Record<string, unknown> | null }) | null
+  latest_decided_action: AgentDecidedAction | null
 }
 
 export interface AgentMessageConflict {
@@ -56,6 +66,73 @@ export interface AgentMessageConflict {
     run_id: string
     pending_action: AgentActionCard | null
   }
+}
+
+export interface Conversation {
+  conversation_id: string
+  title: string
+  current_job_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+// 工具消息的一步：执行结果摘要（context.summarize_tool），或出卡时的卡片快照。
+export type AgentToolStep =
+  | ({ tool: string; tool_call_id?: string; status?: number | string; error?: string } & Record<
+      string,
+      unknown
+    >)
+  | { confirm: AgentActionCard }
+
+export interface ConversationMessage {
+  message_id: string
+  run_id: string
+  client_message_id: string | null
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  attachments_json: AgentTextAttachment[]
+  steps_json: AgentToolStep[]
+  created_at: string
+}
+
+export interface AgentRun {
+  run_id: string
+  status: RunStatus
+  stop_reason: string | null
+}
+
+export interface ConversationDetail extends Conversation, AgentConfirmationDetails {
+  messages: ConversationMessage[]
+  run: AgentRun | null
+}
+
+export interface AgentActionResult {
+  action_id: string
+  tool: string
+  status: AgentActionStatus
+  result: Record<string, unknown> | null
+}
+
+export type AgentStreamEvent =
+  | { event: 'text'; data: { text: string } }
+  | { event: 'tool_start'; data: { tool: string; tool_call_id: string } }
+  | { event: 'tool_end'; data: Extract<AgentToolStep, { tool: string }> }
+  | { event: 'confirm'; data: AgentActionCard }
+  | {
+      event: 'done'
+      data: {
+        run_id: string
+        status: RunStatus
+        stop_reason: string | null
+        action?: AgentActionResult
+      }
+    }
+  | { event: 'error'; data: { message?: string; error?: string; status?: number } }
+
+export interface AgentUndoResult {
+  action_id: string
+  status: 'undone'
+  result: Record<string, unknown>
 }
 
 // ---------- 工作台汇总 ----------

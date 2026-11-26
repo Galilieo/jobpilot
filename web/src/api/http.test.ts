@@ -78,6 +78,24 @@ describe('request HTTP 错误整理与请求约定', () => {
     })
   })
 
+  it('422 的模型级校验说明原样显示，例如消息总长度上限', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(422, {
+          detail: [
+            { loc: ['body'], msg: 'Value error, 消息正文和附件的总长度不能超过 20833 字符' },
+          ],
+        }),
+      ),
+    )
+
+    await expect(request('/api/x', { json: {} })).rejects.toMatchObject({
+      status: 422,
+      message: '消息正文和附件的总长度不能超过 20833 字符',
+    })
+  })
+
   it('断网抛出 status=0 的 ApiError，AbortError 原样抛出', async () => {
     vi.stubGlobal(
       'fetch',

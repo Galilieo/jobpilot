@@ -11,3 +11,6 @@ export const tailorRunsQuery = (jobId: string) => ['jobs', jobId, 'tailor-runs']
 export const tailorRunQuery = (runId: string) => ['tailor-run', runId] as const
 export const tailorResumeQuery = (runId: string, version?: number) =>
   ['tailor-resume', runId, version ?? 'current'] as const
+export const CONVERSATIONS_QUERY = ['conversations', 'list'] as const
+export const conversationQuery = (conversationId: string) =>
+  ['conversations', conversationId] as const

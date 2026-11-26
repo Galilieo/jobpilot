@@ -1,6 +1,11 @@
 // 前端用到的全部接口，一个函数对应一个后端接口；路径与 02 第 6 节一致。
-import { request } from './http'
+import { postForStream, request } from './http'
 import type {
+  AgentDecision,
+  AgentMessageInput,
+  AgentUndoResult,
+  Conversation,
+  ConversationDetail,
   CriterionField,
   DegreeLevel,
   DraftCriterion,
@@ -199,4 +204,31 @@ export const tailoring = {
     const ver = version !== undefined ? `&version=${version}` : ''
     return `/api/tailor-runs/${runId}/export?format=${format}${ver}`
   },
+}
+
+// ---------- 对话 ----------
+
+export const conversations = {
+  list: (signal?: AbortSignal) => request<Conversation[]>('/api/conversations', { signal }),
+  get: (conversationId: string, signal?: AbortSignal) =>
+    request<ConversationDetail>(`/api/conversations/${conversationId}`, { signal }),
+  create: (title: string) => request<Conversation>('/api/conversations', { json: { title } }),
+  update: (conversationId: string, changes: { title?: string; current_job_id?: string | null }) =>
+    request<Conversation>(`/api/conversations/${conversationId}`, {
+      method: 'PUT',
+      json: changes,
+    }),
+  remove: (conversationId: string) =>
+    request<void>(`/api/conversations/${conversationId}`, { method: 'DELETE' }),
+  // 下面两个返回 SSE 响应，由 readAgentStream 读。
+  sendMessage: (conversationId: string, body: AgentMessageInput, signal?: AbortSignal) =>
+    postForStream(`/api/conversations/${conversationId}/messages`, body, signal),
+  decide: (
+    conversationId: string,
+    actionId: string,
+    decision: AgentDecision,
+    signal?: AbortSignal,
+  ) => postForStream(`/api/conversations/${conversationId}/actions/${actionId}`, decision, signal),
+  undo: (actionId: string) =>
+    request<AgentUndoResult>(`/api/actions/${actionId}/undo`, { method: 'POST' }),
 }
