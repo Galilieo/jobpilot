@@ -5,12 +5,16 @@ from itertools import groupby
 from json import dumps
 from uuid import UUID
 
+from openai.types.chat import ChatCompletionSystemMessageParam
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from jobpilot.config import settings
 from jobpilot.db.conversations import find_conversation, recent_messages
 from jobpilot.db.models import Message, MessageRole
 from jobpilot.services.agent.read_tools import current_job_summary
 from jobpilot.services.agent.types import AgentDeps, AgentState, Payload
 from jobpilot.services.llm_gateway import redact_pii, wrap_untrusted_text
+from jobpilot.services.memories import memory_views
 from jobpilot.services.prompts import load_prompt
 
 
@@ -85,13 +89,29 @@ def _history_content(message: Message, *, current: bool) -> str:
     return content
 
 
-def _system_content(summary: Payload | None) -> str:
+async def agent_system_message(
+    agent: AgentDeps, session: AsyncSession
+) -> ChatCompletionSystemMessageParam:
+    conversation = await find_conversation(
+        agent.user_id, session, agent.conversation_id
+    )
+    job_id = conversation.current_job_id if conversation else None
+    summary = await current_job_summary(agent.user_id, session, job_id)
+    memories = {
+        item.key: item.value
+        for item in await memory_views(session, agent.user_id)
+        if item.value is not None
+    }
     system = load_prompt("agent").text
+    if memories:
+        system += "\n长期记忆\n" + wrap_untrusted_text(
+            "long_term_memory", serialize(memories)
+        )
     if summary:
         system += "\n当前岗位摘要\n" + wrap_untrusted_text(
             "current_job", serialize(summary)
         )
-    return system
+    return {"role": "system", "content": system}
 
 
 def _render_turn(messages: Iterable[Message], *, current: bool) -> list[Payload]:
@@ -136,14 +156,10 @@ async def build_context(agent: AgentDeps) -> AgentState:
         rows = await recent_messages(
             agent.user_id, session, agent.conversation_id, limits.history_turns
         )
-        conversation = await find_conversation(
-            agent.user_id, session, agent.conversation_id
-        )
-        job_id = conversation.current_job_id if conversation else None
-        summary = await current_job_summary(agent.user_id, session, job_id)
+        system = await agent_system_message(agent, session)
     return {
         "messages": [
-            {"role": "system", "content": _system_content(summary)},
+            system,
             *_render_recent_history(rows, agent.run_id, limits.history_tokens),
         ],
         "run_id": str(agent.run_id),

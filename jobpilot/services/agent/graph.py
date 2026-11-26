@@ -34,11 +34,12 @@ from jobpilot.db.models import (
 from jobpilot.services.agent.actions import apply_write, bind_job
 from jobpilot.services.agent.arguments import JobArgs, ParseJobArgs
 from jobpilot.services.agent.context import (
+    agent_system_message,
     build_context,
     serialize_tool_result,
     summarize_tool,
 )
-from jobpilot.services.agent.memory_actions import MEMORY_CLARIFICATION
+from jobpilot.services.agent.memory_actions import MEMORY_CLARIFICATION, MEMORY_TOOLS
 from jobpilot.services.agent.questions import (
     JOB_CHOICE_QUESTION,
     JobSelection,
@@ -481,13 +482,18 @@ async def _apply(agent: AgentDeps, state: AgentState) -> AgentState:
             )
         else:
             result = await apply_write(session, action)
+    messages = state["messages"]
+    if call["name"] in MEMORY_TOOLS and "revision" in result:
+        async with agent.sessions() as session:
+            system = await agent_system_message(agent, session)
+        messages = [system, *messages[1:]]
     replies = []
     for item in calls:
         item_result = _question_tool_result(item, result) if ask else result
         await _record(agent, item, item_result)
         replies.append(_tool_message(item, item_result))
     return {
-        "messages": [*state["messages"], *replies],
+        "messages": [*messages, *replies],
         "calls": state["calls"][len(calls) :],
         "tools_left": state["tools_left"] - len(calls),
         "asked": state["asked"] or ask,

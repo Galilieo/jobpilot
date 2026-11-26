@@ -96,6 +96,48 @@ async def test_memory_requires_an_unambiguous_current_body_quote(
     assert [card["tool"] for card in cards] == ["ask_user"]
 
 
+async def test_memory_is_recalled_in_a_new_conversation_and_removed_after_forget(
+    async_client: httpx.AsyncClient,
+) -> None:
+    await sign_in(async_client)
+    value = "仅考虑虚构甲类岗位"
+    saved = await async_client.put(
+        "/api/memories/job_notes", json={"expected_revision": 0, "value": value}
+    )
+    assert saved.status_code == 200
+    path = await conversation(async_client)
+    requests: list[list[dict[str, str]]] = []
+    quote = "忘掉其他求职偏好"
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        messages = loads(request.content)["messages"]
+        requests.append(messages)
+        if messages[-1]["role"] == "tool":
+            return reply()
+        return batch(("forget", {"key": "job_notes", "op": "clear", "quote": quote}))
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        card = card_of(await _send(async_client, path, quote))
+        response = await _confirm(async_client, path, card["action_id"])
+        assert response.status_code == 200
+
+    assert value in requests[0][0]["content"]
+    assert value not in str(requests[1])
+    assert value not in str(events(response))
+    assert value not in str((await async_client.get(path)).json())
+    undone = await async_client.post(f"/api/actions/{card['action_id']}/undo")
+    assert undone.is_success
+    assert value not in undone.text
+    preferences = (await async_client.get("/api/memories")).json()
+    assert next(item for item in preferences if item["key"] == "job_notes") == {
+        "key": "job_notes",
+        "value": value,
+        "revision": 3,
+        "deleted": False,
+    }
+
+
 async def test_list_add_and_replace_compute_the_card_value_on_the_server(
     async_client: httpx.AsyncClient,
 ) -> None:
