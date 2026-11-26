@@ -1,12 +1,12 @@
 """验证裁判的覆盖校验和二分类一致性计分。"""
 
 import pytest
-from pydantic import ValidationError
-
 from evals.runners.e5_dataset import pairs_for
 from evals.runners.e5_judge import Candidate, JudgeBatch
 from evals.runners.e5_run import EvalBullet, Version
 from evals.runners.e5_score import agreement
+from pydantic import ValidationError
+
 from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
 
 

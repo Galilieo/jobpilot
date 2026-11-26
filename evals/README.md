@@ -493,3 +493,5 @@ uv run --project jobpilot python -m evals.runners.e5_score score evals/results/e
 按 [DeepSeek 官方人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 的高峰非缓存输入价估算。Flash 每百万输入 2 元、输出 8 元。Pro 每百万输入 9 元、输出 27 元。将两组实际用量和墙钟时间乘以 25，生成约 **5.81 元、39 分钟**，裁判约 **14.19 元、28 分钟**，合计约 **20 元、1.1 小时**。费用按未命中缓存估算，实际随样本文本、修订次数和缓存变化。耗时不含人工标注等待，费用和耗时均不含可能的额外裁判校准轮次。
 
 C 首次试跑发现 `resume-011` 的混合栏目被评测导入切成了只有栏目名的分段，产品组装器移去栏目名后无条目可读。用 `ee0a961` 修正合成样本分段并检查全部 10 份底稿，再重跑 C。表内 C 的用量取完整重跑结果。最初中断的调用不用于外推。产品提示词及默认检查保持原版本。
+
+**试跑盲标。** 全量推迟到其他优化完成后统一运行。先用已有的 131 条试跑裁判结果抽取 40 条，五个版本各 8 条，包含两种初判类别，并优先选择不同句子。[盲标表](datasets/e5/calibration-sheet.csv) 已随机打乱。填写后另存为 `evals/private/e5-calibration.csv`，计分时使用 `--judging evals/results/e5-pilot-judge.json` 与同次生成的本地键表 `evals/results/e5-calibration-map.json`。

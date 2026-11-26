@@ -80,6 +80,25 @@ def _candidates(
     return split, records, candidates
 
 
+def _take_distinct(
+    pool: list[Candidate],
+    count: int,
+    seen: set[tuple[str, str | None, str]],
+) -> list[Candidate]:
+    """优先抽不同的句子，需要时用重复句补足版本配额。"""
+    distinct, repeated = [], []
+    for item in pool:
+        if len(distinct) == count:
+            break
+        signature = (item.pair.resume_id, item.bullet.experience, item.bullet.text)
+        if signature in seen:
+            repeated.append(item)
+        else:
+            distinct.append(item)
+            seen.add(signature)
+    return distinct + repeated[: count - len(distinct)]
+
+
 def _draw(
     candidates: list[Candidate],
     verdicts: dict[str, Verdict],
@@ -87,6 +106,7 @@ def _draw(
     random = Random(SAMPLE_SEED)
     selected = []
     strata = {}
+    seen: set[tuple[str, str | None, str]] = set()
     if {bool(verdict.types) for verdict in verdicts.values()} != {True, False}:
         raise ValueError("开发集裁判结果须同时包含有编造与无编造条目")
     for version in Version:
@@ -101,7 +121,8 @@ def _draw(
             len(positive), max(PER_VERSION // 2, PER_VERSION - len(negative))
         )
         n_negative = PER_VERSION - n_positive
-        selected.extend(negative[:n_negative] + positive[:n_positive])
+        selected.extend(_take_distinct(positive, n_positive, seen))
+        selected.extend(_take_distinct(negative, n_negative, seen))
         strata[version.value] = {
             "provisional_positive": n_positive,
             "provisional_negative": n_negative,

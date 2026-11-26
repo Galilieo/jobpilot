@@ -5,10 +5,10 @@ import re
 
 import httpx
 import pytest
-
 from evals.runners.e5_dataset import pairs_for
 from evals.runners.e5_run import Version, _run_pair, eval_prompt
 from evals.runners.e5_store import Factory
+
 from jobpilot.db.models import CheckStatus, RunStatus
 from jobpilot.services.prompts import load_prompt
 from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
