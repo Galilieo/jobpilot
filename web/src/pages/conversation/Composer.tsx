@@ -3,7 +3,7 @@
 import { CloseOutlined, FileTextOutlined } from '@ant-design/icons'
 import { Sender } from '@ant-design/x'
 import { Typography } from 'antd'
-import type { ReactElement } from 'react'
+import type { ReactElement, RefObject } from 'react'
 import type { AgentTextAttachment } from '../../api/types'
 import { AttachmentPicker } from './AttachmentPicker'
 
@@ -18,6 +18,11 @@ interface ComposerProps {
   onSubmit: () => void
   // 运行没结束或有卡等你决定时不能发新消息，placeholder 说明原因。
   blockedReason: string | null
+  variant?: 'default' | 'prominent'
+  placeholder?: string
+  minRows?: number
+  hideNote?: boolean
+  containerRef?: RefObject<HTMLDivElement | null>
 }
 
 export function Composer({
@@ -25,20 +30,30 @@ export function Composer({
   onChange,
   onSubmit,
   blockedReason,
+  variant = 'default',
+  placeholder = '发 JD、问匹配情况，或让我改一条简历…',
+  minRows = 2,
+  hideNote = false,
+  containerRef,
 }: ComposerProps): ReactElement {
   const hasContent = draft.text.trim().length > 0 || draft.attachments.length > 0
   const canSend = blockedReason === null && hasContent
   const { attachments } = draft
 
   return (
-    <div className="conversation-composer">
+    <div
+      ref={containerRef}
+      className={
+        variant === 'prominent' ? 'conversation-composer is-prominent' : 'conversation-composer'
+      }
+    >
       <Sender
         value={draft.text}
         onChange={(text) => onChange({ ...draft, text })}
         onSubmit={() => canSend && onSubmit()}
         submitType="enter"
-        placeholder={blockedReason ?? '发 JD、问匹配情况，或让我改一条简历…'}
-        autoSize={{ minRows: 2, maxRows: 8 }}
+        placeholder={blockedReason ?? placeholder}
+        autoSize={{ minRows, maxRows: 8 }}
         header={
           attachments.length > 0 && (
             <div className="composer-attachments">
@@ -68,9 +83,11 @@ export function Composer({
           <SendButton type="primary" disabled={!canSend} aria-label="发送" />
         )}
       />
-      <Typography.Text type="secondary" className="composer-note">
-        新增、修改和删除前，会先请你确认。
-      </Typography.Text>
+      {!hideNote && (
+        <Typography.Text type="secondary" className="composer-note">
+          新增、修改和删除前，会先请你确认。
+        </Typography.Text>
+      )}
     </div>
   )
 }

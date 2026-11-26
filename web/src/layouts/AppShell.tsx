@@ -55,7 +55,7 @@ export function AppShell(): ReactElement {
               aria-label="打开导航"
               onClick={() => setNavigationOpen(true)}
             />
-            <span className="brand">
+            <span className="brand serif-heading">
               Job<span style={{ color: token.colorPrimary }}>Pilot</span>
             </span>
           </header>

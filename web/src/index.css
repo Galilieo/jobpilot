@@ -136,10 +136,24 @@ textarea {
   padding: 16px 12px 12px;
 }
 .brand {
-  padding: 4px 8px;
+  padding: 2px 8px 6px;
   font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.4px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.new-chat-btn.ant-btn {
+  border-radius: var(--jp-radius-md);
+  border-color: var(--ant-color-border-secondary);
+  box-shadow: var(--jp-shadow-card);
+  font-weight: 500;
+}
+.sidebar-menu .ant-menu-item-selected,
+.recent-list .ant-conversations-item-active {
+  box-shadow: inset 2px 0 0 var(--ant-color-primary);
+  font-weight: 500;
+}
+.recent-list .ant-conversations-item {
+  border-radius: var(--jp-radius-sm);
 }
 .recent-conversations {
   display: flex;
@@ -158,12 +172,12 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   height: auto;
-  padding: 8px 12px;
+  padding: 8px;
   border-top: 1px solid var(--ant-color-border-secondary);
-  border-radius: 10px;
+  border-radius: var(--jp-radius-md);
   text-align: left;
 }
 .account-menu .ant-avatar {
@@ -179,6 +193,14 @@ textarea {
 }
 .account-copy .ant-typography:last-child {
   font-size: 12px;
+}
+.account-chevron {
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+  transition: transform 0.18s ease;
+}
+.account-menu[aria-expanded='true'] .account-chevron {
+  transform: rotate(180deg);
 }
 
 /* 通用页面与公共组件 */
@@ -445,32 +467,72 @@ textarea {
   padding: 24px max(24px, calc((100% - 860px) / 2)) 8px;
 }
 .conversation-welcome {
-  width: 100%;
-  max-width: 640px;
+  width: min(720px, 100%);
+  padding-bottom: 9vh;
   text-align: center;
 }
-.conversation-welcome .ant-welcome {
-  justify-content: center;
+.welcome-heading {
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1.3;
+}
+.ant-typography.welcome-subtitle {
+  margin: 0 0 28px;
+  font-size: 14px;
+}
+.conversation-welcome .conversation-composer {
+  max-width: none;
   padding: 0;
 }
-.welcome-prompts {
-  margin-top: 28px;
-  text-align: left;
+.welcome-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
 }
-.welcome-prompts .ant-prompts-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.welcome-prompts .ant-prompts-item {
-  border: 1px solid var(--ant-color-border);
-  border-radius: 12px;
+.starter-btn.ant-btn {
+  border-radius: var(--jp-radius-sm);
+  padding: 6px 12px;
+  height: auto;
+  font-size: 13.5px;
+  border-color: var(--ant-color-border);
   background: var(--ant-color-bg-container);
-  transition: border-color 0.2s;
+  color: var(--ant-color-text);
 }
-.welcome-prompts .ant-prompts-item:hover {
-  border-color: var(--ant-color-primary-border-hover);
-  background: var(--ant-color-bg-container);
+.starter-btn.ant-btn:hover {
+  border-color: var(--ant-color-primary-border);
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-text);
+}
+.welcome-trust {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 18px;
+  margin-top: 30px;
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+}
+.welcome-trust-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.welcome-trust-icon {
+  color: var(--ant-color-success);
+  font-size: 13px;
+}
+.job-pill-static.is-empty {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--ant-color-border);
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
 }
 .conversation-composer {
   width: 100%;
@@ -479,8 +541,22 @@ textarea {
   padding: 12px 24px 20px;
 }
 .conversation-composer .ant-sender {
-  border-radius: 16px;
-  box-shadow: 0 1px 6px rgba(31, 31, 31, 0.04);
+  border: 1px solid var(--ant-color-primary-border);
+  border-radius: var(--jp-radius-lg);
+  box-shadow: var(--jp-shadow-composer);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.conversation-composer .ant-sender:focus-within {
+  border-color: var(--ant-color-primary);
+  box-shadow:
+    0 0 0 3px var(--ant-color-primary-bg),
+    var(--jp-shadow-composer);
+}
+.conversation-composer.is-prominent .ant-sender-input {
+  min-height: 72px;
+  font-size: 15px;
 }
 .composer-note {
   display: block;
@@ -1296,9 +1372,11 @@ textarea {
   .conversation-composer {
     padding: 8px 16px 12px;
   }
-  .before-after,
-  .welcome-prompts .ant-prompts-list {
+  .before-after {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .welcome-heading {
+    font-size: 24px;
   }
 }
 @media (max-width: 767px) {

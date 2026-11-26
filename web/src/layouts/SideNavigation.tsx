@@ -1,16 +1,16 @@
 // 导航入口、最近对话和账号菜单。
 import {
   AppstoreOutlined,
-  DownOutlined,
   LogoutOutlined,
   PlusOutlined,
   SettingOutlined,
   SolutionOutlined,
+  UpOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { Avatar, Button, Dropdown, Menu, Typography, theme } from 'antd'
 import type { MenuProps } from 'antd'
-import type { ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router'
 import { auth } from '../api/endpoints'
@@ -33,6 +33,20 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const email = useCurrentUser().data?.email
+  const [menuOpen, setMenuOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [menuOpen])
 
   async function logout(): Promise<void> {
     await auth.logout().catch(() => undefined) // 已过期也照样回到登录页
@@ -49,10 +63,15 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
 
   return (
     <nav className="sidebar" aria-label="主导航">
-      <div className="brand">
+      <div className="brand serif-heading">
         Job<span style={{ color: token.colorPrimary }}>Pilot</span>
       </div>
-      <Button icon={<PlusOutlined />} block onClick={() => openPage('/conversations/new')}>
+      <Button
+        className="new-chat-btn"
+        icon={<PlusOutlined />}
+        block
+        onClick={() => openPage('/conversations/new')}
+      >
         新对话
       </Button>
       <Menu
@@ -69,15 +88,29 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
       <Dropdown
         trigger={['click']}
         placement="topLeft"
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
         menu={{
           items: [
             { key: '/account', icon: <SettingOutlined />, label: '账号设置' },
+            { type: 'divider' },
             { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
           ],
-          onClick: ({ key }) => (key === 'logout' ? void logout() : openPage(key)),
+          onClick: ({ key }) => {
+            setMenuOpen(false)
+            if (key === 'logout') void logout()
+            else openPage(key)
+          },
         }}
       >
-        <Button type="text" className="account-menu" aria-label="打开账号菜单">
+        <Button
+          ref={triggerRef}
+          type="text"
+          className="account-menu"
+          aria-label="打开账号菜单"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+        >
           <Avatar icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
           <span className="account-copy">
             <Typography.Text>我的账号</Typography.Text>
@@ -85,7 +118,7 @@ export function SideNavigation({ onNavigate }: SideNavigationProps): ReactElemen
               {email}
             </Typography.Text>
           </span>
-          <DownOutlined />
+          <UpOutlined className="account-chevron" />
         </Button>
       </Dropdown>
     </nav>

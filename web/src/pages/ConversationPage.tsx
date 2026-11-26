@@ -1,22 +1,29 @@
 // 对话页：新对话显示欢迎页，发出第一条消息时才建对话；已有对话左边是消息和输入框，
 // 右边是当前岗位的产物面板。运行控制在 conversation/useConversationRun。
-import { Prompts, Welcome } from '@ant-design/x'
-import { useQueryClient } from '@tanstack/react-query'
+import {
+  CheckOutlined,
+  PlusOutlined,
+  SolutionOutlined,
+  UnorderedListOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import { App, Button, Drawer, Grid, Skeleton, Typography, theme } from 'antd'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
-import { conversations } from '../api/endpoints'
 import type { ConversationDetail } from '../api/types'
 import { EmptyHint } from '../components/EmptyHint'
-import { CONVERSATIONS_QUERY } from '../queryKeys'
 import { ArtifactPanel } from './conversation/ArtifactPanel'
 import { Composer, type Draft } from './conversation/Composer'
 import { JobTag } from './conversation/JobTag'
 import { MessageList } from './conversation/MessageList'
-import { titleFrom, useJobTitle } from './conversation/naming'
+import { useJobTitle } from './conversation/naming'
 import type { PanelTab } from './conversation/panelTabs'
 import type { LiveInput } from './conversation/runControl'
 import { useConversationRun } from './conversation/useConversationRun'
+import {
+  useStartConversation,
+  type PendingConversationState,
+} from './conversation/useStartConversation'
 
 const EMPTY_DRAFT: Draft = { text: '', attachments: [] }
 
@@ -24,32 +31,30 @@ const SUGGESTIONS = [
   {
     key: 'resume',
     label: '上传简历',
-    description: '整理成经历事实',
-    text: '这是我的简历，帮我整理一下经历：\n',
+    icon: <UploadOutlined />,
+    text: '我上传一份简历，帮我整理成经历事实。',
   },
   {
     key: 'jd',
     label: '发 JD 或截图',
-    description: '存进岗位库并做匹配',
-    text: '帮我看看这个岗位，JD 如下：\n',
+    icon: <SolutionOutlined />,
+    text: '这是一个岗位的 JD：\n',
   },
   {
     key: 'library',
     label: '从岗位库选一个',
-    description: '接着准备已有岗位',
-    text: '从我的岗位库里选一个最合适的岗位，帮我做匹配。',
+    icon: <UnorderedListOutlined />,
+    text: '从岗位库里选一个岗位继续准备。',
   },
   {
     key: 'facts',
     label: '补充经历',
-    description: '补上简历里没写的',
-    text: '我想补充一段经历：\n',
+    icon: <PlusOutlined />,
+    text: '我想补充一段简历里没写的经历：\n',
   },
 ]
 
-interface PendingState {
-  pendingMessage?: LiveInput
-}
+const TRUST_ITEMS = ['只用你确认过的经历', '改动前先问你', '每条都能查到依据']
 
 function inputOf(draft: Draft): LiveInput {
   return {
@@ -75,55 +80,59 @@ function Heading({ title, children }: { title: string; children?: ReactNode }): 
 }
 
 function NewConversation(): ReactElement {
-  const { message } = App.useApp()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [draft, setDraft] = useState(EMPTY_DRAFT)
-  const [creating, setCreating] = useState(false)
+  const { start, creating } = useStartConversation()
+  const composerRef = useRef<HTMLDivElement>(null)
 
-  async function start(): Promise<void> {
-    const input = inputOf(draft)
-    setCreating(true)
-    try {
-      const created = await conversations.create(titleFrom(input))
-      void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY })
-      // 交给对话页去发：发消息用的 ID 跟着走，刷新后重发也只会接上同一轮。
-      void navigate(`/conversations/${created.conversation_id}`, {
-        state: { pendingMessage: input } satisfies PendingState,
-      })
-    } catch (error) {
-      setCreating(false)
-      void message.error(error instanceof Error ? error.message : '没能新建对话')
-    }
+  function fillStarter(text: string): void {
+    setDraft((current) => ({ ...current, text }))
+    composerRef.current?.querySelector('textarea')?.focus()
   }
 
   return (
     <section className="conversation-page">
-      <Heading title="新对话" />
+      <Heading title="新对话">
+        <span className="job-pill-static is-empty">未关联岗位</span>
+      </Heading>
       <div className="conversation-body is-welcome">
         <div className="conversation-welcome">
-          <Welcome
-            variant="borderless"
-            title="今天想准备哪个岗位？"
-            description="提供简历、JD 或补充经历，我只用你确认过的事实来写简历。"
+          <h2 className="welcome-heading serif-heading">今天想准备哪个岗位？</h2>
+          <Typography.Paragraph type="secondary" className="welcome-subtitle">
+            贴一段 JD、传一份简历，或者说说你想补充的经历。
+          </Typography.Paragraph>
+          <Composer
+            variant="prominent"
+            minRows={3}
+            hideNote
+            containerRef={composerRef}
+            placeholder="例如：帮我看看这个岗位，存进岗位库后做匹配。（可以直接粘贴 JD）"
+            draft={draft}
+            onChange={setDraft}
+            onSubmit={() => void start(inputOf(draft))}
+            blockedReason={creating ? '正在新建对话…' : null}
           />
-          <Prompts
-            className="welcome-prompts"
-            wrap
-            items={SUGGESTIONS.map(({ key, label, description }) => ({ key, label, description }))}
-            onItemClick={({ data }) => {
-              const text = SUGGESTIONS.find((item) => item.key === data.key)?.text ?? ''
-              setDraft((current) => ({ ...current, text }))
-            }}
-          />
+          <div className="welcome-starters">
+            {SUGGESTIONS.map((item) => (
+              <Button
+                key={item.key}
+                className="starter-btn"
+                icon={item.icon}
+                onClick={() => fillStarter(item.text)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+          <div className="welcome-trust">
+            {TRUST_ITEMS.map((item) => (
+              <span key={item} className="welcome-trust-item">
+                <CheckOutlined className="welcome-trust-icon" />
+                {item}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
-      <Composer
-        draft={draft}
-        onChange={setDraft}
-        onSubmit={() => void start()}
-        blockedReason={creating ? '正在新建对话…' : null}
-      />
     </section>
   )
 }
@@ -170,7 +179,9 @@ function ConversationView({ conversationId }: { conversationId: string }): React
   const panel = usePanel(isNarrow)
   const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [hints, setHints] = useState<{ key: string; text: string }[]>([])
-  const pending = useRef((location.state as PendingState | null)?.pendingMessage ?? null)
+  const pending = useRef(
+    (location.state as PendingConversationState | null)?.pendingMessage ?? null,
+  )
 
   async function submit(input: LiveInput): Promise<void> {
     setDraft(EMPTY_DRAFT)

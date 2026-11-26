@@ -159,3 +159,33 @@ describe('对话页发消息', () => {
     ).toEqual(new Set([pendingMessage.clientMessageId]))
   })
 })
+
+describe('新对话页', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('入口建议只填进输入框不发送，页面展示三条保证', async () => {
+    const user = userEvent.setup()
+    const calls = stubFetch({
+      'GET /api/conversations': () => jsonResponse(200, []),
+    })
+    renderWithProviders(
+      <Routes>
+        <Route path="/conversations/new" element={<ConversationPage />} />
+      </Routes>,
+      { initialEntries: ['/conversations/new'] },
+    )
+
+    expect(screen.getByText('只用你确认过的经历')).toBeInTheDocument()
+    expect(screen.getByText('改动前先问你')).toBeInTheDocument()
+    expect(screen.getByText('每条都能查到依据')).toBeInTheDocument()
+
+    const starter = screen.getByRole('button', { name: /发 JD 或截图/ })
+    await user.click(starter)
+
+    const input = screen.getByRole('textbox')
+    expect((input as HTMLTextAreaElement).value).toContain('JD')
+    expect(calls.some((c) => c.route === 'POST /api/conversations')).toBe(false)
+  })
+})
