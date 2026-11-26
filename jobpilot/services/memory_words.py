@@ -13,6 +13,7 @@ from jobpilot.db.memories import MemoryValue
 from jobpilot.db.memory_schema import MEMORY_LIMITS, MemoryKey
 
 _CLAUSE_BOUNDARY = re.compile(r"[。！？；，,;!?\n]")
+MemoryGroup = Literal["job", "writing"]
 
 
 class MemoryOperation(StrEnum):
@@ -25,7 +26,7 @@ class MemoryOperation(StrEnum):
 
 class MemoryWords(BaseModel):
     label: str
-    group: Literal["job", "writing"]
+    group: MemoryGroup
     aliases: list[str]
     examples: list[str] = Field(default_factory=list)
     values: dict[str, list[str]] = Field(default_factory=dict)

@@ -9,12 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jobpilot.db.memories import MemoryValue, list_memories
 from jobpilot.db.memory_schema import MEMORY_LIMITS, MemoryKey
 from jobpilot.db.models import Memory
-from jobpilot.services.memory_words import memory_vocabulary
+from jobpilot.services.memory_words import MemoryGroup, memory_vocabulary
 
 MAX_REVISION = 2**63 - 2
 ExpectedRevision = Annotated[int, Field(strict=True, ge=0, le=MAX_REVISION)]
 MANUAL_SOURCE = {"kind": "manual"}
-MemoryGroup = Literal["job", "writing"]
 MemoryValueType = Literal["text", "list", "enum"]
 
 
