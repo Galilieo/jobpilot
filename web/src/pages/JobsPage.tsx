@@ -7,9 +7,10 @@ import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
 import { newIdempotencyKey } from '../api/http'
 import { EmptyHint } from '../components/EmptyHint'
+import { MetaList } from '../components/MetaList'
 import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
-import { JOB_STAGE, formatJobMeta, formatMatchSummary } from '../labels'
+import { JOB_STAGE, formatMatchSummary, jobMetaParts } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
 
 const JD_COPY = {
@@ -88,9 +89,15 @@ export function JobsPage(): ReactElement {
                     </Typography.Text>
                   )}
                 </div>
-                <Typography.Paragraph type="secondary" className="job-company">
-                  {formatJobMeta(job)}
-                </Typography.Paragraph>
+                <MetaList
+                  className="job-company"
+                  items={jobMetaParts({
+                    company: job.company,
+                    location: job.location,
+                    onsite_days_per_week: job.onsite_days_per_week,
+                    education: job.education,
+                  })}
+                />
                 {(job.keywords.length > 0 || job.injection_count > 0) && (
                   <div className="job-tags">
                     {job.keywords.slice(0, 3).map((keyword) => (

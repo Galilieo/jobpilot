@@ -138,17 +138,30 @@ export function formatMatchSummary(summary: JobMatchSummary | null): string {
   return summary.expression_gap > 0 ? `${base} · 表达缺口 ${summary.expression_gap}` : base
 }
 
+export function jobMetaParts(fields: {
+  company: string | null
+  location: string | null
+  onsite_days_per_week?: string | null
+  education?: string | null
+  salary?: string | null
+}): string[] {
+  const parts = [
+    fields.company,
+    fields.location,
+    fields.onsite_days_per_week,
+    fields.education,
+    fields.salary,
+  ].filter((item): item is string => Boolean(item))
+  return parts.length > 0 ? parts : ['公司未填写']
+}
+
 export function formatJobMeta(fields: {
   company: string | null
   location: string | null
   onsite_days_per_week: string | null
   education: string | null
 }): string {
-  return (
-    [fields.company, fields.location, fields.onsite_days_per_week, fields.education]
-      .filter(Boolean)
-      .join(' · ') || '公司未填写'
-  )
+  return jobMetaParts(fields).join(' · ')
 }
 
 // 对话 Agent 的工具在进度条里的名字；没列出的工具直接显示工具名。

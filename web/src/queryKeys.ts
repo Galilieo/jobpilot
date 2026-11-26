@@ -14,3 +14,4 @@ export const tailorResumeQuery = (runId: string, version?: number) =>
 export const CONVERSATIONS_QUERY = ['conversations', 'list'] as const
 export const conversationQuery = (conversationId: string) =>
   ['conversations', conversationId] as const
+export const MEMORIES_QUERY = ['memories'] as const

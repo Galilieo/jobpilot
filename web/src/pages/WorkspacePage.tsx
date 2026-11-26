@@ -1,17 +1,25 @@
-// 工作台（首页）：问候语、三张核心状态卡（事实库 / 不编造记录 / 偏好记忆）和四列等高岗位进度看板。
-import { BookOutlined, BulbOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+// 工作台（首页）：宋体问候语、顶部发消息新建对话、横向三栏统计（含记住的偏好）和四列看板。
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Skeleton, Space, Tag, Typography, theme } from 'antd'
-import type { ReactElement } from 'react'
-import { useNavigate } from 'react-router'
-import { overview } from '../api/endpoints'
-import type { BoardJobCard, FactsOverview, GroundingOverview, JobBoard } from '../api/types'
+import { useRef, useState, type ReactElement } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { memories, overview } from '../api/endpoints'
+import type {
+  BoardJobCard,
+  FactsOverview,
+  GroundingOverview,
+  JobBoard,
+  MemoryItem,
+} from '../api/types'
 import { useCurrentUser } from '../auth'
 import { EmptyHint } from '../components/EmptyHint'
-import { PageHeader } from '../components/PageHeader'
-import { StatCard } from '../components/StatCard'
-import { JOB_STAGE, formatJobMeta, formatMatchSummary } from '../labels'
-import { OVERVIEW_QUERY } from '../queryKeys'
+import { MetaList } from '../components/MetaList'
+import { JOB_STAGE, formatMatchSummary, jobMetaParts } from '../labels'
+import { MEMORIES_QUERY, OVERVIEW_QUERY } from '../queryKeys'
+import { Composer, type Draft } from './conversation/Composer'
+import { useStartConversation } from './conversation/useStartConversation'
+
+const EMPTY_DRAFT: Draft = { text: '', attachments: [] }
 
 function greetingPrefix(hour: number): string {
   if (hour < 12) return '早上好'
@@ -19,18 +27,58 @@ function greetingPrefix(hour: number): string {
   return '晚上好'
 }
 
+function formatMemoryValue(value: MemoryItem['value']): string {
+  if (Array.isArray(value)) return value.join('、')
+  return value ?? ''
+}
+
 export function WorkspacePage(): ReactElement {
   const email = useCurrentUser().data?.email ?? ''
   const handle = email.split('@')[0] || '同学'
-  const greeting = `${greetingPrefix(new Date().getHours())}，${handle}，今天准备哪个岗位？`
+  const greeting = `${greetingPrefix(new Date().getHours())}，${handle}`
+  const [draft, setDraft] = useState(EMPTY_DRAFT)
+  const composerRef = useRef<HTMLDivElement>(null)
+  const { start, creating } = useStartConversation()
+
   const query = useQuery({
     queryKey: OVERVIEW_QUERY,
     queryFn: ({ signal }) => overview.get(signal),
   })
+  const memoriesQuery = useQuery({
+    queryKey: MEMORIES_QUERY,
+    queryFn: ({ signal }) => memories.list(signal),
+  })
+
+  function submit(): void {
+    void start({
+      clientMessageId: crypto.randomUUID(),
+      content: draft.text.trim(),
+      attachments: draft.attachments,
+    })
+  }
 
   return (
     <section className="page workspace-page">
-      <PageHeader title={greeting} subtitle="先确认经历事实，再匹配岗位并生成可追溯的定制简历。" />
+      <header className="workspace-head">
+        <h1 className="workspace-greeting serif-heading">{greeting}</h1>
+        <Typography.Paragraph type="secondary" className="workspace-subtitle">
+          今天想准备哪个岗位？发出后会新开一段对话。
+        </Typography.Paragraph>
+      </header>
+
+      <div className="workspace-composer-wrap">
+        <Composer
+          variant="prominent"
+          minRows={2}
+          hideNote
+          containerRef={composerRef}
+          placeholder="粘贴一段 JD，或者说说你想做什么……"
+          draft={draft}
+          onChange={setDraft}
+          onSubmit={submit}
+          blockedReason={creating ? '正在新建对话…' : null}
+        />
+      </div>
 
       {query.isPending ? (
         <Skeleton active />
@@ -42,82 +90,84 @@ export function WorkspacePage(): ReactElement {
           />
         </Card>
       ) : (
-        <Space orientation="vertical" size={24} className="full-width">
-          <StatusCards facts={query.data.facts} grounding={query.data.grounding} />
-          <BoardSection board={query.data.board} />
+        <Space orientation="vertical" size={28} className="full-width">
+          <LedgerBar
+            facts={query.data.facts}
+            grounding={query.data.grounding}
+            memoriesList={memoriesQuery.data}
+          />
+          <BoardSection
+            board={query.data.board}
+            onFocusComposer={() => composerRef.current?.querySelector('textarea')?.focus()}
+          />
         </Space>
       )}
     </section>
   )
 }
 
-function StatusCards({
+function LedgerBar({
   facts,
   grounding,
+  memoriesList,
 }: {
   facts: FactsOverview
   grounding: GroundingOverview
+  memoriesList: MemoryItem[] | undefined
 }): ReactElement {
-  const navigate = useNavigate()
-  return (
-    <div className="stat-cards">
-      <StatCard
-        label={<StatLabel icon={<BookOutlined />} tone="primary" text="经历事实库" />}
-        value={facts.published_count}
-        unit={`条 · ${facts.version ? `v${facts.version}` : '尚未发布'}`}
-        note={
-          facts.pending_count > 0
-            ? `${facts.pending_count} 条待确认，确认并发布后才会用于匹配和改写`
-            : '当前没有待确认的条目'
-        }
-        action={
-          <Button size="small" onClick={() => void navigate('/me')}>
-            {facts.pending_count > 0 ? '去确认' : '查看经历'}
-          </Button>
-        }
-      />
-      <StatCard
-        label={<StatLabel icon={<SafetyCertificateOutlined />} tone="success" text="不编造记录" />}
-        value={grounding.total}
-        unit={`条改写 · ${grounding.resume_count} 份定制简历`}
-        note={`通过 ${grounding.passed} 条 · 回退原文 ${grounding.fallback} 条 · 待处理 ${grounding.pending} 条`}
-        action={
-          <Button size="small" onClick={() => void navigate('/me?tab=resumes')}>
-            查看定制简历
-          </Button>
-        }
-      />
-      <StatCard
-        label={<StatLabel icon={<BulbOutlined />} tone="muted" text="记住的偏好" />}
-        unit="之后开放"
-        note="偏好记忆将在后续版本开放，只保存求职与写作偏好，不保存经历。"
-      />
-    </div>
-  )
-}
+  const activeMemories = (memoriesList ?? []).filter((item) => item.value !== null && !item.deleted)
+  const memoryPreview = activeMemories
+    .slice(0, 2)
+    .map((item) => `${item.label ?? item.key}：${formatMemoryValue(item.value)}`)
+    .join('；')
 
-function StatLabel({
-  icon,
-  tone,
-  text,
-}: {
-  icon: ReactElement
-  tone: 'primary' | 'success' | 'muted'
-  text: string
-}): ReactElement {
-  const { token } = theme.useToken()
-  const tones = {
-    primary: { background: token.colorPrimaryBg, color: token.colorPrimaryText },
-    success: { background: token.colorSuccessBg, color: token.colorSuccessText },
-    muted: { background: token.colorFillTertiary, color: token.colorTextSecondary },
-  }
   return (
-    <span className="stat-card-label-row">
-      <span className="stat-card-icon" style={tones[tone]}>
-        {icon}
-      </span>
-      {text}
-    </span>
+    <div className="workspace-ledger">
+      <div className="ledger-cell">
+        <small>经历事实</small>
+        <div className="ledger-metric">
+          <strong className="serif-heading tabular-num">{facts.published_count}</strong>
+          <span>条，{facts.version ? `版本 v${facts.version}` : '尚未发布'}</span>
+        </div>
+        <p className="ledger-note">
+          <span>
+            {facts.pending_count > 0 ? `${facts.pending_count} 条待确认` : '没有待确认的条目'}
+          </span>
+          <Link to="/me">{facts.pending_count > 0 ? '去确认' : '查看经历'}</Link>
+        </p>
+      </div>
+
+      <div className="ledger-cell">
+        <small>改写记录</small>
+        <div className="ledger-metric">
+          <strong className="serif-heading tabular-num">{grounding.total}</strong>
+          <span>
+            条，
+            {grounding.fallback === 0 && grounding.pending === 0
+              ? '全部可追溯'
+              : `可追溯 ${grounding.passed} 条`}
+          </span>
+        </div>
+        <p className="ledger-note">
+          <span className="tabular-num">{grounding.fallback} 条回退到原文</span>
+          <Link to="/me?tab=resumes">查看定制简历</Link>
+        </p>
+      </div>
+
+      <div className="ledger-cell">
+        <small>记住的偏好</small>
+        <div className="ledger-metric">
+          <strong className="serif-heading tabular-num">
+            {memoriesList ? activeMemories.length : '—'}
+          </strong>
+          <span>项</span>
+        </div>
+        <p className="ledger-note">
+          <span className="ledger-memory-preview">{memoryPreview || '还没有保存的偏好'}</span>
+          <Link to="/me?tab=memories">管理</Link>
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -125,14 +175,36 @@ const BOARD_COLUMNS: {
   key: keyof JobBoard
   title: string
   dot: 'muted' | 'primary' | 'success' | 'warning'
+  emptyText: string
 }[] = [
-  { key: 'unmatched', title: '未匹配', dot: 'muted' },
-  { key: 'matched', title: '已匹配', dot: 'primary' },
-  { key: 'tailored', title: '已生成简历', dot: 'success' },
-  { key: 'applied', title: '已投递', dot: 'warning' },
+  { key: 'unmatched', title: '未匹配', dot: 'muted', emptyText: '发一段 JD 就会出现在这里。' },
+  {
+    key: 'matched',
+    title: '已匹配',
+    dot: 'primary',
+    emptyText: '完成匹配分析后会出现在这里。',
+  },
+  {
+    key: 'tailored',
+    title: '已生成简历',
+    dot: 'success',
+    emptyText: '生成定制简历后会出现在这里。',
+  },
+  {
+    key: 'applied',
+    title: '已投递',
+    dot: 'warning',
+    emptyText: '记录投递后会出现在这里。',
+  },
 ]
 
-function BoardSection({ board }: { board: JobBoard }): ReactElement {
+function BoardSection({
+  board,
+  onFocusComposer,
+}: {
+  board: JobBoard
+  onFocusComposer: () => void
+}): ReactElement {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const dotColors = {
@@ -141,67 +213,58 @@ function BoardSection({ board }: { board: JobBoard }): ReactElement {
     success: token.colorSuccess,
     warning: token.colorWarning,
   }
-  const total =
-    board.unmatched.length + board.matched.length + board.tailored.length + board.applied.length
 
   return (
     <section aria-label="岗位进度">
       <div className="workspace-board-head">
         <Typography.Title level={3}>岗位进度</Typography.Title>
         <Typography.Text type="secondary" className="board-head-sub">
-          点击卡片进入岗位详情继续处理
+          点一个岗位，打开详情继续准备
         </Typography.Text>
-        {total > 0 && (
-          <Button size="small" className="board-head-action" onClick={() => void navigate('/jobs')}>
-            打开岗位库
-          </Button>
-        )}
+        <Button size="small" className="board-head-action" onClick={() => void navigate('/jobs')}>
+          打开岗位库
+        </Button>
       </div>
-      {total === 0 ? (
-        <Card>
-          <EmptyHint
-            description="还没有添加岗位。去岗位库贴入一份 JD 开始。"
-            action={
-              <Button type="primary" onClick={() => void navigate('/jobs')}>
-                打开岗位库
-              </Button>
-            }
-          />
-        </Card>
-      ) : (
-        <div className="workspace-board">
-          {BOARD_COLUMNS.map(({ key, title, dot }) => {
-            const items = board[key]
-            return (
-              <div key={key} className="board-column">
-                <div className="board-column-head">
-                  <span className="board-column-title">
-                    <span className="board-dot" style={{ background: dotColors[dot] }} />
-                    <Typography.Text strong>{title}</Typography.Text>
-                  </span>
-                  <Typography.Text type="secondary" className="board-count tabular-num">
-                    {items.length}
-                  </Typography.Text>
-                </div>
-                {items.length === 0 ? (
-                  <Typography.Text type="secondary" className="board-column-empty">
-                    暂无
-                  </Typography.Text>
-                ) : (
-                  items.map((card) => (
-                    <BoardCard
-                      key={card.job_id}
-                      card={card}
-                      columnKey={key}
-                      onOpen={() => void navigate(`/jobs/${card.job_id}`)}
-                    />
-                  ))
-                )}
+      <div className="workspace-board">
+        {BOARD_COLUMNS.map(({ key, title, dot, emptyText }) => {
+          const items = board[key]
+          return (
+            <div
+              key={key}
+              className={items.length === 0 ? 'board-column is-empty' : 'board-column has-cards'}
+            >
+              <div className="board-column-head">
+                <span className="board-column-title">
+                  <span className="board-dot" style={{ background: dotColors[dot] }} />
+                  <Typography.Text strong>{title}</Typography.Text>
+                </span>
+                <Typography.Text type="secondary" className="board-count tabular-num">
+                  {items.length}
+                </Typography.Text>
               </div>
-            )
-          })}
-        </div>
-      )}
+              {items.length === 0 ? (
+                <div className="board-column-empty">
+                  <span>{emptyText}</span>
+                  {key === 'unmatched' && (
+                    <button type="button" className="board-empty-action" onClick={onFocusComposer}>
+                      发 JD
+                    </button>
+                  )}
+                </div>
+              ) : (
+                items.map((card) => (
+                  <BoardCard
+                    key={card.job_id}
+                    card={card}
+                    columnKey={key}
+                    onOpen={() => void navigate(`/jobs/${card.job_id}`)}
+                  />
+                ))
+              )}
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
@@ -216,21 +279,41 @@ function BoardCard({
   onOpen: () => void
 }): ReactElement {
   const { token } = theme.useToken()
-  const subtitle = formatJobMeta(card)
+  const summary = card.match_summary
+  const meterTotal = summary ? Math.min(6, Math.max(summary.hard_total, 1)) : 0
+  const meterOn =
+    summary && summary.hard_total > 0
+      ? Math.round((summary.hard_covered / summary.hard_total) * meterTotal)
+      : 0
+
   return (
     <Card size="small" hoverable className="board-card" onClick={onOpen}>
-      <Typography.Text strong>{card.title ?? '未命名岗位'}</Typography.Text>
+      <Typography.Text strong className="board-card-title">
+        {card.title ?? '未命名岗位'}
+      </Typography.Text>
       {card.salary && (
         <Typography.Text strong className="board-card-salary" style={{ color: token.colorPrimary }}>
           {card.salary}
         </Typography.Text>
       )}
-      <Typography.Paragraph type="secondary" className="board-card-sub">
-        {subtitle}
-      </Typography.Paragraph>
+      <MetaList
+        items={jobMetaParts({
+          company: card.company,
+          location: card.location,
+          onsite_days_per_week: card.onsite_days_per_week,
+          education: card.education,
+        })}
+      />
+      {meterTotal > 0 && (
+        <div className="jobcard-meter" aria-hidden="true">
+          {Array.from({ length: meterTotal }, (_, index) => (
+            <i key={index} className={index < meterOn ? 'is-on' : undefined} />
+          ))}
+        </div>
+      )}
       <div className="board-card-footer">
         <Typography.Text type="secondary" className="tabular-num">
-          {formatMatchSummary(card.match_summary)}
+          {formatMatchSummary(summary)}
         </Typography.Text>
         {card.resume_stale && <Tag color="warning">事实库已更新</Tag>}
         {columnKey === 'applied' && <Tag color="processing">{JOB_STAGE[card.stage]}</Tag>}

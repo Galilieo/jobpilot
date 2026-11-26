@@ -19,6 +19,9 @@ import type {
   Library,
   MatchReport,
   MatchSummary,
+  MemoryItem,
+  MemoryKey,
+  MemoryValue,
   Overview,
   Responsibility,
   SectionKind,
@@ -231,4 +234,14 @@ export const conversations = {
   ) => postForStream(`/api/conversations/${conversationId}/actions/${actionId}`, decision, signal),
   undo: (actionId: string) =>
     request<AgentUndoResult>(`/api/actions/${actionId}/undo`, { method: 'POST' }),
+}
+
+// ---------- 长期记忆 ----------
+
+export const memories = {
+  list: (signal?: AbortSignal) => request<MemoryItem[]>('/api/memories', { signal }),
+  update: (key: MemoryKey, body: { expected_revision: number; value: MemoryValue }) =>
+    request<MemoryItem>(`/api/memories/${key}`, { method: 'PUT', json: body }),
+  remove: (key: MemoryKey, body: { expected_revision: number }) =>
+    request<MemoryItem>(`/api/memories/${key}`, { method: 'DELETE', json: body }),
 }

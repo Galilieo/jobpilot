@@ -110,7 +110,6 @@ textarea {
 }
 
 .stat-card,
-.board-column,
 .board-card,
 .login-card,
 .job-card,
@@ -120,7 +119,6 @@ textarea {
 }
 
 .stat-card,
-.board-column,
 .resume-panel,
 .login-page,
 .job-raw {
@@ -294,12 +292,16 @@ textarea {
 .stat-card,
 .board-card,
 .job-card {
-  transition: border-color 0.2s ease;
+  box-shadow: var(--jp-shadow-card);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .stat-card:hover,
 .board-card:hover,
 .job-card:hover {
   border-color: var(--ant-color-primary-border);
+  box-shadow: var(--jp-shadow-card-hover);
 }
 .stat-card .ant-card-body,
 .job-card .ant-card-body {
@@ -348,11 +350,84 @@ textarea {
 .workspace-page {
   max-width: 1040px;
 }
+.workspace-head {
+  margin-bottom: 18px;
+}
+.workspace-greeting {
+  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1.3;
+}
+.ant-typography.workspace-subtitle {
+  margin: 0;
+  font-size: 14px;
+}
+.workspace-composer-wrap {
+  margin-bottom: 26px;
+}
+.workspace-composer-wrap .conversation-composer {
+  max-width: none;
+  padding: 0;
+}
+.workspace-ledger {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--ant-color-border);
+  border-radius: var(--jp-radius-md);
+  background: var(--ant-color-bg-container);
+  box-shadow: var(--jp-shadow-card);
+}
+.ledger-cell {
+  padding: 14px 18px;
+  min-width: 0;
+}
+.ledger-cell + .ledger-cell {
+  border-left: 1px solid var(--ant-color-border);
+}
+.ledger-cell small {
+  display: block;
+  color: var(--ant-color-text-secondary);
+  font-size: 12.5px;
+}
+.ledger-metric {
+  margin-top: 2px;
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+}
+.ledger-metric strong {
+  color: var(--ant-color-text);
+  font-size: 26px;
+  font-weight: 700;
+  margin-right: 6px;
+  line-height: 1.25;
+}
+.ledger-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin: 4px 0 0;
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+}
+.ledger-memory-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.ledger-note a {
+  color: var(--ant-color-primary-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .workspace-board-head {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
-  align-items: center;
+  align-items: baseline;
   margin-bottom: 12px;
 }
 .board-head-action {
@@ -370,15 +445,23 @@ textarea {
   gap: 8px;
   min-width: 0;
   min-height: 128px;
-  padding: 12px;
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--jp-radius-md);
+}
+.board-column.is-empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--ant-color-primary-border);
+}
+.board-column.has-cards {
+  background: var(--ant-color-fill-quaternary);
 }
 .board-column-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 4px 4px;
+  padding: 2px 4px 6px;
 }
 .board-column-title {
   display: inline-flex;
@@ -392,44 +475,72 @@ textarea {
   flex-shrink: 0;
 }
 .board-count {
-  min-width: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  font-size: 12px;
-  line-height: 20px;
-  text-align: center;
+  font-size: 12.5px;
 }
 .board-column-empty {
   display: flex;
-  flex: 1;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  padding: 16px 4px;
+  gap: 4px 8px;
+  padding: 6px 4px;
+  color: var(--ant-color-text-tertiary);
+  font-size: 12.5px;
+}
+.board-empty-action {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--ant-color-primary-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 12.5px;
+  cursor: pointer;
 }
 .board-card {
-  border-radius: 10px;
+  border-radius: var(--jp-radius-sm);
 }
 .board-card .ant-card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
+  gap: 5px;
+  padding: 10px 12px;
 }
-.ant-typography.board-card-sub {
-  margin: 0;
+.board-card-title {
+  font-size: 14px;
+}
+.jobcard-meter {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+.jobcard-meter i {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ant-color-border);
+}
+.jobcard-meter i.is-on {
+  background: var(--ant-color-success);
 }
 .board-card-footer {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 @media (max-width: 1199px) {
   .workspace-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  .workspace-ledger {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ledger-cell + .ledger-cell {
+    border-left: 0;
+    border-top: 1px solid var(--ant-color-border);
   }
 }
 

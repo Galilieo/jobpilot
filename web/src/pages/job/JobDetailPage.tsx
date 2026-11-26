@@ -19,8 +19,9 @@ import { useNavigate, useParams } from 'react-router'
 import { jobs } from '../../api/endpoints'
 import type { JobStage } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
+import { MetaList } from '../../components/MetaList'
 import { PageHeader } from '../../components/PageHeader'
-import { JOB_STAGE } from '../../labels'
+import { JOB_STAGE, jobMetaParts } from '../../labels'
 import {
   JOBS_QUERY,
   OVERVIEW_QUERY,
@@ -104,9 +105,15 @@ export function JobDetailPage(): ReactElement {
   const hasReport = Boolean(matches.data && matches.data.length > 0)
   const activeTab: DetailTab = manualTab ?? (hasReport ? 'match' : 'info')
   const fields = job.data?.parsed.basic_fields
-  const subtitle = fields
-    ? [fields.company, fields.location, fields.salary].filter(Boolean).join(' · ') || '公司未填写'
-    : undefined
+  const subtitle = fields ? (
+    <MetaList
+      items={jobMetaParts({
+        company: fields.company,
+        location: fields.location,
+        salary: fields.salary,
+      })}
+    />
+  ) : undefined
 
   return (
     <section className="page page-wide">

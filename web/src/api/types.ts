@@ -557,3 +557,31 @@ export interface TailoredResumeSummary {
   status: TailoredResumeStatus
   updated_at: string
 }
+
+// ---------- 长期记忆 ----------
+
+export type MemoryKey =
+  | 'target_direction'
+  | 'cities'
+  | 'excluded_types'
+  | 'job_notes'
+  | 'tone'
+  | 'bullet_length'
+  | 'tech_terms'
+
+export type MemoryGroup = 'job' | 'writing'
+export type MemoryValueType = 'text' | 'list' | 'enum'
+export type MemoryValue = string | string[]
+
+export interface MemoryItem {
+  key: MemoryKey
+  value: MemoryValue | null
+  revision: number
+  deleted: boolean
+  label?: string
+  group?: MemoryGroup
+  type?: MemoryValueType
+  options?: string[]
+  max_length?: number | null
+  max_items?: number | null
+}
