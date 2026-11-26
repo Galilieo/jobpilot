@@ -70,10 +70,17 @@ def _sections(pair: Pair, text: str) -> list[dict]:
             rf"{heading}(?=生?[\s|｜/·，,（(]|$)",
             text,
         )
-        if not match and fact.experience == "技能":
-            match = re.search(r"(?m)^其他经历与技能$", text)
         if match:
             starts[fact.experience] = (match.start(), fact.section)
+        elif fact.section == "skill":
+            # 混合栏目没有独立技能标题，从首条技能原文所在行开始。
+            row = next(
+                row
+                for row in pair.annotation["facts"]
+                if row["experience"] == fact.experience
+            )
+            [(offset, _), *_] = locate_quote(text, row["source_quote"])
+            starts[fact.experience] = (text.rfind("\n", 0, offset) + 1, fact.section)
     ordered = sorted(
         (start, name, section) for name, (start, section) in starts.items()
     )

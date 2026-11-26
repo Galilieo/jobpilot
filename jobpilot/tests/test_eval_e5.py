@@ -57,7 +57,7 @@ def _fake_model(request: httpx.Request) -> httpx.Response:
 async def test_five_versions_record_final_bullets_and_model_calls(
     session_factory: Factory, version: Version
 ) -> None:
-    pair = pairs_for("dev", ["resume-011__jd-syn-01"])[0]
+    pair = pairs_for("dev", ["resume-011__jd-syn-03"])[0]
 
     async with fake_upstream(_fake_model) as model:
         attempt = await _run_pair(session_factory, model, pair, version)
