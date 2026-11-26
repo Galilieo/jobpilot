@@ -1,4 +1,4 @@
-"""06 T2.5 验收：从改写到导出走一遍（假模型、真实数据库）。
+"""用假模型和真实数据库验收改写、导出及联系方式遮蔽。
 
 底稿写「耗时降低 30%」，用户已把事实纠正为 20%。模型坚持写 30%，两次修订仍不改：
 组装结果和导出只能有 20%；教育等没改写的部分与底稿相同；
@@ -8,13 +8,16 @@
 import asyncio
 import json
 import re
+from io import BytesIO
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from docx import Document
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from jobpilot.api.deps import get_model_client
 from jobpilot.db.models import (
     AiRun,
     Fact,
@@ -27,6 +30,7 @@ from jobpilot.db.models import (
     UserJob,
 )
 from jobpilot.db.runs import RunAlreadyFinishedError
+from jobpilot.main import app
 from jobpilot.services.llm_gateway import ModelBudget
 from jobpilot.services.prompts import load_prompt
 from jobpilot.services.resume_export import RenderMode, render_html, to_markdown
@@ -34,6 +38,8 @@ from jobpilot.services.resume_versions import load_resume
 from jobpilot.services.tailoring_graph import TailorDeps, run_tailoring
 from jobpilot.services.tailoring_store import load_inputs, save_outcome
 from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
+from jobpilot.tests.test_facts_api import EXTRACTION, RESUME, new_idempotency_headers
+from jobpilot.tests.test_jobs_api import sign_in
 
 Factory = async_sessionmaker[AsyncSession]
 
@@ -312,3 +318,140 @@ async def test_finalize_again_keeps_one_resume_and_one_version(
             .where(TailoredResume.run_id == run_id)
         )
     assert (resumes, versions) == (1, 1)
+
+
+CONTACT_NAME = "林小满"
+CONTACT_PHONE = "13800001234"
+CONTACT_EMAIL = "lin@example.invalid"
+PRIVACY_RESUME = f"{CONTACT_NAME}\n{CONTACT_PHONE} | {CONTACT_EMAIL}\n\n{RESUME}"
+JOB_REQUIREMENT = "有课程排班功能开发经验"
+PRIVACY_REPLIES = {
+    "extract_facts": EXTRACTION,
+    "parse_jd": {
+        "basic_fields": {},
+        "requirements": [
+            {"type": "hard", "text": JOB_REQUIREMENT, "source_quote": JOB_REQUIREMENT}
+        ],
+        "duties": [],
+        "keywords": [],
+    },
+    "rewrite_bullets": {
+        "bullets": [{"text": "负责实现按周次筛选课程的功能", "fact_ids": ["f1"]}]
+    },
+    "ground_check": {"verdict": "supported", "unsupported_spans": []},
+    "match_job": None,  # 由接口返回的要求、事实 ID 填充
+}
+
+
+async def _publish_privacy_resume(client: httpx.AsyncClient) -> tuple[str, str]:
+    """从导入响应取草稿修订号，经确认发布后读出事实 ID。"""
+    uploaded = await client.post(
+        "/api/resumes",
+        json={"raw_text": PRIVACY_RESUME},
+        headers=new_idempotency_headers(),
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    confirmed = await client.post(
+        "/api/facts/batch",
+        json={
+            "action": "confirm_clean",
+            "expected_revision": uploaded.json()["revision"],
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["changed"] == 1
+    published = await client.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": confirmed.json()["revision"],
+        },
+    )
+    assert published.status_code == 200, published.text
+    [fact] = (await client.get("/api/facts")).json()["facts"]
+    return uploaded.json()["doc_id"], fact["fact_id"]
+
+
+async def _match_and_tailor(
+    client: httpx.AsyncClient, replies: dict[str, object], doc_id: str, fact_id: str
+) -> str:
+    """从岗位响应取要求 ID，调用真实匹配和改写接口。"""
+    created = await client.post(
+        "/api/jobs",
+        json={"raw_text": JOB_REQUIREMENT},
+        headers=new_idempotency_headers(),
+    )
+    assert created.status_code == 201, created.text
+    job = created.json()
+    [requirement] = job["parsed"]["requirements"]
+    replies["match_job"] = {
+        "items": [
+            {
+                "requirement_id": requirement["requirement_id"],
+                "verdict": "covered",
+                "fact_ids": [fact_id],
+                "reason": "做过课程排班功能",
+                "suggestion": "保留该经历",
+            }
+        ],
+        "main_gaps": [],
+    }
+    job_path = f"/api/jobs/{job['job_id']}"
+    matched = await client.post(f"{job_path}/match", headers=new_idempotency_headers())
+    assert matched.status_code == 201, matched.text
+    started = await client.post(
+        f"{job_path}/tailor",
+        json={"base_doc_id": doc_id},
+        headers=new_idempotency_headers(),
+    )
+    assert started.status_code == 202, started.text
+    run_path = f"/api/tailor-runs/{started.json()['run_id']}"
+    await app.state.run_launcher.wait_all()
+    result = await client.get(run_path)
+    assert result.json()["status"] == "succeeded", result.text
+    return run_path
+
+
+async def test_contact_details_stay_local_and_survive_every_export(
+    async_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """替换 SDK 的 HTTP 传输，走完导入、确认发布、匹配、改写和三个下载接口。"""
+    replies: dict[str, object] = PRIVACY_REPLIES.copy()
+    prompts = {load_prompt(name).text: name for name in replies}
+    sent: list[tuple[str, str]] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        messages = json.loads(request.content)["messages"]
+        purpose = prompts[messages[0]["content"]]
+        sent.append((purpose, request.content.decode()))
+        return completion_response(json.dumps(replies[purpose], ensure_ascii=False))
+
+    await sign_in(async_client, "accept-privacy@example.invalid")
+    async with fake_upstream(respond) as fake:
+        monkeypatch.setitem(app.dependency_overrides, get_model_client, lambda: fake)
+        doc_id, fact_id = await _publish_privacy_resume(async_client)
+        run_path = await _match_and_tailor(async_client, replies, doc_id, fact_id)
+
+    assert {"extract_facts", "parse_jd", "match_job", "rewrite_bullets"} <= {
+        purpose for purpose, _ in sent
+    }
+    [extraction] = [
+        payload for purpose, payload in sent if purpose == "extract_facts"
+    ]
+    assert "[PHONE]" in extraction and "[EMAIL]" in extraction
+    for purpose, payload in sent:
+        assert CONTACT_PHONE not in payload, purpose
+        assert CONTACT_EMAIL not in payload, purpose
+
+    for kind in ("html", "md", "docx"):
+        downloaded = await async_client.get(
+            f"{run_path}/export", params={"format": kind}
+        )
+        assert downloaded.status_code == 200, downloaded.text
+        if kind == "docx":
+            document = Document(BytesIO(downloaded.content))
+            exported = "\n".join(paragraph.text for paragraph in document.paragraphs)
+        else:
+            exported = visible(downloaded.text) if kind == "html" else downloaded.text
+        for contact in (CONTACT_NAME, CONTACT_PHONE, CONTACT_EMAIL):
+            assert contact in exported, kind
