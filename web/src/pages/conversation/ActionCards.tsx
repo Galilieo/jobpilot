@@ -335,7 +335,7 @@ export function CardResult(props: {
   const undoable = outcome.state === 'decided' && canUndo(outcome.action) && props.onUndo
   return (
     <div className="card-result">
-      {busy ? <LoadingOutlined /> : <Tag bordered={false}>{toolLabel(props.tool)}</Tag>}
+      {busy ? <LoadingOutlined /> : <Tag variant="filled">{toolLabel(props.tool)}</Tag>}
       <Typography.Text type="secondary">
         {outcomeText(props.tool, outcome, props.title)}
       </Typography.Text>
