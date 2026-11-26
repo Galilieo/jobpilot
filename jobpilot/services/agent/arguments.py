@@ -37,7 +37,8 @@ class ResumeArgs(ToolArgs):
 class EditResumeArgs(ToolArgs):
     run_id: UUID
     bullet_id: UUID
-    text: ShortText
+    mode: Literal["replace", "polish"]
+    quote: ShortText
 
 
 class ParseJobArgs(ToolArgs):

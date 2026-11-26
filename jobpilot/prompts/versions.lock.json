@@ -1,7 +1,11 @@
 {
   "agent": {
-    "sha256": "c23e0d1b6178bc53fb8931395f6e6198298485e789ceaebe9ccd532103dd0719",
+    "sha256": "0a35f6d586f913b48a58c1af0a1b315fb10844a771e2e08044edd759aaadcbe8",
     "version": 3
+  },
+  "edit_bullet": {
+    "sha256": "8fefb7ae8f3c6575259b8ac296a5596645a85d6e712ce8198a6aa8b24c01817f",
+    "version": 1
   },
   "extract_facts": {
     "sha256": "26a76d664805f9998d808d68317e0e2a69f3b4140ad3b75e5aa7dbe8691e534a",

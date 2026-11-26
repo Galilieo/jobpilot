@@ -7,11 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.conversations import find_conversation, set_job_binding
+from jobpilot.db.conversations import agent_input, find_conversation, set_job_binding
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import ActionStatus, AgentAction, AiRun, Conversation
 from jobpilot.services import drafts
-from jobpilot.services.agent.arguments import EditResumeArgs, SetJobArgs
+from jobpilot.services.agent.arguments import EditResumeArgs, SetJobArgs, ShortText
+from jobpilot.services.agent.edit_request import authorized_edit
 from jobpilot.services.agent.memory_actions import undo_memory
 from jobpilot.services.agent.types import Payload, ToolContext, ToolError
 from jobpilot.services.grounding import GroundingFact, organizations_of
@@ -31,10 +32,15 @@ from jobpilot.services.resume_versions import (
     restore_snapshot,
     save_checked_version,
 )
+from jobpilot.services.rewriting import edit_bullet
 from jobpilot.services.semantic_check import ground_check
+from jobpilot.services.writing_preferences import confirmed_writing_preferences
 
 
-class PreparedResume(EditResumeArgs):
+class PreparedResume(BaseModel):
+    run_id: UUID
+    bullet_id: UUID
+    text: ShortText
     base_version_id: UUID
     previous_text: str
     check: BulletCheck
@@ -94,21 +100,19 @@ async def _resume_facts(
     }
 
 
-async def prepare_resume(context: ToolContext, args: EditResumeArgs) -> Payload:
-    agent = context.agent
-    async with agent.sessions() as session:
-        loaded = await load_resume(
-            session, agent.user_id, args.run_id, include_history=False
-        )
-        facts = await _resume_facts(session, agent.user_id, args.run_id)
-    previous = loaded.content
-    submitted = loaded.content
-    previous_text = _bullet(previous, args.bullet_id).text
-    _bullet(submitted, args.bullet_id).text = args.text
+async def _checked_edit(
+    context: ToolContext,
+    draft: ResumeContent,
+    bullet_id: UUID,
+    text: str,
+    facts: dict[UUID, GroundingFact],
+) -> BulletCheck:
+    before = draft.model_copy(deep=True)
+    _bullet(draft, bullet_id).text = text
     checked = _bullet(
-        recheck(previous, submitted, facts, organizations_of(facts.values())),
-        args.bullet_id,
+        recheck(before, draft, facts, organizations_of(facts.values())), bullet_id
     )
+    agent = context.agent
     semantic = await ground_check(
         agent.sessions,
         agent.user_id,
@@ -118,13 +122,52 @@ async def prepare_resume(context: ToolContext, args: EditResumeArgs) -> Payload:
         sentence=plain(checked.text),
         facts=[facts[fact_id] for fact_id in checked.fact_ids if fact_id in facts],
     )
-    check = BulletCheck(
+    return BulletCheck(
         text=checked.text,
         layers=CheckLayers.FULL,
         issues=list(dict.fromkeys((*checked.check.issues, *semantic.issues))),
     )
+
+
+async def prepare_resume(context: ToolContext, args: EditResumeArgs) -> Payload:
+    agent = context.agent
+    async with agent.sessions() as session:
+        loaded = await load_resume(
+            session, agent.user_id, args.run_id, include_history=False
+        )
+        draft = loaded.content
+        bullet = _bullet(draft, args.bullet_id)
+        previous_text = bullet.text
+        message = await agent_input(agent.user_id, session, agent.run_id)
+        if context.message_used_as_jd or not authorized_edit(message, draft, args):
+            return {
+                "error": "本轮修改的条目或文字不明确",
+                "status": 422,
+                "clarify": "请指出要改的简历条目，并给出完整替换正文或润色要求。",
+            }
+        facts = await _resume_facts(session, agent.user_id, args.run_id)
+        preferences = await confirmed_writing_preferences(session, agent.user_id)
+    text = args.quote
+    if args.mode == "polish":
+        cited = [facts[fact_id] for fact_id in bullet.fact_ids if fact_id in facts]
+        if not cited:
+            raise ToolError("这条没有可用的事实引用，请给出完整替换正文")
+        text = await edit_bullet(
+            agent.sessions,
+            agent.user_id,
+            agent.run_id,
+            client=agent.client,
+            budget=context.budget,
+            previous_text=previous_text,
+            facts=cited,
+            quote=args.quote,
+            writing_preferences=preferences,
+        )
+    check = await _checked_edit(context, draft, args.bullet_id, text, facts)
     return PreparedResume(
-        **args.model_dump(),
+        run_id=args.run_id,
+        bullet_id=args.bullet_id,
+        text=check.text,
         base_version_id=loaded.version.resume_version_id,
         previous_text=previous_text,
         check=check,

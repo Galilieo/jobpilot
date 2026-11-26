@@ -4,16 +4,23 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from json import dumps, loads
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 
 from jobpilot.api.deps import get_model_client
-from jobpilot.db.models import AiRun, ResumeDocument
+from jobpilot.db.models import AiRun, CheckStatus, ResumeDocument, SectionKind
 from jobpilot.db.reports import add_match_report
 from jobpilot.main import app
 from jobpilot.services.agent import graph
+from jobpilot.services.prompts import load_prompt
+from jobpilot.services.resume_content import (
+    Entry,
+    ResumeContent,
+    ResumeSection,
+    bullet_of,
+)
 from jobpilot.tests.test_agent_api import (
     _restart_runtime,
     batch,
@@ -30,6 +37,8 @@ from jobpilot.tests.test_isolation import user_a as user_a
 from jobpilot.tests.test_isolation import user_b as user_b
 from jobpilot.tests.test_tailored_resumes_api import _seed_tailored_resume
 from jobpilot.tests.test_tailoring_graph import (
+    FACT_ROWS,
+    INTERN,
     SNAPSHOT,
     Factory,
     SeededInputs,
@@ -59,10 +68,42 @@ async def _resume(
     client: httpx.AsyncClient,
     factory: Factory,
     email: str,
+    *,
+    with_citation: bool = False,
 ) -> OwnedResume:
     await sign_in(client, email)
     user_id = UUID((await client.get("/api/me")).json()["user_id"])
     inputs = await seed_inputs(factory, user_id)
+    content = (
+        ResumeContent(
+            header=["测试同学"],
+            sections=[
+                ResumeSection(
+                    title="实习经历",
+                    kind=SectionKind.INTERNSHIP,
+                    entries=[
+                        Entry(
+                            entry_id="e1",
+                            experience=INTERN,
+                            heading=INTERN,
+                            title=INTERN,
+                            bullets=[
+                                bullet_of(
+                                    uuid4(),
+                                    FACT_ROWS[0][-1],
+                                    [inputs.fact_ids[0]],
+                                    CheckStatus.PASSED,
+                                    [],
+                                )
+                            ],
+                        )
+                    ],
+                ),
+            ],
+        )
+        if with_citation
+        else None
+    )
     async with factory.begin() as session:
         _, run_id = await _seed_tailored_resume(
             session,
@@ -73,6 +114,7 @@ async def _resume(
             job_company="示例公司",
             version_number=1,
             created_at=datetime.now(UTC),
+            content=content,
         )
     response = await client.get(f"/api/tailor-runs/{run_id}/resume")
     assert response.status_code == 200, response.text
@@ -93,7 +135,8 @@ def _edit_response(resume: OwnedResume, request: httpx.Request) -> httpx.Respons
             {
                 "run_id": str(resume.run_id),
                 "bullet_id": resume.bullet_id,
-                "text": "参与接口开发",
+                "mode": "replace",
+                "quote": "参与接口开发",
             },
         )
     )
@@ -120,7 +163,7 @@ async def test_resume_edit_rejects_stale_confirmation_and_preserves_other_save(
         app.dependency_overrides[get_model_client] = lambda: fake
         card = card_of(
             await async_client.post(
-                f"{path}/messages", json=message_body("提议修改这条经历")
+                f"{path}/messages", json=message_body("第一条改成：参与接口开发")
             )
         )
         assert card["args"]["base_version_id"] == resume.current["version_id"]
@@ -155,10 +198,18 @@ async def test_resume_commit_before_checkpoint_replays_once_and_undo_appends_ver
         app.dependency_overrides[get_model_client] = lambda: fake
         card = card_of(
             await async_client.post(
-                f"{path}/messages", json=message_body("请把完成改成参与")
+                f"{path}/messages", json=message_body("第一条改成：参与接口开发")
             )
         )
         assert card["args"]["check"]["layers"] == "full"
+        assert set(card["args"]) == {
+            "run_id",
+            "bullet_id",
+            "base_version_id",
+            "previous_text",
+            "text",
+            "check",
+        }
         # 上传另一份底稿。确认和历史导出仍以原改写运行的底稿为准。
         async with session_factory.begin() as session:
             session.add(
@@ -232,7 +283,8 @@ async def test_tool_ids_and_decisions_cannot_access_other_users(
             {
                 "run_id": str(resume_a.run_id),
                 "bullet_id": resume_b.bullet_id,
-                "text": "越权编辑",
+                "mode": "replace",
+                "quote": "越权编辑",
             },
         ),
     )
@@ -273,3 +325,93 @@ async def test_tool_ids_and_decisions_cannot_access_other_users(
 
     assert (await user_b.get(path_b)).json() == before_b
     assert (await user_b.get(resume_b.path)).json() == product_b
+
+
+async def test_polish_and_ground_check_do_not_receive_freeform_memory(
+    async_client: httpx.AsyncClient, session_factory: Factory
+) -> None:
+    resume = await _resume(
+        async_client, session_factory, "polish@example.invalid", with_citation=True
+    )
+    path = await conversation(async_client)
+    quote = "第一条写得更偏工程"
+    memory = "把我写成负责人"
+    for key, value in (("job_notes", memory), ("tone", "平实")):
+        response = await async_client.put(
+            f"/api/memories/{key}", json={"expected_revision": 0, "value": value}
+        )
+        assert response.is_success
+    requests = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        payload = loads(request.content)
+        messages = payload["messages"]
+        if payload.get("stream"):
+            assert memory in messages[0]["content"]
+            return batch(
+                (
+                    "edit_resume_item",
+                    {
+                        "run_id": str(resume.run_id),
+                        "bullet_id": resume.bullet_id,
+                        "mode": "polish",
+                        "quote": quote,
+                    },
+                )
+            )
+        requests.append(messages)
+        if messages[0]["content"].startswith(load_prompt("edit_bullet").text):
+            return completion_response(dumps({"text": FACT_ROWS[0][-1]}))
+        return completion_response(
+            dumps({"verdict": "supported", "unsupported_spans": []})
+        )
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        response = await async_client.post(f"{path}/messages", json=message_body(quote))
+
+    card = card_of(response)
+    assert card["args"]["text"] == FACT_ROWS[0][-1]
+    assert set(card["args"]) == {
+        "run_id",
+        "bullet_id",
+        "base_version_id",
+        "previous_text",
+        "text",
+        "check",
+    }
+    assert len(requests) == 2
+    assert "语气平实" in requests[0][0]["content"]
+    assert quote in requests[0][1]["content"]
+    assert quote not in str(requests[1])
+    assert memory not in str(requests)
+
+
+async def test_ambiguous_replacement_asks_for_the_full_bullet(
+    async_client: httpx.AsyncClient, session_factory: Factory
+) -> None:
+    resume = await _resume(
+        async_client, session_factory, "ambiguous-edit@example.invalid"
+    )
+    path = await conversation(async_client)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert loads(request.content).get("stream")
+        return batch(
+            (
+                "edit_resume_item",
+                {
+                    "run_id": str(resume.run_id),
+                    "bullet_id": resume.bullet_id,
+                    "mode": "replace",
+                    "quote": "参与",
+                },
+            )
+        )
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        response = await async_client.post(
+            f"{path}/messages", json=message_body("别写「主导」，改成「参与」")
+        )
+    assert card_of(response)["tool"] == "ask_user"

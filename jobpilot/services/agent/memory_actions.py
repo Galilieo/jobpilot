@@ -132,7 +132,11 @@ async def _prepare(context: ToolContext, proposal: _MemoryProposal) -> Payload:
                 [item["text"] for item in message.attachments_json],
             )
         ):
-            return {"error": "记忆需要本轮明确的原话", "status": 422, "clarify": True}
+            return {
+                "error": "记忆需要本轮明确的原话",
+                "status": 422,
+                "clarify": MEMORY_CLARIFICATION,
+            }
         row = await find_memory(agent.user_id, session, proposal.key)
     current_value = row.value_json if row else None
     if current_value is None and proposal.op in {

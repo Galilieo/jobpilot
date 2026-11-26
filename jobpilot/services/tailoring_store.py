@@ -5,7 +5,7 @@
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -37,6 +37,7 @@ from jobpilot.services.resume_content import (
 )
 from jobpilot.services.tailoring import BlockOutcome, BlockStatus
 from jobpilot.services.tailoring_plan import PlanBlock, TailorFact
+from jobpilot.services.writing_preferences import WritingPreferences
 
 NOT_STARTED = "not_started"
 
@@ -57,6 +58,7 @@ class TailorInputs:
     snapshot: ParsedJob
     facts: tuple[TailorFact, ...]
     candidates: tuple[FactCandidate, ...]  # 同一批事实，给匹配用
+    writing_preferences: WritingPreferences = field(default_factory=WritingPreferences)
 
 
 async def load_inputs(
@@ -92,6 +94,9 @@ async def load_inputs(
         base_text=base.raw_text,
         base_sections=tuple(BaseSection.model_validate(s) for s in base.sections_json),
         snapshot=ParsedJob.model_validate(run.job_snapshot_json),
+        writing_preferences=WritingPreferences.model_validate(
+            run.writing_preferences_json or {}
+        ),
         facts=tuple(TailorFact.of(fact) for fact in facts),
         candidates=tuple(FactCandidate.from_fact(fact) for fact in facts),
     )

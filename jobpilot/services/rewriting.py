@@ -29,6 +29,7 @@ from jobpilot.services.llm_gateway import (
     wrap_untrusted_text,
 )
 from jobpilot.services.prompts import load_prompt
+from jobpilot.services.writing_preferences import WritingPreferences
 
 MAX_BULLET_CHARS = 120  # 提示词要求 60 字以内；这里放宽一倍，只拦明显失控的输出
 
@@ -195,6 +196,7 @@ async def rewrite_section(
     client: AsyncOpenAI,
     budget: ModelQuota,
     task: RewriteTask,
+    writing_preferences: WritingPreferences | None = None,
 ) -> list[DraftBullet]:
     """一次调用写出一段经历（或技能概述）的条目。调用前需已提交所属 ai_run。"""
     if not task.facts:
@@ -208,7 +210,12 @@ async def rewrite_section(
         client=client,
         purpose=ModelPurpose.REWRITE,
         prompt_version=prompt.label,
-        messages=format_rewrite_messages(task, system_prompt=prompt.text),
+        messages=format_rewrite_messages(
+            task,
+            system_prompt=writing_preferences.append_to(prompt.text)
+            if writing_preferences
+            else prompt.text,
+        ),
         json_output=True,
         budget=budget,
         validate=lambda completion: parse_rewrite(completion, labels),
@@ -227,6 +234,7 @@ async def revise_bullet(
     bullet: DraftBullet,
     facts: Sequence[GroundingFact],
     issues: Sequence[GroundingIssue],
+    writing_preferences: WritingPreferences | None = None,
 ) -> DraftBullet:
     """按依据检查的问题清单改一条。facts 是这一条可以引用的全部事实。"""
     prompt = load_prompt("revise_bullet")
@@ -239,10 +247,64 @@ async def revise_bullet(
         purpose=ModelPurpose.REWRITE,
         prompt_version=prompt.label,
         messages=format_revise_messages(
-            bullet, facts, issues, system_prompt=prompt.text
+            bullet,
+            facts,
+            issues,
+            system_prompt=writing_preferences.append_to(prompt.text)
+            if writing_preferences
+            else prompt.text,
         ),
         json_output=True,
         budget=budget,
         validate=lambda completion: parse_revision(completion, labels),
     )
     return _to_draft(parse_revision(completion, labels), labels)
+
+
+class EditedBullet(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    text: str = Field(min_length=1, max_length=MAX_BULLET_CHARS)
+
+
+def _parse_edit(completion: ChatCompletion) -> EditedBullet:
+    return EditedBullet.model_validate_json(_content(completion, "条目润色"))
+
+
+async def edit_bullet(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: UUID,
+    run_id: UUID,
+    *,
+    client: AsyncOpenAI,
+    budget: ModelQuota,
+    previous_text: str,
+    facts: Sequence[GroundingFact],
+    quote: str,
+    writing_preferences: WritingPreferences,
+) -> str:
+    """润色原条目，只发送这一轮用户的要求与此条目已引用的事实。"""
+    prompt = load_prompt("edit_bullet")
+    user_content = "\n\n".join(
+        [
+            wrap_untrusted_text("original_bullet", previous_text),
+            wrap_untrusted_text("facts", _facts_payload(facts)),
+            wrap_untrusted_text("edit_request", quote),
+        ]
+    )
+    completion = await request_completion(
+        session_factory,
+        user_id,
+        run_id,
+        client=client,
+        purpose=ModelPurpose.EDIT_BULLET,
+        prompt_version=prompt.label,
+        messages=[
+            {"role": "system", "content": writing_preferences.append_to(prompt.text)},
+            {"role": "user", "content": user_content},
+        ],
+        json_output=True,
+        budget=budget,
+        validate=_parse_edit,
+    )
+    return _parse_edit(completion).text

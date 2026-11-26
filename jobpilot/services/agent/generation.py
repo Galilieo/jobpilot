@@ -46,6 +46,7 @@ from jobpilot.services.tailoring_plan import (
     resolve_sections,
 )
 from jobpilot.services.tailoring_store import TailorInputError
+from jobpilot.services.writing_preferences import writing_preferences_snapshot
 
 
 def _child_id(context: ToolContext) -> UUID:
@@ -240,6 +241,9 @@ async def _prepare_tailor(context: ToolContext, args: TailorArgs) -> AiRun:
             run_id=run_id,
             user_id=user_id,
             kind="tailor",
+            writing_preferences_json=await writing_preferences_snapshot(
+                session, user_id
+            ),
             user_job_id=job.user_job_id,
             base_doc_id=base_doc_id,
             fact_set_id=fact_set.fact_set_id,

@@ -39,7 +39,7 @@ from jobpilot.services.agent.context import (
     serialize_tool_result,
     summarize_tool,
 )
-from jobpilot.services.agent.memory_actions import MEMORY_CLARIFICATION, MEMORY_TOOLS
+from jobpilot.services.agent.memory_actions import MEMORY_TOOLS
 from jobpilot.services.agent.questions import (
     JOB_CHOICE_QUESTION,
     JobSelection,
@@ -349,8 +349,8 @@ def _next_call(state: AgentState) -> AgentState:
         return _select_tool(state)
     if state.get("switch_job_id"):
         name, question = "switch", JOB_CHOICE_QUESTION
-    elif state.get("clarify_memory"):
-        name, question = "memory", MEMORY_CLARIFICATION
+    elif state.get("clarification"):
+        name, question = "clarify", state["clarification"]
     else:
         return _select_tool(state)
     if state["tools_left"] < 1:
@@ -398,8 +398,7 @@ async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
         return {
             "seconds_left": agent.seconds_left,
             "next_tool": "select_tool",
-            "clarify_memory": state.get("clarify_memory", False)
-            or args.get("clarify", False),
+            "clarification": state.get("clarification") or args.get("clarify"),
             "calls": state["calls"][1:],
             "tools_left": state["tools_left"] - 1,
             "messages": [*state["messages"], _tool_message(call, args)],

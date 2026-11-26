@@ -73,7 +73,7 @@ class AgentState(TypedDict, total=False):
     budget_exhausted: bool
     asked: bool
     message_used_as_jd: bool
-    clarify_memory: bool
+    clarification: str | None
     switch_job_id: str | None
     generation_results: dict[str, dict[str, Payload]]
 

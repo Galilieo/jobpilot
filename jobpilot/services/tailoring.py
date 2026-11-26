@@ -10,7 +10,7 @@
 
 import asyncio
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
@@ -39,6 +39,7 @@ from jobpilot.services.rewriting import (
 )
 from jobpilot.services.semantic_check import ground_check
 from jobpilot.services.tailoring_plan import PlanBlock
+from jobpilot.services.writing_preferences import WritingPreferences
 
 # 与 tailored_bullet 的约束 revision_count BETWEEN 0 AND 2 一致。
 MAX_REVISIONS = 2
@@ -97,6 +98,7 @@ class WriteContext:
     job_title: str | None
     keywords: tuple[str, ...]
     check_level: CheckLevel = CheckLevel.FULL
+    writing_preferences: WritingPreferences = field(default_factory=WritingPreferences)
 
 
 async def write_block(ctx: WriteContext, block: PlanBlock) -> BlockOutcome:
@@ -120,6 +122,7 @@ async def write_block(ctx: WriteContext, block: PlanBlock) -> BlockOutcome:
                 client=ctx.client,
                 budget=ctx.budget,
                 task=task,
+                writing_preferences=ctx.writing_preferences,
             )
     except BudgetExhaustedError:
         return BlockOutcome(key=block.key, status=BlockStatus.INTERRUPTED)
@@ -192,6 +195,7 @@ async def _settle(
                     bullet=draft,
                     facts=facts,
                     issues=issues,
+                    writing_preferences=ctx.writing_preferences,
                 )
         except MODEL_ERRORS:
             return fallback(block, ctx.available, draft, issues, revisions)

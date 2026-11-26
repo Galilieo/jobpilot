@@ -150,7 +150,7 @@ TOOLS = {
         _register(
             "edit_resume_item",
             ToolCategory.WRITE,
-            "提议修改一条定制简历条目，须用户确认",
+            "引用本轮替换正文或润色要求，提议修改一条定制简历条目，须用户确认",
             EditResumeArgs,
             actions.prepare_resume,
         ),

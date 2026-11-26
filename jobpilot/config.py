@@ -19,6 +19,7 @@ class ModelPurpose(StrEnum):
     MATCH = "match"
     PLAN = "plan"
     REWRITE = "rewrite"
+    EDIT_BULLET = "edit_bullet"
     GROUND_CHECK = "ground_check"
     AGENT = "agent"
 
@@ -109,6 +110,7 @@ class Settings(BaseSettings):
     match: ModelSettings = Field(default_factory=lambda: ModelSettings(max_tokens=4096))
     plan: ModelSettings = Field(default_factory=ModelSettings)
     rewrite: ModelSettings = Field(default_factory=ModelSettings)
+    edit_bullet: ModelSettings = Field(default_factory=ModelSettings)
     ground_check: ModelSettings = Field(default_factory=ModelSettings)
     order_ocr: ModelSettings = Field(default_factory=ModelSettings)
     agent: ModelSettings = Field(default_factory=ModelSettings)

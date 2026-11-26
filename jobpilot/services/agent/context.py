@@ -167,7 +167,7 @@ async def build_context(agent: AgentDeps) -> AgentState:
         "calls": [],
         "asked": False,
         "message_used_as_jd": False,
-        "clarify_memory": False,
+        "clarification": None,
         "action_id": "",
         "switch_job_id": None,
         "budget_exhausted": False,

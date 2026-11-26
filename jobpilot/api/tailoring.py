@@ -48,6 +48,7 @@ from jobpilot.services.tailoring_plan import (
     UnresolvedSectionsError,
     resolve_sections,
 )
+from jobpilot.services.writing_preferences import writing_preferences_snapshot
 
 logger = logging.getLogger("uvicorn.error").getChild("tailoring")
 router = APIRouter(prefix="/api", tags=["tailoring"])
@@ -187,6 +188,7 @@ async def start_tailoring(
         run_id=run_id,
         user_id=user_id,
         kind="tailor",
+        writing_preferences_json=await writing_preferences_snapshot(db, user_id),
         user_job_id=user_job.user_job_id,
         fact_set_id=fact_set.fact_set_id,
         base_doc_id=base_doc_id,

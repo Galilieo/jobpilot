@@ -188,6 +188,7 @@ def _context(deps: TailorDeps, task: BlockTask) -> WriteContext:
         job_title=inputs.snapshot.basic_fields.title,
         keywords=tuple(inputs.snapshot.keywords),
         check_level=deps.check_level,
+        writing_preferences=inputs.writing_preferences,
     )
 
 
