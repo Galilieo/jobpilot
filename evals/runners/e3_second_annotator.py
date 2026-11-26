@@ -131,7 +131,7 @@ def prepare() -> None:
     if SHEET.exists() or KEY.exists():
         raise FileExistsError("第二人盲标文件已存在。")
     with SHEET.open("x", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     with KEY.open("x", encoding="utf-8") as stream:
