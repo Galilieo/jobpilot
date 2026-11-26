@@ -1,7 +1,9 @@
 """从业务消息重建最近对话，历史工具只携带简短结果。"""
 
+from collections.abc import Iterable
 from itertools import groupby
 from json import dumps
+from uuid import UUID
 
 from jobpilot.config import settings
 from jobpilot.db.conversations import find_conversation, recent_messages
@@ -83,7 +85,52 @@ def _history_content(message: Message, *, current: bool) -> str:
     return content
 
 
+def _system_content(summary: Payload | None) -> str:
+    system = load_prompt("agent").text
+    if summary:
+        system += "\n当前岗位摘要\n" + wrap_untrusted_text(
+            "current_job", serialize(summary)
+        )
+    return system
+
+
+def _render_turn(messages: Iterable[Message], *, current: bool) -> list[Payload]:
+    turn: list[Payload] = []
+    for message in messages:
+        if message.role != MessageRole.TOOL:
+            turn.append(
+                {
+                    "role": message.role,
+                    "content": _history_content(message, current=current),
+                }
+            )
+        elif message.steps_json and not message.event_key.startswith("confirm:"):
+            turn.append(
+                {
+                    "role": "assistant",
+                    "content": wrap_untrusted_text(
+                        "past_step", serialize(message.steps_json)
+                    ),
+                }
+            )
+    return turn
+
+
+def _render_recent_history(
+    rows: list[Message], current_run_id: UUID, history_tokens: int
+) -> list[Payload]:
+    grouped = [
+        _render_turn(group, current=run_id == current_run_id)
+        for run_id, group in groupby(rows, key=lambda message: message.run_id)
+    ]
+    # 以 UTF-8 字节数保守估算，沿用模型网关的长度口径。
+    while len(grouped) > 1 and len(serialize(grouped).encode()) > history_tokens:
+        grouped.pop(0)
+    return [message for turn in grouped for message in turn]
+
+
 async def build_context(agent: AgentDeps) -> AgentState:
+    """读取本轮可用的对话记录并初始化 Agent 图状态。"""
     limits = settings.agent_limits
     async with agent.sessions() as session:
         rows = await recent_messages(
@@ -94,42 +141,10 @@ async def build_context(agent: AgentDeps) -> AgentState:
         )
         job_id = conversation.current_job_id if conversation else None
         summary = await current_job_summary(agent.user_id, session, job_id)
-    prompt = load_prompt("agent")
-    system = prompt.text
-    if summary:
-        system += "\n当前岗位摘要\n" + wrap_untrusted_text(
-            "current_job", serialize(summary)
-        )
-    grouped = []
-    for run_id, group in groupby(rows, key=lambda message: message.run_id):
-        current = run_id == agent.run_id
-        turn = []
-        for message in group:
-            if message.role == MessageRole.TOOL:
-                if message.steps_json and not message.event_key.startswith("confirm:"):
-                    turn.append(
-                        {
-                            "role": "assistant",
-                            "content": wrap_untrusted_text(
-                                "past_step", serialize(message.steps_json)
-                            ),
-                        }
-                    )
-            else:
-                turn.append(
-                    {
-                        "role": message.role,
-                        "content": _history_content(message, current=current),
-                    }
-                )
-        grouped.append(turn)
-    # 以 UTF-8 字节数保守估算，沿用模型网关的长度口径。
-    while len(grouped) > 1 and len(serialize(grouped).encode()) > limits.history_tokens:
-        grouped.pop(0)
     return {
         "messages": [
-            {"role": "system", "content": system},
-            *[item for turn in grouped for item in turn],
+            {"role": "system", "content": _system_content(summary)},
+            *_render_recent_history(rows, agent.run_id, limits.history_tokens),
         ],
         "run_id": str(agent.run_id),
         "reply": "",
