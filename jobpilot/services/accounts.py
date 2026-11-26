@@ -50,7 +50,6 @@ async def purge_accounts(factory: async_sessionmaker[AsyncSession]) -> PurgeResu
     for user_id in candidates:
         try:
             async with factory.begin() as session:
-                # 改写图未启用 checkpointer。以后启用时，须先按 thread_id 清理检查点。
                 removed = await delete_due_account(session, user_id)
             deleted += int(removed)
         except SQLAlchemyError as error:

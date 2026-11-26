@@ -7,8 +7,10 @@ from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.models import (
+    AgentAction,
     AiRun,
     BulletFact,
+    Conversation,
     Fact,
     FactDraft,
     FactSet,
@@ -16,6 +18,7 @@ from jobpilot.db.models import (
     FactSetEducation,
     JobPosting,
     MatchReport,
+    Message,
     ResumeDocument,
     ResumeVersion,
     TailoredBullet,
@@ -36,12 +39,16 @@ _EXPORT_TABLES = {
     "user_jobs": UserJob.__table__,
     "match_reports": MatchReport.__table__,
     "ai_runs": AiRun.__table__,
+    "conversations": Conversation.__table__,
+    "messages": Message.__table__,
+    "agent_actions": AgentAction.__table__,
     "tailored_bullets": TailoredBullet.__table__,
     "bullet_facts": BulletFact.__table__,
     "tailored_resumes": TailoredResume.__table__,
     "resume_versions": ResumeVersion.__table__,
 }
 _VERSION_ORDER = {
+    Message.__table__: (Message.seq,),
     FactSet.__table__: (FactSet.version,),
     ResumeVersion.__table__: (ResumeVersion.resume_id, ResumeVersion.version),
 }

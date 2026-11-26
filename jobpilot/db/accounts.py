@@ -12,7 +12,8 @@ from sqlalchemy import delete, exists, func, literal_column, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
-from jobpilot.db.models import User, UserSession, normalize_email
+from jobpilot.db.checkpoints import delete_checkpoint_threads
+from jobpilot.db.models import AiRun, User, UserSession, normalize_email
 
 DELETION_GRACE_PERIOD = timedelta(days=7)
 # 使用小时单位，保证数据库与前端显示的截止时间都是申请后 168 小时。
@@ -208,9 +209,18 @@ async def due_account_ids(session: AsyncSession) -> list[UUID]:
 
 async def delete_due_account(session: AsyncSession, user_id: UUID) -> bool:
     """在删除事务里重新核对到期状态，防止删掉已恢复的账号。"""
-    deleted = await session.scalar(
-        delete(User)
+    locked = await session.scalar(
+        select(User.user_id)
         .where(User.user_id == user_id, _deletion_due())
-        .returning(User.user_id)
+        .with_for_update()
     )
-    return deleted is not None
+    if locked is None:
+        return False
+    threads = await session.scalars(
+        select(AiRun.thread_id)
+        .where(AiRun.user_id == user_id, AiRun.thread_id.is_not(None))
+        .distinct()
+    )
+    await delete_checkpoint_threads(session, [thread for thread in threads if thread])
+    await session.execute(delete(User).where(User.user_id == user_id))
+    return True

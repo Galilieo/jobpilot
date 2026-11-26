@@ -128,6 +128,22 @@ class AiRun(Base):
     __tablename__ = "ai_run"
     __table_args__ = (
         UniqueConstraint("run_id", "user_id"),
+        UniqueConstraint(
+            "run_id", "conversation_id", "user_id", name="uq_ai_run_conversation_owner"
+        ),
+        ForeignKeyConstraint(
+            ["conversation_id", "user_id"],
+            ["conversation.conversation_id", "conversation.user_id"],
+            ondelete="CASCADE",
+        ),
+        Index(
+            "uq_ai_run_active_conversation",
+            "conversation_id",
+            unique=True,
+            postgresql_where=sql_text(
+                "kind = 'agent' AND status IN ('running', 'waiting_confirmation')"
+            ),
+        ),
         # 供改写条目用 (run_id, user_id, fact_set_id) 绑定运行固定的事实库版本。
         UniqueConstraint(
             "run_id",
@@ -181,6 +197,7 @@ class AiRun(Base):
     kind: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), server_default="running")
     thread_id: Mapped[str | None] = mapped_column(Text)
+    conversation_id: Mapped[UUID | None] = mapped_column(Uuid)
     fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)
     user_job_id: Mapped[UUID | None] = mapped_column(Uuid)
     # 改写启动时固定的简历底稿：基本信息、教育等不改写的内容从这里原样保留。
@@ -624,6 +641,113 @@ class UserJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class Conversation(Base):
+    """保存对话身份和当前岗位，删除岗位时只解除软绑定。"""
+
+    __tablename__ = "conversation"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "user_id"),
+        ForeignKeyConstraint(
+            ["current_job_id", "user_id"],
+            ["user_job.user_job_id", "user_job.user_id"],
+            ondelete="SET NULL (current_job_id)",
+        ),
+        Index("ix_conversation_user_id_updated_at", "user_id", "updated_at"),
+    )
+
+    conversation_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    current_job_id: Mapped[UUID | None] = mapped_column(Uuid)
+    summary: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MessageRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+
+
+class Message(Base):
+    """持久化用户消息、工具步骤及最终回复，供刷新时恢复对话。"""
+
+    __tablename__ = "message"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "conversation_id", "user_id"],
+            ["ai_run.run_id", "ai_run.conversation_id", "ai_run.user_id"],
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "role IN ('user', 'assistant', 'tool')", name="ck_message_role"
+        ),
+        UniqueConstraint("run_id", "event_key", name="uq_message_run_event"),
+        Index("ix_message_conversation_id_seq", "conversation_id", "seq"),
+    )
+
+    message_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    event_key: Mapped[str] = mapped_column(Text)
+    seq: Mapped[int] = mapped_column(BigInteger, Identity())
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    attachments_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+    steps_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=sql_text("'[]'::jsonb")
+    )
+
+
+class ActionStatus(StrEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+    EXECUTED = "executed"
+    FAILED = "failed"
+    UNDONE = "undone"
+
+
+class AgentAction(Base):
+    """记录服务端确认卡、第一次决定及可重放的执行结果。"""
+
+    __tablename__ = "agent_action"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "conversation_id", "user_id"],
+            ["ai_run.run_id", "ai_run.conversation_id", "ai_run.user_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "run_id", "tool_call_id", name="uq_agent_action_run_tool_call"
+        ),
+        CheckConstraint(
+            "status IN (" + ", ".join(f"'{status}'" for status in ActionStatus) + ")",
+            name="ck_agent_action_status",
+        ),
+    )
+
+    action_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    conversation_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    tool_call_id: Mapped[str] = mapped_column(Text)
+    tool: Mapped[str] = mapped_column(String(32))
+    args_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16), server_default=ActionStatus.PENDING)
+    decision_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    undo_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class MatchReport(Base):

@@ -224,6 +224,8 @@ def _check_seq_migration(connection: Connection, owner, version) -> None:
         },
     )
 
+    # 在同一测试事务中插入旧运行后，先结清延迟外键再执行后续迁移的 DDL。
+    connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     command.upgrade(config, "head")
     rows = connection.execute(
         text("SELECT report_id, seq FROM match_report ORDER BY seq ASC")

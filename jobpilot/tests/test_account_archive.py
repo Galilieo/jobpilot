@@ -155,7 +155,11 @@ async def test_export_has_all_versions_and_only_the_signed_in_owners_data(
     assert set(archive["account"]) == {"user_id", "email", "deletion_requested_at"}
     assert archive["account"]["email"] == EMAIL
     assert {"user_sessions", "model_calls", "idempotency_keys"}.isdisjoint(archive)
-    assert all(archive[name] for name in archive.keys() - {"account", "format_version"})
+    empty = {"conversations", "messages", "agent_actions"}
+    assert all(archive[name] == [] for name in empty)
+    assert all(
+        archive[name] for name in archive.keys() - empty - {"account", "format_version"}
+    )
     assert str(other_id) not in str(archive)
     assert [item["version"] for item in archive["fact_sets"]] == [1, 2]
     assert len(archive["fact_set_criteria"]) == 1
@@ -278,6 +282,8 @@ async def test_account_foreign_keys_in_migrated_database(
     assert foreign_keys.pop("fact_set_criterion")["fact_set"] == "CASCADE"
     assert foreign_keys.pop("fact_set_education")["fact_set"] == "CASCADE"
     assert foreign_keys.pop("model_call")["ai_run"] == "SET NULL"
+    assert foreign_keys.pop("message")["ai_run"] == "CASCADE"
+    assert foreign_keys.pop("agent_action")["ai_run"] == "CASCADE"
     foreign_keys.pop("user_account")
     assert {
         table: rules.get("user_account") for table, rules in foreign_keys.items()

@@ -11,13 +11,14 @@ from pathlib import Path
 import httpx
 import pytest
 from alembic.config import Config
-from sqlalchemy import URL, delete
+from sqlalchemy import URL, delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from alembic import command
 from jobpilot.api.deps import get_model_client, get_session_factory
 from jobpilot.config import settings
-from jobpilot.db.models import Base
+from jobpilot.db.checkpoints import delete_checkpoint_threads
+from jobpilot.db.models import AiRun, Base
 from jobpilot.db.session import create_database_engine, get_session
 from jobpilot.main import app
 from jobpilot.tests.fakes import FakeModelClient
@@ -61,9 +62,15 @@ def migrated_test_database() -> URL:
 
 async def clear_business_tables(engine: AsyncEngine) -> None:
     """按外键依赖逆序清空模型中的业务表，保留 Alembic 版本信息。"""
-    async with engine.begin() as connection:
+    async with AsyncSession(engine) as session, session.begin():
+        threads = await session.scalars(
+            select(AiRun.thread_id).where(AiRun.thread_id.is_not(None)).distinct()
+        )
+        await delete_checkpoint_threads(
+            session, [thread for thread in threads if thread]
+        )
         for table in reversed(Base.metadata.sorted_tables):
-            await connection.execute(delete(table))
+            await session.execute(delete(table))
 
 
 @pytest.fixture
