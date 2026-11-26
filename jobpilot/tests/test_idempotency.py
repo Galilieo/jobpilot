@@ -208,6 +208,34 @@ async def test_losing_job_insert_saves_200_for_its_own_run(
         attempt = await db.get(AiRun, key.run_id)
         assert attempt.status == RunStatus.CANCELLED
         assert await db.scalar(select(func.count()).select_from(JobPosting)) == 1
+    job_id = winner.json()["job_id"]
+    assert (await async_client.delete(f"/api/jobs/{job_id}")).status_code == 204
+    model_outputs.append(json.dumps(OUTPUT))
+    reimported = await async_client.post(
+        "/api/jobs", json=body, headers=_headers("paused")
+    )
+    assert reimported.status_code == 201
+    assert reimported.json()["job_id"] != job_id
+
+
+async def test_delete_job_removes_snapshot_from_ordinary_duplicate(
+    async_client, model_outputs
+):
+    await sign_in(async_client, "key-job-delete@example.invalid")
+    model_outputs.extend([json.dumps(OUTPUT)] * 2)
+    body = {"raw_text": JD}
+    created = await async_client.post("/api/jobs", json=body, headers=_headers("first"))
+    duplicate = await async_client.post(
+        "/api/jobs", json=body, headers=_headers("reuse")
+    )
+    assert created.status_code == 201 and duplicate.status_code == 200
+    job_id = duplicate.json()["job_id"]
+    assert (await async_client.delete(f"/api/jobs/{job_id}")).status_code == 204
+    reimported = await async_client.post(
+        "/api/jobs", json=body, headers=_headers("reuse")
+    )
+    assert reimported.status_code == 201
+    assert reimported.json()["job_id"] != job_id
 
 
 async def test_match_replays_report_and_checks_job_path(

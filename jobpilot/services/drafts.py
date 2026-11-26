@@ -1047,8 +1047,10 @@ def _apply_education_changes(item: DraftEducation, changes: EducationChanges) ->
                 for r in item.review_reasons
                 if r is not ReviewReason.EDUCATION_STATUS_UNCERTAIN
             ]
-        elif ReviewReason.EDUCATION_STATUS_UNCERTAIN not in item.review_reasons:
-            item.review_reasons.append(ReviewReason.EDUCATION_STATUS_UNCERTAIN)
+        else:
+            item.draft_status = ItemStatus.PENDING
+            if ReviewReason.EDUCATION_STATUS_UNCERTAIN not in item.review_reasons:
+                item.review_reasons.append(ReviewReason.EDUCATION_STATUS_UNCERTAIN)
 
     if changes.confirmed is not None:
         if changes.confirmed and item.blocked:

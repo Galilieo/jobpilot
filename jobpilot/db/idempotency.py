@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Update, select, update
+from sqlalchemy import Update, delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -155,4 +155,18 @@ async def fail_interrupted_keys(db: AsyncSession) -> None:
         update(IdempotencyKey)
         .where(IdempotencyKey.status == "processing")
         .values(status="failed")
+    )
+
+
+async def delete_result_snapshots(
+    db: AsyncSession, user_id: UUID, operation: Operation, result_id: UUID
+) -> None:
+    """删除已被移除的业务结果所对应的所有成功快照。"""
+    await db.execute(
+        delete(IdempotencyKey).where(
+            IdempotencyKey.user_id == user_id,
+            IdempotencyKey.operation == operation,
+            IdempotencyKey.result_id == result_id,
+            IdempotencyKey.status == "succeeded",
+        )
     )

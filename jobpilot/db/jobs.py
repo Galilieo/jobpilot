@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from jobpilot.db.idempotency import Operation, delete_result_snapshots
 from jobpilot.db.models import AiRun, JobPosting, UserJob
 
 
@@ -62,6 +63,7 @@ async def delete_user_job(
     if user_job is None:
         return None
     posting_id = user_job.posting_id
+    await delete_result_snapshots(db, user_id, Operation.PARSE_JD, job_id)
 
     deleted_run_ids = list(
         await db.scalars(

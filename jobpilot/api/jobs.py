@@ -271,7 +271,8 @@ async def _store_job(
             raise
         await set_run_status(db, user_id, run_id, RunStatus.CANCELLED)
         existing = await find_existing_job(db, user_id, content_hash)
-        assert existing is not None
+        if existing is None:
+            raise HTTPException(409, "该岗位在导入期间被删除，请重试") from None
         return await _reuse_job(db, response, attempt, existing)
     user_job = UserJob(user_id=user_id, posting_id=posting.posting_id)
     db.add(user_job)
@@ -287,7 +288,8 @@ async def _store_job(
 async def _reuse_job(
     db: DbSession, response: Response, attempt: Attempt, job_id: UUID
 ) -> JobOut:
-    output = _job_out(*await _load(db, attempt.scope.user_id, job_id))
+    # 与删除岗位共用行锁，避免删除事务提交后才补写旧快照。
+    output = _job_out(*await _load(db, attempt.scope.user_id, job_id, for_update=True))
     await save_snapshot(db, attempt, job_id, output, status.HTTP_200_OK)
     await db.commit()
     response.status_code = status.HTTP_200_OK

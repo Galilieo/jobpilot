@@ -4,14 +4,14 @@
 """
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from jobpilot.db.models import AiRun, ResumeDocument, RunStatus
+from jobpilot.db.models import AiRun, FactDraft, ResumeDocument, RunStatus
 
 RESUME = (
     "项目｜课程排班面板\n负责实现按周次筛选课程的功能\n优化查询后响应时间降低 30%\n"
@@ -643,6 +643,67 @@ async def test_criteria_and_education_routes_and_revision_conflicts(
     lib2 = (await signed_in.get("/api/facts")).json()
     assert lib2["education"] == []
     assert len(lib2["criteria"]) == 1
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_missing_confirmed_education_status_has_recoverable_publish_behavior(
+    signed_in: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    legacy: bool,
+) -> None:
+    user_id = UUID((await signed_in.get("/api/me")).json()["user_id"])
+    start = (await signed_in.get("/api/facts")).json()["draft"]["revision"]
+    added = await signed_in.post(
+        "/api/facts/education",
+        json={
+            "school": "东澜理工",
+            "degree": "bachelor",
+            "status": "enrolled",
+            "expected_revision": start,
+        },
+    )
+    assert added.status_code == 201
+    education_id = added.json()["education_id"]
+    revision = added.json()["revision"]
+    if legacy:
+        async with session_factory.begin() as db:
+            draft = await db.get_one(FactDraft, user_id)
+            draft.education_json = [{**draft.education_json[0], "status": None}]
+    else:
+        cleared = await signed_in.put(
+            f"/api/facts/education/{education_id}",
+            json={"status": None, "expected_revision": revision},
+        )
+        assert cleared.status_code == 200
+        revision = cleared.json()["revision"]
+
+    criterion = await signed_in.put(
+        "/api/facts/criteria",
+        json={
+            "field": "onsite_days_per_week",
+            "int_value": 4,
+            "confirmed": True,
+            "expected_revision": revision,
+        },
+    )
+    assert criterion.status_code == 200
+    result = await signed_in.post(
+        "/api/facts/commit",
+        json={
+            "base_fact_set_id": None,
+            "expected_revision": criterion.json()["revision"],
+        },
+    )
+    if legacy:
+        assert result.status_code == 422
+        assert result.json()["detail"]["education_id"] == education_id
+        library = (await signed_in.get("/api/facts")).json()
+        assert library["fact_set"] is None
+    else:
+        assert result.status_code == 200
+        library = (await signed_in.get("/api/facts")).json()
+        assert library["criteria"][0]["int_value"] == 4
+        assert library["draft"]["education"][0]["draft_status"] == "pending"
 
 
 async def test_two_resumes_same_criteria_quote_point_to_each_doc(

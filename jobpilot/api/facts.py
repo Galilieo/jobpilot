@@ -511,6 +511,14 @@ async def commit(body: CommitIn, user: CurrentUser, db: DbSession) -> PublishOut
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="没有已确认或删除的改动"
         ) from None
+    except CannotConfirmError as error:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "请补充这段教育经历的就读状态，或取消确认后再发布",
+                "education_id": str(error.args[0]),
+            },
+        ) from None
     revision = await _commit_draft(db, user.user_id)
     return PublishOut(
         fact_set_id=fact_set.fact_set_id, version=fact_set.version, revision=revision
