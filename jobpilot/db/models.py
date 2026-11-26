@@ -175,6 +175,14 @@ class AiRun(Base):
                 "kind = 'agent' AND status IN ('running', 'waiting_confirmation')"
             ),
         ),
+        Index(
+            "uq_ai_run_active_compact",
+            "conversation_id",
+            unique=True,
+            postgresql_where=sql_text(
+                "kind = 'compact' AND status IN ('running', 'waiting_confirmation')"
+            ),
+        ),
         # 供改写条目用 (run_id, user_id, fact_set_id) 绑定运行固定的事实库版本。
         UniqueConstraint(
             "run_id",
@@ -183,7 +191,8 @@ class AiRun(Base):
             name="uq_ai_run_run_id_user_id_fact_set_id",
         ),
         CheckConstraint(
-            "kind IN ('parse_resume', 'parse_jd', 'match', 'tailor', 'agent')",
+            "kind IN ('parse_resume', 'parse_jd', 'match', 'tailor', 'agent', "
+            "'compact')",
             name="ck_ai_run_kind",
         ),
         CheckConstraint(
@@ -693,6 +702,13 @@ class Conversation(Base):
             ["user_job.user_job_id", "user_job.user_id"],
             ondelete="SET NULL (current_job_id)",
         ),
+        CheckConstraint(
+            "(summary_json IS NULL AND summary_through_seq = 0 "
+            "AND summary_revision = 0) OR "
+            "(summary_json IS NOT NULL AND jsonb_typeof(summary_json) = 'object' "
+            "AND summary_through_seq > 0 AND summary_revision > 0)",
+            name="ck_conversation_summary_boundary",
+        ),
         Index("ix_conversation_user_id_updated_at", "user_id", "updated_at"),
     )
 
@@ -703,7 +719,11 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(200))
     current_job_id: Mapped[UUID | None] = mapped_column(Uuid)
     job_binding_revision: Mapped[int] = mapped_column(BigInteger, server_default="0")
-    summary: Mapped[str | None] = mapped_column(Text)
+    summary_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)
+    )
+    summary_through_seq: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    summary_revision: Mapped[int] = mapped_column(BigInteger, server_default="0")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
