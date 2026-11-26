@@ -1,6 +1,19 @@
 /* 全局结构、疏密与布局。颜色、字号档位、圆角与组件默认外观集中在 theme.ts；
  * 这里只写布局、过渡与基于 var(--ant-*) 的边框/底色修饰，不写零散色值或强制覆盖。 */
 
+:root {
+  --jp-font-serif: 'Songti SC', 'STSong', 'Noto Serif SC', 'Source Han Serif SC', serif;
+  --jp-radius-sm: 5px;
+  --jp-radius-md: 8px;
+  --jp-radius-lg: 14px;
+  --jp-shadow-card: 0 1px 2px rgba(30, 45, 60, 0.04);
+  --jp-shadow-card-hover: 0 4px 14px rgba(30, 45, 60, 0.09);
+  --jp-shadow-composer: 0 1px 2px rgba(30, 45, 60, 0.04), 0 8px 28px rgba(30, 45, 60, 0.07);
+  --jp-shadow-paper:
+    0 0 0 1px rgba(30, 45, 60, 0.06), 0 2px 4px rgba(30, 45, 60, 0.04),
+    0 16px 40px rgba(30, 45, 60, 0.08);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -22,6 +35,22 @@ textarea {
 }
 .tabular-num {
   font-variant-numeric: tabular-nums;
+}
+.serif-heading {
+  font-family: var(--jp-font-serif);
+}
+.meta-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--ant-color-text-secondary);
+  font-size: 12.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
 
 /* 共享字号、Flex 与边框底色 */

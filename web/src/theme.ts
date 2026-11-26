@@ -1,57 +1,59 @@
-// 应用的极简雾蓝主题（07 第 2、3 节与静态原型）：所有色彩统一在这里配置，页面只读 token 或 CSS 变量。
+// 应用的「雾蓝 + 纸面」（方向 D）主题（07 第 0、2、3 节与原型 v2）：所有色彩与圆角档位统一在这里配置，页面只读 token 或 CSS 变量。
 import type { ThemeConfig } from 'antd'
 
 export const jobpilotTheme: ThemeConfig = {
   token: {
-    // 雾蓝主色与浅底（与原型 #50687F / #E4EAF0 / #3B5268 对齐）
-    colorPrimary: '#50687F',
-    colorPrimaryHover: '#3F566C',
-    colorPrimaryActive: '#33475B',
-    colorPrimaryBg: '#E4EAF0',
-    colorPrimaryBgHover: '#D7E0E9',
-    colorPrimaryBorder: '#C9D4DF',
+    // 雾蓝主色与浅底（方向 D）
+    colorPrimary: '#46607A',
+    colorPrimaryHover: '#3B5268',
+    colorPrimaryActive: '#2F4357',
+    colorPrimaryBg: '#EEF2F6',
+    colorPrimaryBgHover: '#E2E9F0',
+    colorPrimaryBorder: '#CDD6DF',
     colorPrimaryBorderHover: '#9FB1C3',
     colorPrimaryText: '#3B5268',
     colorPrimaryTextHover: '#2E4357',
-    colorLink: '#50687F',
-    colorLinkHover: '#3F566C',
+    colorLink: '#46607A',
+    colorLinkHover: '#3B5268',
 
     // 信息色与主色统一，供「你填写 / 你补充的 / 最新 / 表达缺口」等雾蓝标签复用
-    colorInfo: '#50687F',
-    colorInfoBg: '#E4EAF0',
-    colorInfoBorder: '#C9D4DF',
+    colorInfo: '#46607A',
+    colorInfoBg: '#EEF2F6',
+    colorInfoBorder: '#CDD6DF',
     colorInfoText: '#3B5268',
 
-    // 柔和低饱和状态色（鼠尾草绿 / 暖琥珀 / 陶土红），避免刺眼默认高亮色
-    colorSuccess: '#5B8A4A',
-    colorSuccessBg: '#E6EEDF',
-    colorSuccessBorder: '#D3E2C9',
-    colorSuccessText: '#3F6130',
+    // 核对绿 / 暖琥珀 / 陶土红（方向 D）
+    colorSuccess: '#2E6B58',
+    colorSuccessBg: '#EAF3EE',
+    colorSuccessBgHover: '#D5E9DE',
+    colorSuccessBorder: '#C7DFD3',
+    colorSuccessText: '#245747',
 
-    colorWarning: '#B9842F',
-    colorWarningBg: '#F5ECDA',
-    colorWarningBorder: '#EBDBBA',
-    colorWarningText: '#7A5618',
+    colorWarning: '#9A6418',
+    colorWarningHover: '#D9A04A',
+    colorWarningBg: '#FBF2E2',
+    colorWarningBorder: '#ECD9B4',
+    colorWarningText: '#7D5112',
 
     colorError: '#B5534A',
-    colorErrorBg: '#F5E3E0',
-    colorErrorBorder: '#ECCDC8',
-    colorErrorText: '#8A3A33',
+    colorErrorBg: '#F6E8E8',
+    colorErrorBorder: '#E9C8C8',
+    colorErrorText: '#9B3C3C',
 
-    // 中性骨架（纯白主画布、暖纸灰面板与柔和边框）
+    // 中性骨架（纯白画布、纸面灰面板、用户气泡与柔和边框）
     colorBgLayout: '#FFFFFF',
     colorBgContainer: '#FFFFFF',
     colorBgElevated: '#FFFFFF',
-    colorFillQuaternary: '#FAFAF8',
-    colorFillTertiary: '#F2F2F0',
-    colorFillSecondary: '#EBEBE7',
-    colorText: '#1F1F1F',
-    colorTextSecondary: '#5F5F5B',
-    colorTextTertiary: '#8F8F8A',
-    colorBorder: '#E6E6E2',
-    colorBorderSecondary: '#EFEFEC',
+    colorFillQuaternary: '#F2F4F5',
+    colorFillTertiary: '#F3F5F7',
+    colorFillSecondary: '#E8EDF2',
+    colorText: '#1E2832',
+    colorTextSecondary: '#66717D',
+    colorTextTertiary: '#9DA6B0',
+    colorBorder: '#E7EAED',
+    colorBorderSecondary: '#E6E9EC',
 
-    // 字体与固定档位字号（规则 8：页面标题 22、区块 16、卡片 14、正文 14、次要 13）
+    // 字体与圆角三级（小控件 5 / 卡片 8 / 输入框 14）
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     fontSize: 14,
@@ -61,11 +63,11 @@ export const jobpilotTheme: ThemeConfig = {
     fontSizeHeading3: 16,
     fontSizeHeading4: 14,
     fontSizeHeading5: 14,
-    lineHeight: 1.65,
-    borderRadius: 10,
-    borderRadiusLG: 12,
-    borderRadiusSM: 6,
-    boxShadowSecondary: '0 6px 20px rgba(31, 31, 31, 0.08)',
+    lineHeight: 1.6,
+    borderRadius: 8,
+    borderRadiusLG: 8,
+    borderRadiusSM: 5,
+    boxShadowSecondary: '0 10px 28px rgba(20, 30, 40, 0.12)',
   },
   components: {
     Typography: {
@@ -74,30 +76,30 @@ export const jobpilotTheme: ThemeConfig = {
     },
     Layout: {
       bodyBg: '#FFFFFF',
-      siderBg: '#F6F6F4',
-      headerBg: '#F6F6F4',
+      siderBg: '#F5F6F7',
+      headerBg: '#F5F6F7',
     },
     Menu: {
       itemBg: 'transparent',
-      itemSelectedBg: '#E4EAF0',
-      itemSelectedColor: '#3B5268',
-      itemHoverBg: 'rgba(80, 104, 127, 0.07)',
-      itemColor: '#5F5F5B',
-      itemBorderRadius: 10,
-      itemHeight: 38,
+      itemSelectedBg: '#E8EDF2',
+      itemSelectedColor: '#26313C',
+      itemHoverBg: '#E8EDF2',
+      itemColor: '#26313C',
+      itemBorderRadius: 5,
+      itemHeight: 36,
       itemMarginInline: 0,
       activeBarBorderWidth: 0,
     },
     Card: {
-      borderRadiusLG: 12,
+      borderRadiusLG: 8,
       paddingLG: 16,
       headerFontSize: 16,
       headerHeight: 48,
     },
     Tag: {
-      borderRadiusSM: 6,
-      defaultBg: '#F7F7F5',
-      defaultColor: '#5F5F5B',
+      borderRadiusSM: 4,
+      defaultBg: '#F3F5F7',
+      defaultColor: '#66717D',
     },
     Button: {
       primaryShadow: 'none',
@@ -105,26 +107,26 @@ export const jobpilotTheme: ThemeConfig = {
       dangerShadow: 'none',
     },
     Tabs: {
-      inkBarColor: '#50687F',
-      itemActiveColor: '#3B5268',
-      itemSelectedColor: '#3B5268',
-      itemHoverColor: '#3B5268',
-      itemColor: '#5F5F5B',
+      inkBarColor: '#46607A',
+      itemActiveColor: '#1E2832',
+      itemSelectedColor: '#1E2832',
+      itemHoverColor: '#1E2832',
+      itemColor: '#66717D',
       titleFontSize: 14,
     },
     Table: {
-      headerBg: '#FAFAF8',
-      headerColor: '#5F5F5B',
-      rowHoverBg: '#FAFAF8',
+      headerBg: '#F2F4F5',
+      headerColor: '#66717D',
+      rowHoverBg: '#F2F4F5',
     },
     Segmented: {
-      trackBg: '#F2F2F0',
+      trackBg: '#F3F5F7',
       itemSelectedBg: '#FFFFFF',
-      itemColor: '#5F5F5B',
-      itemSelectedColor: '#1F1F1F',
+      itemColor: '#66717D',
+      itemSelectedColor: '#1E2832',
     },
     Alert: {
-      borderRadiusLG: 10,
+      borderRadiusLG: 8,
     },
   },
 }
