@@ -420,3 +420,63 @@ uv run --project jobpilot python -m evals.runners.e4_score
 | jd-141 安信智云 | 条件编号有跳号，正文还有独立的职责段 |
 | jd-151 BIGO | 网页把职责和要求排成一整段，段落边界要靠措辞识别 |
 | jd-152 缘启智慧 | 正文混用括号、图标和不等号，页面摘要与正文的薪资及出勤数字不同 |
+
+## E5 端到端编造率
+
+用 E3 的 50 组合成配对比较 A、A'（命令行 `A2`）、B、C、D。A/A' 从简历和 JD 原文一次改写，区别是 A' 加事实边界。B/C/D 走同一产品流程，从匹配、按经历分块到生成引用，依次增加程序检查和模型语义检查。产品的格式校验、事实短标签解析和每块条数上限适用于 B/C/D。B 的未经检查条目只进入评测结果。版本和发出的实际请求均有用量记录。
+
+### 全量前预测
+
+| 组别 | 预计编造率 | 理由 |
+| --- | ---: | --- |
+| A | 8%–18% | 要求突出岗位适配，模型可能补出收益、职责或岗位技术 |
+| A' | 3%–9% | 边界提示能减少显式新增信息，限定语丢失仍可能发生 |
+| B | 2%–7% | 分块及事实引用压缩改写范围，引用存在与句子受支持是两件事 |
+| C | 1%–4% | 程序可拦数字、实体和职责升级，语义上的范围扩大仍可能漏过 |
+| D | ≤ 2% | 语义检查进一步拦截隐含夸大，预期明显低于 A' |
+
+预测写于 2026-11-26。E5 的程序门槛是 D 每条定稿都引用本次已确认事实。语义忠实度以校准后的裁判衡量。
+
+### 运行与校准
+
+在仓库根目录运行。每个版本一次尝试用单独的评测账号登记调用，落盘后保留结果与匿名用量。测试集要求已经完成 E3 正式测试，并使用 README 记录的定稿匹配提示词。测试结果和测试裁判输出用固定文件名，存在时会拒绝重跑。
+
+```sh
+for version in A A2 B C D; do
+  uv run --project jobpilot python -m evals.runners.e5_run --version "$version" --split dev
+done
+uv run --project jobpilot python -m evals.runners.e5_judge <开发集五份改写结果> --output evals/results/e5-judge-dev-v1.json
+uv run --project jobpilot python -m evals.runners.e5_score prepare <同一批五份结果> --judging evals/results/e5-judge-dev-v1.json
+```
+
+裁判默认使用 `deepseek-v4-pro`，产品试跑使用 `deepseek-flash`。每次裁判调用最多放入同一份简历下的 8 条句子，给全部已确认的事实、教育和求职条件。请求与回复保存在本地裁判结果。抽样每组 8 条，按裁判的初判优先抽两类，某组某类不足时从另一类补足，键表记录实际配比。人工表经打乱，在 `datasets/e5/calibration-sheet.csv` 中每行只填写「有编造」或「没有」，保持顺序，另存为 `evals/private/e5-calibration.csv`。
+
+```sh
+uv run --project jobpilot python -m evals.runners.e5_score calibrate --judging evals/results/e5-judge-dev-v1.json --output evals/results/e5-calibration-v1.json
+```
+
+Cohen’s kappa 低于 0.6 时，只在开发集修订判据，升级裁判提示词版本号，用 `--sample-map evals/results/e5-calibration-map.json` 重判同一批条目，再用同一份人工表计算。达到门槛后，五个版本各跑一次 `--split test`，然后以同一裁判模型和提示词运行下列命令。
+
+```sh
+uv run --project jobpilot python -m evals.runners.e5_judge evals/results/e5-test-{A,A2,B,C,D}-official.json --calibration evals/results/e5-calibration-v1.json
+uv run --project jobpilot python -m evals.runners.e5_score score evals/results/e5-test-{A,A2,B,C,D}-official.json --judging evals/results/e5-judge-test-official.json --output evals/results/e5-test-score.json
+```
+
+预算中断、失败和零产出全计入启动次数。编造率和回退率以已定稿条目为分母，待处理项另计。带【待补】的句子仍检查其中的实际断言，单独的【待补】计入产出并统计占位数。调用耗时取 `model_call.latency_ms`，与含并行、数据库和本地处理的墙钟耗时同时列出。对没有使用量的请求报告缺失次数，token 汇总只能覆盖已知用量。
+
+### 两组试跑与全量估算（2026-11-26）
+
+选择 `resume-001__jd-syn-01` 和 `resume-011__jd-syn-03`，覆盖短项目简历和较长的多经历简历。改写用 `deepseek-flash`，裁判用 `deepseek-v4-pro`，温度均为 0、非思考模式。五组各两次均产出，裁判完成 21 次请求、覆盖 131 条。试跑编造判定用于验证链路，正式结果等人工校准。
+
+| 组别 | 调用数 | 输入 token | 输出 token | 累计模型耗时 | 墙钟耗时 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 2 | 1,440 | 761 | 9.4 秒 | 9.5 秒 |
+| A' | 2 | 1,658 | 836 | 7.9 秒 | 7.9 秒 |
+| B | 9 | 15,169 | 3,315 | 25.0 秒 | 18.0 秒 |
+| C | 10 | 15,842 | 3,314 | 37.1 秒 | 29.2 秒 |
+| D | 37 | 34,330 | 3,693 | 57.9 秒 | 28.2 秒 |
+| 裁判 | 21 | 49,339 | 4,575 | 67.7 秒 | 68.0 秒 |
+
+按 [DeepSeek 官方人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) 的高峰非缓存输入价估算。Flash 每百万输入 2 元、输出 8 元。Pro 每百万输入 9 元、输出 27 元。将两组实际用量和墙钟时间乘以 25，生成约 **5.81 元、39 分钟**，裁判约 **14.19 元、28 分钟**，合计约 **20 元、1.1 小时**。费用按未命中缓存估算，实际随样本文本、修订次数和缓存变化。耗时不含人工标注等待，费用和耗时均不含可能的额外裁判校准轮次。
+
+C 首次试跑发现 `resume-011` 的混合栏目被评测导入切成了只有栏目名的分段，产品组装器移去栏目名后无条目可读。用 `ee0a961` 修正合成样本分段并检查全部 10 份底稿，再重跑 C。表内 C 的用量取完整重跑结果。最初中断的调用不用于外推。产品提示词及默认检查保持原版本。
