@@ -375,4 +375,112 @@ describe('resume_editor.js 编辑器行为', () => {
     api.setEditing(true)
     expect(btn.contentEditable).toBe('false')
   })
+
+  it('显示依据时在条目后插入编号并标记改过条目，保存和导出内容里不带编号', async () => {
+    const { requests } = mountEditor('模型改写 30%', true)
+    const api = (
+      window as unknown as {
+        jobpilotEditor: {
+          collect: () => ReturnType<typeof makeContent>
+          save: () => Promise<unknown>
+        }
+      }
+    ).jobpilotEditor
+
+    // 跨源消息必须忽略
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://evil.example',
+        data: {
+          type: 'jobpilot:evidence',
+          show: true,
+          bullets: { [BULLET_ID]: [{ code: 'F99', text: '伪造' }] },
+          changedIds: [BULLET_ID],
+        },
+      }),
+    )
+    expect(document.querySelectorAll('.evidence-badge')).toHaveLength(0)
+
+    // 同源开启显示依据
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        data: {
+          type: 'jobpilot:evidence',
+          show: true,
+          bullets: { [BULLET_ID]: [{ code: 'F1', text: '负责用 FastAPI 实现问答接口' }] },
+          changedIds: [BULLET_ID],
+        },
+      }),
+    )
+
+    const li = document.querySelector(`li[data-bullet-id="${BULLET_ID}"]`)!
+    const badge = li.querySelector('.evidence-badge') as HTMLElement
+    expect(badge).toBeTruthy()
+    expect(badge.textContent).toBe('F1')
+    expect(badge.classList.contains('no-print')).toBe(true)
+    expect(badge.dataset.tip).toBe('F1 负责用 FastAPI 实现问答接口')
+    expect(badge.tabIndex).toBe(0)
+    expect(li.classList.contains('is-changed')).toBe(true)
+
+    // 开启依据时收集并保存的正文不能混入 F1 编号
+    expect(api.collect().sections[0].entries[0].bullets[0].text).toBe('模型改写 30%')
+    const saving = api.save()
+    expect(requests).toHaveLength(1)
+    const sent = requests[0].body.content as ReturnType<typeof makeContent>
+    expect(sent.sections[0].entries[0].bullets[0].text).toBe('模型改写 30%')
+    requests[0].gate.resolve(
+      jsonResponse(200, {
+        version_id: 'v2-uuid',
+        version: 2,
+        content: makeContent('模型改写 30%'),
+      }),
+    )
+    await saving
+
+    // 关闭显示依据后移除编号
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        data: {
+          type: 'jobpilot:evidence',
+          show: false,
+          bullets: {},
+          changedIds: [BULLET_ID],
+        },
+      }),
+    )
+    expect(document.querySelectorAll('.evidence-badge')).toHaveLength(0)
+  })
+
+  it('离线导出文件忽略显示依据消息，保存与下载 HTML 不带编号和改动高亮', () => {
+    mountEditor('离线条目', false)
+    const li = document.querySelector(`li[data-bullet-id="${BULLET_ID}"]`)!
+    li.classList.add('is-changed')
+    const fakeBadge = document.createElement('span')
+    fakeBadge.className = 'evidence-badge'
+    fakeBadge.textContent = 'F1'
+    li.append(fakeBadge)
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        data: {
+          type: 'jobpilot:evidence',
+          show: true,
+          bullets: { [BULLET_ID]: [{ code: 'F2', text: '不应注入' }] },
+          changedIds: [BULLET_ID],
+        },
+      }),
+    )
+    expect(document.querySelectorAll('.evidence-badge')).toHaveLength(1)
+
+    const api = (window as unknown as { jobpilotEditor: { save: () => Promise<unknown> } })
+      .jobpilotEditor
+    void api.save()
+    const saved = localStorage.getItem('jobpilot:resume-test') ?? ''
+    expect(saved).not.toContain('evidence-badge')
+    expect(saved).not.toContain('is-changed')
+    expect(saved).not.toContain('F1')
+  })
 })

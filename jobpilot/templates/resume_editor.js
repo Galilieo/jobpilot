@@ -17,6 +17,7 @@
   let saveTimer = null;
   let saving = null; // 进行中的保存；它没结束之前不发下一次
   let dirty = false; // 页面上有还没存到服务器的修改
+  let evidenceState = { show: false, bullets: {}, changedIds: [] };
 
   // ---------- 本机存储（隐私模式等情况下可能不可用） ----------
 
@@ -52,7 +53,7 @@
   function marked(node) {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent;
     if (node.nodeType !== Node.ELEMENT_NODE) return "";
-    if (node.classList.contains("mark")) return ""; // 检查标记不是简历内容
+    if (node.classList.contains("mark") || node.classList.contains("evidence-badge")) return ""; // 检查标记与依据编号不是简历内容
     const inner = [...node.childNodes].map(marked).join("");
     // 只认明确的加粗标签（加粗按钮生成的就是它们）；标题本身的粗体是样式，不是内容。
     const bold = node.tagName === "STRONG" || node.tagName === "B";
@@ -110,7 +111,8 @@
     const copy = node.cloneNode(true);
     copy.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
     copy.querySelector(".toolbar")?.remove();
-    copy.querySelectorAll(".bullet-action").forEach((el) => el.remove());
+    copy.querySelectorAll(".bullet-action, .evidence-badge").forEach((el) => el.remove());
+    copy.querySelectorAll("li.is-changed").forEach((el) => el.classList.remove("is-changed"));
     copy.querySelector("body")?.classList.remove("editing");
     return copy;
   }
@@ -171,6 +173,12 @@
         refreshMarks(saved.content);
         storage.remove(DRAFT_KEY);
         setStatus(`已保存 · 第 ${saved.version} 版`);
+        if (window.parent !== window) {
+          window.parent.postMessage(
+            { type: "jobpilot:saved", version: saved.version, version_id: saved.version_id },
+            window.location.origin,
+          );
+        }
         if (dirty) scheduleSave(); // 保存期间又有修改：接着存
         return { ok: true };
       }
@@ -228,6 +236,32 @@
       const action = li.querySelector(".bullet-action");
       if (action) action.before(mark);
       else li.append(mark);
+    }
+    renderEvidence();
+  }
+
+  function renderEvidence() {
+    page.querySelectorAll(".evidence-badge").forEach((el) => el.remove());
+    page.querySelectorAll("li.is-changed").forEach((el) => el.classList.remove("is-changed"));
+    if (!online) return;
+    const changed = new Set(evidenceState.changedIds);
+    for (const li of page.querySelectorAll("li[data-bullet-id]")) {
+      const bulletId = li.dataset.bulletId;
+      if (changed.has(bulletId)) li.classList.add("is-changed");
+      if (!evidenceState.show) continue;
+      const items = evidenceState.bullets[bulletId];
+      if (!Array.isArray(items) || items.length === 0) continue;
+      const anchor = li.querySelector(".mark") || li.querySelector(".bullet-action");
+      for (const item of items) {
+        const badge = document.createElement("span");
+        badge.className = "evidence-badge no-print";
+        badge.textContent = item.code;
+        badge.tabIndex = 0;
+        badge.contentEditable = "false";
+        if (item.text) badge.dataset.tip = `${item.code} ${item.text}`;
+        if (anchor) anchor.before(badge);
+        else li.append(badge);
+      }
     }
   }
 
@@ -509,10 +543,22 @@
 
   function updateFit() {
     const ratio = contentHeight() / A4_PX;
+    const percent = Math.round(ratio * 100);
+    const overflowPages = ratio <= 1 ? 0 : Math.ceil(ratio) - 1;
     fitText.textContent =
-      ratio <= 1
-        ? `一页内 · 占用 ${Math.round(ratio * 100)}%`
-        : `超出 ${Math.ceil(ratio) - 1} 页`;
+      ratio <= 1 ? `一页内 · 占用 ${percent}%` : `超出 ${overflowPages} 页`;
+    if (online && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          type: "jobpilot:fit",
+          fit: ratio <= 1,
+          percent,
+          overflowPages,
+          text: fitText.textContent,
+        },
+        window.location.origin,
+      );
+    }
     return ratio <= 1;
   }
 
@@ -663,6 +709,27 @@
 
   if (storage.get(VIEW_KEY)?.paged) setPaged(true);
   updateFit();
+
+  if (online) {
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      const msg = event.data;
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "jobpilot:evidence") {
+        evidenceState = {
+          show: Boolean(msg.show),
+          bullets: msg.bullets && typeof msg.bullets === "object" ? msg.bullets : {},
+          changedIds: Array.isArray(msg.changedIds) ? msg.changedIds : [],
+        };
+        renderEvidence();
+      } else if (msg.type === "jobpilot:print") {
+        window.print();
+      }
+    });
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: "jobpilot:ready" }, window.location.origin);
+    }
+  }
 
   // 测试和其他脚本可以调用（例如应用外壳在关闭前立即保存）。
   window.jobpilotEditor = { collect, save, setEditing, fitOnePage };

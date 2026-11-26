@@ -8,28 +8,34 @@
   :root {
     --ink: #1f2328;
     --muted: #57606a;
-    --rule: #d0d7de;
+    --rule: #8fa5b8;
+    --heading: #2e4a63;
+    --ok: #2e6b58;
+    --ok-soft: #eaf3ee;
+    --ok-hover: #d5e9de;
     --warn: #9a6700;
     --warn-bg: #fff8c5;
     --pending-bg: #ffebe9;
     --font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
       "Source Han Sans SC", sans-serif;
+    --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
     --size: 10.5pt;
     --leading: 1.5;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #eaeef2; color: var(--ink); font-family: var(--font); }
+  body { margin: 0; background: #f2f4f5; color: var(--ink); font-family: var(--font); }
   .page {
     width: 210mm; min-height: 297mm; margin: 16px auto; padding: 14mm 16mm;
     background: #fff; font-size: var(--size); line-height: var(--leading);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(30, 45, 60, .06), 0 2px 4px rgba(30, 45, 60, .04), 0 16px 40px rgba(30, 45, 60, .08);
   }
-  .name { font-size: 1.9em; font-weight: 700; margin: 0 0 2px; }
+  .name { font-family: var(--font-serif); font-size: 1.9em; font-weight: 700; letter-spacing: 1px; margin: 0 0 2px; }
   .contact { color: var(--muted); margin: 0; }
   section { margin-top: 12px; }
   h2 {
-    font-size: 1.15em; margin: 0 0 6px; padding-bottom: 2px;
-    border-bottom: 1px solid var(--rule);
+    font-size: 1.15em; color: var(--heading); margin: 0 0 6px; padding-bottom: 2px;
+    border-bottom: 1.5px solid var(--rule);
   }
   .entry { margin: 0 0 8px; }
   .entry-head { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
@@ -37,14 +43,33 @@
   .entry p { margin: 2px 0; }
   ul { margin: 2px 0 0; padding-left: 1.2em; }
   li { margin: 1px 0; }
+  li.is-changed { background: linear-gradient(90deg, rgba(232, 163, 61, .16), transparent 80%); margin-left: -6px; padding-left: 6px; border-radius: 2px; }
   .mark { font-size: .8em; border-radius: 3px; padding: 0 4px; margin-left: 4px; }
   .mark-stale, .mark-issue { background: var(--warn-bg); color: var(--warn); }
   li.pending { background: var(--pending-bg); }
+  .evidence-badge {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 15px; padding: 0 4px; margin-left: 3px; border-radius: 4px;
+    font-size: 9.5px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
+    color: var(--ok); background: var(--ok-soft); vertical-align: 1px; cursor: help;
+  }
+  .evidence-badge:hover { background: var(--ok-hover); }
+  .evidence-badge[data-tip]:hover::after, .evidence-badge[data-tip]:focus-visible::after {
+    content: attr(data-tip); position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+    width: max-content; max-width: 260px; white-space: normal; text-align: left;
+    font-family: var(--font); font-size: 12px; font-weight: 400; line-height: 1.5; letter-spacing: 0;
+    color: #fff; background: #26313c; padding: 7px 10px; border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  }
+  .evidence-badge[data-tip]:hover::before, .evidence-badge[data-tip]:focus-visible::before {
+    content: ""; position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: #26313c; border-bottom: 0;
+  }
   @page { size: A4; margin: 0; }
   @media print {
     body { background: #fff; }
     .page { margin: 0 !important; box-shadow: none; transform: none !important; }
-    .mark, li.pending, .no-print { display: none !important; }
+    li.is-changed { background: none !important; margin-left: 0; padding-left: 0; }
+    .mark, .evidence-badge, li.pending, .no-print { display: none !important; }
   }
 </style>
 </head>
