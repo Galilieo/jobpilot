@@ -435,9 +435,7 @@ async def test_contact_details_stay_local_and_survive_every_export(
     assert {"extract_facts", "parse_jd", "match_job", "rewrite_bullets"} <= {
         purpose for purpose, _ in sent
     }
-    [extraction] = [
-        payload for purpose, payload in sent if purpose == "extract_facts"
-    ]
+    [extraction] = [payload for purpose, payload in sent if purpose == "extract_facts"]
     assert "[PHONE]" in extraction and "[EMAIL]" in extraction
     for purpose, payload in sent:
         assert CONTACT_PHONE not in payload, purpose

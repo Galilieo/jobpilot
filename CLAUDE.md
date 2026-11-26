@@ -33,7 +33,7 @@
 
 - 测试和代码一起写；改规则时，先写一个会失败的测试，再改代码。
 - 关键判断做变异检查：故意改坏一处，确认有测试会失败。
-- `cd jobpilot && uv run pytest -q` 和 `uv run ruff check` 都通过再提交。
+- `cd jobpilot && uv run pytest -q`、`uv run ruff check` 和 `uv run ruff format --check .` 都通过再提交（CI 跑的就是这三项，格式不对 CI 会失败）。
 - 改了 `web/` 的提交，`pnpm --dir web format:check`、`lint`、`test`、`build` 都通过再提交（CI 跑的就是这几项，格式不对 CI 会失败）。
 - **行为不变的整理**和**改变行为的修复**分开提交，提交信息写清楚是哪一种。
 - **提交粒度适中**：一个提交是一件能单独说清楚、单独回退的事，通常对应任务书里的一项。
