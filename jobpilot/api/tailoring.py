@@ -8,23 +8,20 @@
 import asyncio
 import json
 import logging
-import traceback
 from collections.abc import AsyncIterator, Coroutine, Iterable
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from psycopg.errors import CheckViolation
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
-from jobpilot.config import REPO_ROOT
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
@@ -37,6 +34,7 @@ from jobpilot.db.models import (
     TailoredResume,
 )
 from jobpilot.db.runs import RunAlreadyFinishedError, set_run_status
+from jobpilot.diagnostics import describe_error, error_locations
 from jobpilot.services import drafts
 from jobpilot.services.jobs import effective_parsed_job
 from jobpilot.services.llm_gateway import ModelBudget
@@ -47,7 +45,7 @@ from jobpilot.services.tailoring_plan import (
     resolve_sections,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error").getChild("tailoring")
 router = APIRouter(prefix="/api", tags=["tailoring"])
 
 # 一次改写运行的额度。先按估算设：5 块 × (1 次改写 + 4 条第三层 + 约 2 次修订和复查)
@@ -66,7 +64,18 @@ class RunLauncher:
     def launch(self, run_id: UUID, work: Coroutine[Any, Any, None]) -> None:
         task = asyncio.create_task(work)
         self._tasks[run_id] = task
-        task.add_done_callback(lambda _: self._tasks.pop(run_id))
+        task.add_done_callback(lambda done: self._finish(run_id, done))
+
+    def _finish(self, run_id: UUID, task: asyncio.Task[None]) -> None:
+        """收走终态写入等未处理错误，避免 asyncio 输出原异常。"""
+        self._tasks.pop(run_id)
+        if not task.cancelled() and (error := task.exception()) is not None:
+            logger.error(
+                "改写任务 %s 退出（%s），调用栈：%s",
+                run_id,
+                describe_error(error),
+                error_locations(error),
+            )
 
     def cancel_runs(self, run_ids: Iterable[UUID]) -> None:
         """提交账号删除后停止已取消的进程内任务，避免恢复后旧任务继续派生步骤。"""
@@ -238,47 +247,14 @@ async def execute(
         await _fail_execution(deps, user_id, run_id, error)
 
 
-def _describe(error: BaseException) -> str:
-    """日志里能写的异常信息：类名和错误码，不写异常的说明。
-
-    说明里可能带着简历正文：数据库错误带着语句参数和出错的整行，校验错误带着输入值。
-    """
-    parts = [type(error).__name__]
-    original = getattr(error, "orig", None)  # SQLAlchemy 包在里面的数据库异常
-    if original is not None:
-        parts.append(type(original).__name__)
-        constraint = getattr(getattr(original, "diag", None), "constraint_name", None)
-        if constraint:
-            parts.append(constraint)
-        if getattr(original, "sqlstate", None):
-            parts.append(original.sqlstate)
-    if isinstance(error, ValidationError):
-        # 错误类型是固定的一组代码；出问题的位置和输入值不写
-        parts.append(",".join(sorted({item["type"] for item in error.errors()})))
-    return " · ".join(parts)
-
-
-def _locations(error: BaseException) -> str:
-    """只提取调用栈的文件、行号和函数名；绝不读异常说明、源码行或局部变量。"""
-    frames = []
-    for frame in traceback.extract_tb(error.__traceback__):
-        path = Path(frame.filename)
-        try:
-            display = path.resolve().relative_to(REPO_ROOT).as_posix()
-        except ValueError:
-            display = path.name
-        frames.append(f"{display}:{frame.lineno} {frame.name}")
-    return " -> ".join(frames) or "unknown"
-
-
 async def _fail_execution(
     deps: TailorDeps, user_id: UUID, run_id: UUID, error: BaseException
 ) -> None:
     logger.error(
         "改写运行 %s 出错（%s），调用栈：%s",
         run_id,
-        _describe(error),
-        _locations(error),
+        describe_error(error),
+        error_locations(error),
     )
     await mark_failed(deps.session_factory, user_id, run_id)
 

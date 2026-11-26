@@ -289,8 +289,9 @@ async def test_snapshot_failure_rolls_back_product_and_success(
         raise RuntimeError("快照落库失败")
 
     monkeypatch.setattr(Attempt, "succeed", fail_snapshot)
-    with pytest.raises(RuntimeError, match="快照落库失败"):
-        await async_client.post(path, json=body, headers=_headers())
+    response = await async_client.post(path, json=body, headers=_headers())
+    assert response.status_code == 500
+    assert response.json() == {"detail": "服务器内部错误"}
     async with session_factory() as db:
         reservation = await db.scalar(
             select(IdempotencyKey).filter_by(key="submit-once")
