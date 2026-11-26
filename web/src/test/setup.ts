@@ -27,3 +27,19 @@ if (!globalThis.ResizeObserver) {
     disconnect(): void {}
   }
 }
+
+// Ant Design X 的 Bubble.List 用它判断是否滚到底部。
+if (!globalThis.IntersectionObserver) {
+  globalThis.IntersectionObserver = class {
+    readonly root = null
+    readonly scrollMargin = ''
+    readonly rootMargin = ''
+    readonly thresholds: readonly number[] = []
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
+  }
+}

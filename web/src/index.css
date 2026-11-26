@@ -358,44 +358,271 @@ textarea {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
 }
 .conversation-heading {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 24px;
+}
+.conversation-title {
+  min-width: 0;
+  max-width: 40%;
+  font-size: 15px;
+}
+.conversation-heading-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
 }
 .conversation-body {
-  display: flex;
   flex: 1;
-  align-items: center;
-  justify-content: center;
   min-height: 0;
   overflow-y: auto;
-  padding: 32px 24px;
+  padding: 24px 24px 8px;
+}
+.conversation-body.is-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.conversation-thread {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
 }
 .conversation-welcome {
   width: 100%;
-  max-width: 600px;
+  max-width: 640px;
+  text-align: center;
 }
 .conversation-welcome .ant-welcome {
+  justify-content: center;
   padding: 0;
+}
+.welcome-prompts {
+  margin-top: 28px;
+  text-align: left;
+}
+.welcome-prompts .ant-prompts-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.welcome-prompts .ant-prompts-item {
+  border: 1px solid var(--ant-color-border);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container);
+  transition: border-color 0.2s;
+}
+.welcome-prompts .ant-prompts-item:hover {
+  border-color: var(--ant-color-primary-border-hover);
+  background: var(--ant-color-bg-container);
 }
 .conversation-composer {
   width: 100%;
   max-width: 860px;
   margin: 0 auto;
-  padding: 16px 24px 24px;
+  padding: 12px 24px 20px;
 }
 .conversation-composer .ant-sender {
   border-radius: 16px;
+  box-shadow: 0 1px 6px rgba(31, 31, 31, 0.04);
 }
 .composer-note {
   display: block;
-  margin-top: 12px;
+  margin-top: 8px;
   font-size: 12px;
   text-align: center;
+}
+
+/* 消息 */
+.message-list .ant-bubble-list-scroll-box,
+.message-list {
+  gap: 16px;
+}
+.message-text {
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bubble-user .ant-bubble-content {
+  max-width: min(82%, 640px);
+  padding: 9px 14px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--ant-color-fill-tertiary);
+}
+.bubble-ai {
+  width: 100%;
+}
+.bubble-ai .ant-bubble-body,
+.bubble-ai .ant-bubble-content {
+  width: 100%;
+  max-width: 100%;
+}
+.bubble-ai .ant-bubble-content {
+  padding: 0;
+}
+.message-list .ant-bubble-system .ant-bubble-content {
+  padding: 2px 12px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 12px;
+  background: var(--ant-color-fill-quaternary);
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+}
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.message-attachments:first-child {
+  margin-top: 0;
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 1px 8px;
+  overflow: hidden;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 6px;
+  background: var(--ant-color-bg-container);
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.background-run {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  text-align: center;
+}
+.background-run .ant-typography {
+  margin-inline-start: 6px;
+}
+
+/* 工具步骤 */
+.tool-steps {
+  display: inline-block;
+  min-width: 220px;
+  padding: 2px 12px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 10px;
+  background: var(--ant-color-bg-container);
+  font-size: 13px;
+}
+.tool-steps .ant-thought-chain-item-header {
+  color: var(--ant-color-text-secondary);
+}
+.tool-step-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 6px 18px;
+  color: var(--ant-color-text-secondary);
+}
+.tool-step-name {
+  margin-inline-end: 8px;
+  color: var(--ant-color-text);
+}
+.tool-step-list .is-error .tool-step-result {
+  color: var(--ant-color-error-text);
+}
+
+/* 确认卡与提问卡 */
+.action-card {
+  display: grid;
+  gap: 10px;
+  max-width: 640px;
+  padding: 14px 16px;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 12px;
+  background: var(--ant-color-bg-container);
+  box-shadow: 0 1px 4px rgba(31, 31, 31, 0.03);
+}
+.action-card p {
+  margin: 0;
+}
+.action-card-kind {
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+.action-card-buttons {
+  margin-top: 2px;
+}
+.before-after {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.before-after > div {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ant-color-fill-quaternary);
+}
+.before-after > .is-after {
+  background: var(--ant-color-primary-bg);
+}
+.before-after p {
+  margin-top: 2px;
+  line-height: 1.65;
+}
+.grounding-verdict {
+  font-size: 13px;
+}
+.grounding-verdict ul {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+  color: var(--ant-color-text-secondary);
+}
+.generic-args {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+}
+.generic-args > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+.generic-args dt {
+  color: var(--ant-color-text-tertiary);
+}
+.generic-args dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.question-row {
+  display: grid;
+  gap: 4px;
+}
+.question-row .ant-btn-link {
+  justify-self: start;
+  padding: 0;
+}
+.card-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.card-result .ant-tag {
+  margin: 0;
+  background: var(--ant-color-fill-tertiary);
+  color: var(--ant-color-text-secondary);
+}
+.card-result .ant-btn-link {
+  height: auto;
+  padding: 0 4px;
 }
 
 /* 登录页与账号设置 */
@@ -861,13 +1088,20 @@ textarea {
     padding: 16px 16px 32px;
   }
   .conversation-heading {
-    padding: 12px 16px;
+    padding: 8px 16px;
+  }
+  .conversation-title {
+    max-width: 50%;
   }
   .conversation-body {
-    padding: 24px 16px;
+    padding: 16px 16px 8px;
   }
   .conversation-composer {
-    padding: 12px 16px 16px;
+    padding: 8px 16px 12px;
+  }
+  .before-after,
+  .welcome-prompts .ant-prompts-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 767px) {

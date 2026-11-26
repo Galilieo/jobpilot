@@ -150,3 +150,20 @@ export function formatJobMeta(fields: {
       .join(' · ') || '公司未填写'
   )
 }
+
+// 对话 Agent 的工具在进度条里的名字；没列出的工具直接显示工具名。
+export const AGENT_TOOL: Record<string, string> = {
+  list_jobs: '读取岗位库',
+  read_job: '读取岗位详情',
+  read_facts: '读取经历事实',
+  read_match_report: '读取匹配报告',
+  read_resume: '读取定制简历',
+  parse_jd: '解析 JD',
+  match_job: '匹配岗位',
+  tailor_resume: '生成定制简历',
+  set_current_job: '设置当前岗位',
+  edit_resume_item: '修改简历条目',
+  ask_user: '向你提问',
+}
+
+export const toolLabel = (tool: string): string => AGENT_TOOL[tool] ?? tool
