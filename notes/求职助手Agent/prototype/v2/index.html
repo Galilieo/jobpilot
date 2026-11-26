@@ -376,6 +376,7 @@ body[data-dir="c"] .card.pending { border-color: #E8A33D; box-shadow: 0 0 0 3px 
 .check { display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ok); background: var(--ok-soft); }
 .check svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; flex: none; margin-top: 2px; }
 .check span { color: var(--ink); }
+.check .fact { background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(46, 107, 88, .25); }
 .card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); justify-content: flex-end; }
 .result-line { display: none; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 .result-line svg { width: 15px; height: 15px; stroke: var(--ok); fill: none; stroke-width: 2; }
@@ -479,11 +480,7 @@ body[data-dir="d"] .welcome p.sub { margin-bottom: 28px; }
 body[data-dir="d"] .composer { border-width: 1px; }
 body[data-dir="d"] .composer:focus-within { box-shadow: 0 0 0 3px var(--accent-soft), var(--composer-shadow); }
 body[data-dir="d"] .starter { border-radius: var(--r-s); padding: 6px 12px; font-size: 13.5px; }
-body[data-dir="d"] .fact {
-  background: transparent; border: 1px solid color-mix(in srgb, var(--ok) 55%, transparent);
-  border-radius: 3px; height: 16px; min-width: 20px; font-size: 10.5px; vertical-align: 2px; color: var(--ok);
-}
-body[data-dir="d"] .fact:hover { background: var(--ok-soft); border-color: var(--ok); }
+body[data-dir="d"] .fact:hover { background: #D5E9DE; }
 body[data-dir="d"] .msg-user { border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; }
 body[data-dir="d"] .sys::before, body[data-dir="d"] .sys::after { width: 40px; }
 body[data-dir="d"] .trace { border-radius: var(--r-m); }
@@ -496,8 +493,6 @@ body[data-dir="d"] .card { box-shadow: 0 1px 2px rgba(30,45,60,.04); }
 body[data-dir="d"] .card.pending { border-color: #D6DEE6; box-shadow: 0 0 0 3px var(--accent-soft); }
 body[data-dir="d"] .card-head .state { display: inline-flex; align-items: center; gap: 6px; color: var(--warn); }
 body[data-dir="d"] .card-head .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mark); }
-body[data-dir="d"] .diff > div + div { background: var(--bg); box-shadow: inset 2px 0 0 var(--accent); border-left-color: transparent; }
-body[data-dir="d"] .check { background: transparent; border-top-style: dashed; }
 body[data-dir="d"] .panel-head .tabs button { position: relative; border-bottom: 0; }
 body[data-dir="d"] .panel-head .tabs button::after {
   content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--accent);
@@ -507,7 +502,6 @@ body[data-dir="d"] .panel-head .tabs button[aria-selected="true"]::after { trans
 body[data-dir="d"] .guarantee { background: var(--bg); color: var(--muted); }
 body[data-dir="d"] .guarantee b { color: var(--ink); font-weight: 600; }
 body[data-dir="d"] .paper { box-shadow: 0 0 0 1px rgba(30,45,60,.06), 0 2px 4px rgba(30,45,60,.04), 0 16px 40px rgba(30,45,60,.08); border-radius: 2px; }
-body[data-dir="d"] .paper li.changed { background: none; box-shadow: -8px 0 0 -6px var(--mark); margin-left: 0; padding-left: 0; }
 body[data-dir="d"] .work h2 { font-size: 28px; font-weight: 700; letter-spacing: .5px; }
 body[data-dir="d"] .ledger { box-shadow: 0 1px 2px rgba(30,45,60,.04); }
 body[data-dir="d"] .ledger strong { font-family: var(--font-head); font-size: 26px; font-weight: 700; }
@@ -557,7 +551,7 @@ body[data-dir="d"] .jobcard:hover { box-shadow: 0 4px 14px rgba(30,45,60,.09); }
   </ol>
   <h3>三个方向</h3>
   <ul>
-    <li><b>D 雾蓝 + 纸面（用户 2026-11-26 选定的方向）</b>：以 A 为底，借 B 的宋体大标题（只用在欢迎语、工作台问候、简历姓名）、线框事实编号和核对绿；细节精修：事实编号悬停显示原文、圆角分层级、改动条目用左侧细竖线、确认卡「改成」一侧用强调线、工具步骤展开为时间轴、数字等宽、元信息分开排而不用中点串。</li>
+    <li><b>D 雾蓝 + 纸面（用户 2026-11-26 选定的方向）</b>：以 A 为底，借 B 的宋体大标题（只用在欢迎语、工作台问候、简历姓名）、核对绿；确认卡、彩色实底的事实编号、改动条目的淡琥珀底沿用 A（用户 2026-11-26 反馈）；细节精修：事实编号悬停显示原文、圆角分层级、工具步骤展开为时间轴、数字等宽、元信息分开排而不用中点串。</li>
     <li><b>A 雾蓝精修</b>：保留现在的雾蓝主色，理顺层级。改动最小，风险最低。</li>
     <li><b>B 档案纸面</b>：整页像一份带批注的档案，简历面板更宽，标题用宋体，依据用「核对过」的绿色。</li>
     <li><b>C 深色侧栏</b>：深墨色侧栏，回复不用气泡、像文档；需要你处理的地方用琥珀色。</li>
