@@ -439,6 +439,94 @@ textarea {
   text-align: center;
 }
 
+/* 对话 + 右侧产物面板：面板为主角，对话约四成、面板约六成 */
+.conversation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.conversation-layout.has-panel {
+  grid-template-columns: minmax(360px, 2fr) minmax(0, 3fr);
+}
+.conversation-layout.panel-expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+.conversation-layout.panel-expanded > .conversation-page {
+  display: none;
+}
+.artifact-panel {
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--ant-color-border-secondary);
+  background: var(--ant-color-fill-quaternary);
+}
+.artifact-panel-tabs {
+  height: 100%;
+}
+.artifact-panel-tabs > .ant-tabs-nav {
+  margin: 0;
+  padding: 0 12px 0 20px;
+  background: var(--ant-color-bg-container);
+}
+.artifact-panel-tabs > .ant-tabs-content-holder {
+  min-height: 0;
+  overflow-y: auto;
+}
+.artifact-panel-body {
+  padding: 16px;
+}
+.artifact-panel-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+.job-tag.ant-btn {
+  max-width: 260px;
+  border: none;
+  border-radius: 13px;
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
+}
+.job-tag.ant-btn:not(:disabled):hover {
+  background: var(--ant-color-primary-bg-hover);
+  color: var(--ant-color-primary-text);
+}
+.job-tag.is-empty.ant-btn {
+  border: 1px dashed var(--ant-color-border);
+  background: var(--ant-color-fill-quaternary);
+  color: var(--ant-color-text-tertiary);
+}
+.job-tag-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.job-tag .anticon-down {
+  font-size: 10px;
+}
+.view-result {
+  margin-inline-start: auto;
+}
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+.attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.attachment-chip .anticon-close {
+  cursor: pointer;
+  color: var(--ant-color-text-tertiary);
+  font-size: 10px;
+}
+.attachment-picker {
+  display: grid;
+  gap: 12px;
+}
+
 /* 消息 */
 .message-list .ant-bubble-list-scroll-box,
 .message-list {

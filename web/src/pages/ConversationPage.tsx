@@ -1,16 +1,21 @@
-// 对话页：新对话显示欢迎页，发出第一条消息时才建对话；已有对话显示消息、卡片和输入框。
-// 运行控制在 conversation/useConversationRun，消息渲染在 conversation/MessageList。
+// 对话页：新对话显示欢迎页，发出第一条消息时才建对话；已有对话左边是消息和输入框，
+// 右边是当前岗位的产物面板。运行控制在 conversation/useConversationRun。
 import { Prompts, Welcome } from '@ant-design/x'
-import { App, Button, Skeleton, Typography, theme } from 'antd'
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { App, Button, Drawer, Grid, Skeleton, Typography, theme } from 'antd'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { conversations } from '../api/endpoints'
 import { EmptyHint } from '../components/EmptyHint'
-import { Composer } from './conversation/Composer'
-import { titleFrom, useJobTitle } from './conversation/naming'
+import { ArtifactPanel } from './conversation/ArtifactPanel'
+import { Composer, type Draft } from './conversation/Composer'
+import { JobTag } from './conversation/JobTag'
 import { MessageList } from './conversation/MessageList'
+import { titleFrom, useJobTitle } from './conversation/naming'
+import type { PanelTab } from './conversation/panelTabs'
 import type { LiveInput } from './conversation/runControl'
 import { useConversationRun } from './conversation/useConversationRun'
+
+const EMPTY_DRAFT: Draft = { text: '', attachments: [] }
 
 const SUGGESTIONS = [
   {
@@ -43,11 +48,15 @@ interface PendingState {
   pendingMessage?: LiveInput
 }
 
-function newInput(content: string): LiveInput {
-  return { clientMessageId: crypto.randomUUID(), content: content.trim(), attachments: [] }
+function inputOf(draft: Draft): LiveInput {
+  return {
+    clientMessageId: crypto.randomUUID(),
+    content: draft.text.trim(),
+    attachments: draft.attachments,
+  }
 }
 
-function Heading({ title, extra }: { title: string; extra?: ReactElement }): ReactElement {
+function Heading({ title, children }: { title: string; children?: ReactNode }): ReactElement {
   const { token } = theme.useToken()
   return (
     <header
@@ -57,7 +66,7 @@ function Heading({ title, extra }: { title: string; extra?: ReactElement }): Rea
       <Typography.Text strong ellipsis className="conversation-title">
         {title}
       </Typography.Text>
-      {extra}
+      {children}
     </header>
   )
 }
@@ -65,11 +74,11 @@ function Heading({ title, extra }: { title: string; extra?: ReactElement }): Rea
 function NewConversation(): ReactElement {
   const { message } = App.useApp()
   const navigate = useNavigate()
-  const [text, setText] = useState('')
+  const [draft, setDraft] = useState(EMPTY_DRAFT)
   const [creating, setCreating] = useState(false)
 
   async function start(): Promise<void> {
-    const input = newInput(text)
+    const input = inputOf(draft)
     setCreating(true)
     try {
       const created = await conversations.create(titleFrom(input))
@@ -98,14 +107,15 @@ function NewConversation(): ReactElement {
             wrap
             items={SUGGESTIONS.map(({ key, label, description }) => ({ key, label, description }))}
             onItemClick={({ data }) => {
-              setText(SUGGESTIONS.find((item) => item.key === data.key)?.text ?? '')
+              const text = SUGGESTIONS.find((item) => item.key === data.key)?.text ?? ''
+              setDraft((current) => ({ ...current, text }))
             }}
           />
         </div>
       </div>
       <Composer
-        value={text}
-        onChange={setText}
+        draft={draft}
+        onChange={setDraft}
         onSubmit={() => void start()}
         blockedReason={creating ? '正在新建对话…' : null}
       />
@@ -121,22 +131,50 @@ function blockedReasonOf(run: ReturnType<typeof useConversationRun>): string | n
   return null
 }
 
+function usePanel(isNarrow: boolean) {
+  const [tab, setTab] = useState<PanelTab | null>(null)
+  // 宽屏默认打开，窄屏默认收起、由「查看结果」打开为全屏层。
+  const [open, setOpen] = useState<boolean | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  return {
+    tab,
+    setTab,
+    open: open ?? !isNarrow,
+    setOpen,
+    expanded,
+    toggleExpanded: () => setExpanded((value) => !value),
+    show: (next: PanelTab | null = null) => {
+      if (next) setTab(next)
+      setOpen(true)
+    },
+  }
+}
+
 function ConversationView({ conversationId }: { conversationId: string }): ReactElement {
   const { message } = App.useApp()
   const location = useLocation()
   const navigate = useNavigate()
+  const isNarrow = Grid.useBreakpoint().lg === false
   const run = useConversationRun(conversationId)
   const title = useJobTitle()
-  const [text, setText] = useState('')
+  const panel = usePanel(isNarrow)
+  const [draft, setDraft] = useState(EMPTY_DRAFT)
+  const [hints, setHints] = useState<{ key: string; text: string }[]>([])
   const pending = useRef((location.state as PendingState | null)?.pendingMessage ?? null)
 
   async function submit(input: LiveInput): Promise<void> {
-    setText('')
+    setDraft(EMPTY_DRAFT)
     const outcome = await run.send(input)
     if (!outcome.saved) {
-      setText(input.content)
+      setDraft({ text: input.content, attachments: input.attachments })
       void message.warning(outcome.reason)
     }
+  }
+
+  async function jobChanged(text: string): Promise<void> {
+    // 面板上改的绑定不会存成消息，只在这次打开的页面里加一行提示。
+    setHints((current) => [...current, { key: `local:${current.length}`, text }])
+    await run.refresh()
   }
 
   useEffect(() => {
@@ -150,60 +188,102 @@ function ConversationView({ conversationId }: { conversationId: string }): React
   }, [])
 
   const { detail } = run
-  if (detail.isPending) {
+  if (detail.isPending || detail.isError) {
     return (
       <section className="conversation-page">
         <Heading title="对话" />
         <div className="conversation-body">
-          <Skeleton active />
-        </div>
-      </section>
-    )
-  }
-  if (detail.isError) {
-    return (
-      <section className="conversation-page">
-        <Heading title="对话" />
-        <div className="conversation-body">
-          <EmptyHint
-            description={detail.error.message}
-            action={<Button onClick={() => void detail.refetch()}>重新加载</Button>}
-          />
+          {detail.isPending ? (
+            <Skeleton active />
+          ) : (
+            <EmptyHint
+              description={detail.error.message}
+              action={<Button onClick={() => void detail.refetch()}>重新加载</Button>}
+            />
+          )}
         </div>
       </section>
     )
   }
 
+  const jobId = detail.data.current_job_id
   const blockedReason = blockedReasonOf(run)
   const backgroundRunning = !run.streaming && blockedReason !== null && !detail.data.pending_action
+  const panelVisible = jobId !== null && panel.open
+  const panelContent = jobId && (
+    <ArtifactPanel
+      jobId={jobId}
+      activeTab={panel.tab}
+      onTabChange={panel.setTab}
+      expanded={!isNarrow && panel.expanded}
+      onToggleExpand={isNarrow ? undefined : panel.toggleExpanded}
+      onClose={isNarrow ? undefined : () => panel.setOpen(false)}
+    />
+  )
+
+  const layoutClass = [
+    'conversation-layout',
+    panelVisible && !isNarrow ? 'has-panel' : '',
+    panelVisible && panel.expanded && !isNarrow ? 'panel-expanded' : '',
+  ].join(' ')
+
   return (
-    <section className="conversation-page">
-      <Heading title={detail.data.title} />
-      <div className="conversation-body">
-        <div className="conversation-thread">
-          <MessageList
-            detail={detail.data}
-            live={run.live}
+    <div className={layoutClass}>
+      <section className="conversation-page">
+        <Heading title={detail.data.title}>
+          <JobTag
+            conversationId={conversationId}
+            currentJobId={jobId}
             title={title}
-            decide={run.decide}
-            refresh={run.refresh}
-            localHints={[]}
+            onView={() => panel.show('job')}
+            onChanged={jobChanged}
           />
-          {backgroundRunning && (
-            <Typography.Text type="secondary" className="background-run">
-              Agent 还在后台处理，结果出来后会自动显示。
-              <Typography.Link onClick={() => void run.refresh()}>立即刷新</Typography.Link>
-            </Typography.Text>
+          {jobId && (isNarrow || !panel.open) && (
+            <Button size="small" className="view-result" onClick={() => panel.show()}>
+              查看结果
+            </Button>
           )}
+        </Heading>
+        <div className="conversation-body">
+          <div className="conversation-thread">
+            <MessageList
+              detail={detail.data}
+              live={run.live}
+              title={title}
+              decide={run.decide}
+              refresh={run.refresh}
+              localHints={hints}
+            />
+            {backgroundRunning && (
+              <Typography.Text type="secondary" className="background-run">
+                Agent 还在后台处理，结果出来后会自动显示。
+                <Typography.Link onClick={() => void run.refresh()}>立即刷新</Typography.Link>
+              </Typography.Text>
+            )}
+          </div>
         </div>
-      </div>
-      <Composer
-        value={text}
-        onChange={setText}
-        onSubmit={() => void submit(newInput(text))}
-        blockedReason={blockedReason}
-      />
-    </section>
+        <Composer
+          draft={draft}
+          onChange={setDraft}
+          onSubmit={() => void submit(inputOf(draft))}
+          blockedReason={blockedReason}
+        />
+      </section>
+      {panelVisible && !isNarrow && <aside className="artifact-panel">{panelContent}</aside>}
+      {isNarrow && (
+        <Drawer
+          title="结果"
+          placement="right"
+          size="100%"
+          open={panelVisible}
+          onClose={() => panel.setOpen(false)}
+          styles={{ body: { padding: 0 } }}
+          destroyOnHidden
+        >
+          {panelContent}
+        </Drawer>
+      )}
+    </div>
   )
 }
 
