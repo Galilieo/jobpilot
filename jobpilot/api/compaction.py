@@ -1,16 +1,19 @@
-"""接收手动压缩请求，按用户隔离启动或查询压缩运行。"""
+"""接收手动压缩请求，按用户隔离启动或查询压缩运行，并给出当前上下文用量。"""
 
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from jobpilot.api.deps import CurrentUser, ModelClient, SessionFactory
+from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.api.tailoring import Launcher
+from jobpilot.db.conversations import find_conversation
 from jobpilot.services.agent.compaction import (
     CompactConflict,
     CompactResult,
     CompactSchedule,
+    ContextUsage,
+    context_usage,
     schedule_compaction,
 )
 
@@ -21,6 +24,16 @@ class CompactIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     focus: str | None = Field(default=None, min_length=1, max_length=300)
+
+
+@router.get("/{conversation_id}/context")
+async def read_context_usage(
+    conversation_id: UUID, user: CurrentUser, db: DbSession
+) -> ContextUsage:
+    conversation = await find_conversation(user.user_id, db, conversation_id)
+    if conversation is None:
+        raise HTTPException(404, "对话不存在")
+    return await context_usage(user.user_id, db, conversation)
 
 
 @router.post("/{conversation_id}/compact")

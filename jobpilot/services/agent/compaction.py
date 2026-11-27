@@ -1,4 +1,4 @@
-"""安排对话压缩，固定边界后在事务之外调用模型。"""
+"""安排对话压缩，固定边界后在事务之外调用模型；也给出当前上下文用量，和自动压缩用同一套估算。"""
 
 import asyncio
 import logging
@@ -34,6 +34,7 @@ from jobpilot.services.agent.compact_input import (
 from jobpilot.services.agent.compact_sources import batch_answers, verified_sources
 from jobpilot.services.agent.context import render_turn, system_message
 from jobpilot.services.agent.tools import TOOL_DEFINITIONS
+from jobpilot.services.agent.types import Payload
 from jobpilot.services.agent.work_summary import (
     AnsweredQuestion,
     WorkSummary,
@@ -248,6 +249,52 @@ async def _schedule(
     return work or CompactResult(status="not_needed")
 
 
+async def _projected_request_tokens(
+    user_id: UUID,
+    session: AsyncSession,
+    conversation: Conversation,
+    history: list[list[Payload]],
+) -> int:
+    """下一次主调用的输入估算：当前摘要、摘要之后的完整轮次和工具定义。"""
+    current_system = await system_message(
+        user_id, session, conversation, summary=conversation.summary_json
+    )
+    context = [current_system, *(item for turn in history for item in turn)]
+    return estimate_request_tokens(
+        request_messages_for_model(context), TOOL_DEFINITIONS
+    )
+
+
+class ContextUsage(BaseModel):
+    used_tokens: int
+    window_tokens: int
+    # 估算的输入超过这条线，本轮结束后会自动压缩（触发水位减去预留的输出）。
+    compact_at_tokens: int
+
+
+async def context_usage(
+    user_id: UUID, session: AsyncSession, conversation: Conversation
+) -> ContextUsage:
+    turns = group_turns(
+        await completed_messages(
+            user_id,
+            session,
+            conversation.conversation_id,
+            conversation.summary_through_seq,
+        )
+    )
+    history = [render_turn(turn.messages, current=False) for turn in turns]
+    window = settings.effective_window(ModelPurpose.AGENT)
+    trigger = int(window * settings.agent_limits.compact_trigger_ratio)
+    return ContextUsage(
+        used_tokens=await _projected_request_tokens(
+            user_id, session, conversation, history
+        ),
+        window_tokens=window,
+        compact_at_tokens=trigger - _output_tokens(ModelPurpose.AGENT),
+    )
+
+
 async def _compaction_candidates(
     schedule: CompactSchedule,
     session: AsyncSession,
@@ -275,15 +322,8 @@ async def _compaction_candidates(
     if not schedule.automatic:
         return turns[:-1], summary_bytes
     history = [render_turn(turn.messages, current=False) for turn in turns]
-    current_system = await system_message(
-        schedule.user_id,
-        session,
-        conversation,
-        summary=conversation.summary_json,
-    )
-    context = [current_system, *(item for turn in history for item in turn)]
-    projected = estimate_request_tokens(
-        request_messages_for_model(context), TOOL_DEFINITIONS
+    projected = await _projected_request_tokens(
+        schedule.user_id, session, conversation, history
     )
     if projected + output <= window * limits.compact_trigger_ratio:
         return [], 0
