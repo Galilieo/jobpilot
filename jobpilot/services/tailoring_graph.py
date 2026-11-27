@@ -29,7 +29,11 @@ from jobpilot.db.models import (
 from jobpilot.db.reports import add_match_report
 from jobpilot.db.runs import RunAlreadyFinishedError, finish_run
 from jobpilot.services.grounding import organizations_of
-from jobpilot.services.llm_gateway import BudgetExhaustedError, ModelQuota
+from jobpilot.services.llm_gateway import (
+    BudgetExhaustedError,
+    DailyModelQuotaError,
+    ModelQuota,
+)
 from jobpilot.services.matching import (
     MatchItem,
     MatchValidationError,
@@ -232,6 +236,9 @@ async def run_match(
     except BudgetExhaustedError:
         await _finish(deps, user_id, match_run_id, RunStatus.BUDGET_EXHAUSTED)
         return {"stop_reason": StopReason.BUDGET_EXHAUSTED}
+    except DailyModelQuotaError:
+        await _finish(deps, user_id, match_run_id, RunStatus.FAILED)
+        raise
     except (*MODEL_ERRORS, MatchValidationError):
         await _finish(deps, user_id, match_run_id, RunStatus.FAILED)
         return {"stop_reason": StopReason.MATCH_FAILED}

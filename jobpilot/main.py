@@ -7,7 +7,8 @@ from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -39,8 +40,17 @@ from jobpilot.diagnostics import describe_error, error_locations
 from jobpilot.services.accounts import purge_daily, purge_with_logging
 from jobpilot.services.agent.runtime import AgentRuntime
 from jobpilot.services.applications import ApplicationError
+from jobpilot.services.llm_gateway import DailyModelQuotaError
 
 logger = logging.getLogger("uvicorn.error").getChild("jobpilot")
+
+
+async def daily_quota_response(
+    _request: Request, error: DailyModelQuotaError
+) -> JSONResponse:
+    return JSONResponse(
+        {"detail": str(error)}, status_code=status.HTTP_429_TOO_MANY_REQUESTS
+    )
 
 
 async def _start_resources(app: FastAPI, resources: AsyncExitStack) -> None:
@@ -99,6 +109,7 @@ app.add_middleware(RequestErrorBoundary)
 app.state.run_launcher = RunLauncher()
 app.state.agent_runtime = AgentRuntime()
 app.add_exception_handler(IdempotentReplay, replay_response)
+app.add_exception_handler(DailyModelQuotaError, daily_quota_response)
 app.include_router(auth_router)
 app.include_router(conversation_router)
 app.include_router(agent_router)

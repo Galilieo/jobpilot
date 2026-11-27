@@ -11,10 +11,11 @@ import pytest
 from sqlalchemy import select
 
 from jobpilot.api.deps import get_model_client
-from jobpilot.config import settings
+from jobpilot.config import Settings, settings
 from jobpilot.db.models import AiRun, Conversation, ModelCall
 from jobpilot.db.runs import fail_abandoned_runs
 from jobpilot.main import app
+from jobpilot.services import llm_gateway
 from jobpilot.services.agent.runtime import AgentRuntime
 from jobpilot.tests.test_agent_gateway import stream_response
 from jobpilot.tests.test_auth import login, register
@@ -63,6 +64,35 @@ async def conversation(client: httpx.AsyncClient) -> str:
 
 def message_body(content: str = "", **fields: object) -> dict:
     return {"client_message_id": str(uuid4()), "content": content, **fields}
+
+
+async def test_daily_quota_explains_failed_conversation_without_sending(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DAILY_TOKEN_LIMIT", "1")
+    monkeypatch.setattr(llm_gateway, "settings", Settings())
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    requests = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        result = await async_client.post(f"{path}/messages", json=message_body("你好"))
+
+    assert (
+        "error",
+        {
+            "message": "今天的模型额度已用完，明天会恢复；"
+            "可在 .env 调整 DAILY_TOKEN_LIMIT"
+        },
+    ) in events(result)
+    assert events(result)[-1][1]["status"] == "failed"
+    assert requests == []
 
 
 async def test_cancelled_account_blocks_agent_launch_after_message_commit(

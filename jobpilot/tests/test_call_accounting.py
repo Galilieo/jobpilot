@@ -16,7 +16,7 @@ import pytest
 from openai import APIStatusError, APITimeoutError, AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import (
@@ -24,10 +24,12 @@ from jobpilot.config import (
     ModelPurpose,
     ModelSettings,
     ProtocolAdapter,
+    Settings,
     settings,
 )
 from jobpilot.db.models import AiRun, ModelCall, RunStatus, User
 from jobpilot.db.runs import set_run_status
+from jobpilot.services import llm_gateway
 from jobpilot.services.llm_gateway import (
     BudgetExhaustedError,
     ContextOverflowError,
@@ -144,6 +146,32 @@ def outcomes_and_usage(
 
 
 # ---------- 记账：每次发送一行，发送前登记、结束后结算 ----------
+
+
+async def test_daily_quota_blocks_other_purposes_after_run_is_deleted(
+    session_factory: async_sessionmaker[AsyncSession],
+    run: AiRun,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DAILY_TOKEN_LIMIT", "3000")
+    monkeypatch.setattr(llm_gateway, "settings", Settings())
+    upstream = Mock(return_value=completion_response())
+    async with fake_upstream(upstream) as client:
+        await send(session_factory, run, client)
+        async with session_factory.begin() as db:
+            await db.execute(delete(AiRun).where(AiRun.run_id == run.run_id))
+            next_run = AiRun(user_id=run.user_id, kind="match")
+            db.add(next_run)
+        with pytest.raises(RuntimeError, match="今天的模型额度已用完"):
+            await send(
+                session_factory,
+                next_run,
+                client,
+                purpose="match",
+                max_output_tokens=2048,
+            )
+    upstream.assert_called_once()
+    assert await calls_of(session_factory, next_run) == []
 
 
 async def test_terminal_run_cannot_register_or_send(

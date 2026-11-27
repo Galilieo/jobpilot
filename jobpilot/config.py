@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DAILY_TOKEN_LIMIT = 3_000_000
 
 
 class ModelPurpose(StrEnum):
@@ -155,6 +156,9 @@ class Settings(BaseSettings):
 
     model_max_attempts: int = Field(default=2, ge=1)
     model_retry_delay_seconds: float = Field(default=0.5, ge=0)
+    daily_token_limit: int = Field(
+        default=DEFAULT_DAILY_TOKEN_LIMIT, gt=0, validation_alias="DAILY_TOKEN_LIMIT"
+    )
 
     def model_for_purpose(self, purpose: str) -> ModelSettings:
         """按用途查找模型配置，未知用途立即报错。"""

@@ -27,7 +27,7 @@ from jobpilot.services.agent.read_tools import job_for_tool
 from jobpilot.services.agent.types import Payload, ToolContext, ToolError
 from jobpilot.services.injection import detect_injection
 from jobpilot.services.jobs import ParsedJob, effective_parsed_job, parse_job
-from jobpilot.services.llm_gateway import BudgetExhaustedError
+from jobpilot.services.llm_gateway import BudgetExhaustedError, DailyModelQuotaError
 from jobpilot.services.matching import (
     MatchValidationError,
     load_match_inputs,
@@ -130,7 +130,12 @@ async def parse_jd(context: ToolContext, args: ParseJobArgs) -> Payload:
             raw_text=raw_text,
         )
         job_id = await _save_job(context, raw_text, content_hash, parsed)
-    except (*MODEL_ERRORS, asyncio.CancelledError, BudgetExhaustedError) as error:
+    except (
+        *MODEL_ERRORS,
+        asyncio.CancelledError,
+        BudgetExhaustedError,
+        DailyModelQuotaError,
+    ) as error:
         await _record_generation_failure(context, run_id, error)
         raise
     return {"job_id": str(job_id), "status": "succeeded"}
@@ -200,6 +205,7 @@ async def match(context: ToolContext, args: JobArgs) -> Payload:
         MatchValidationError,
         asyncio.CancelledError,
         BudgetExhaustedError,
+        DailyModelQuotaError,
     ) as error:
         await _record_generation_failure(context, run_id, error)
         raise
@@ -281,7 +287,12 @@ async def tailor(context: ToolContext, args: TailorArgs) -> Payload:
             await run_tailoring(
                 deps, context.agent.user_id, run.run_id, section_overrides=args.sections
             )
-        except (asyncio.CancelledError, TailorInputError, APIError) as error:
+        except (
+            asyncio.CancelledError,
+            TailorInputError,
+            APIError,
+            DailyModelQuotaError,
+        ) as error:
             await _record_generation_failure(context, run.run_id, error)
             raise
     async with context.agent.sessions() as session:

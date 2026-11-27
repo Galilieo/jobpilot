@@ -10,6 +10,7 @@ import re
 from asyncio import sleep
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from json import dumps
 from time import monotonic
 from typing import Any, cast
@@ -29,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelSettings, ProtocolAdapter, settings
 from jobpilot.db.accounts import lock_active_account
+from jobpilot.db.model_quota import daily_reserved_tokens, lock_daily_quota
 from jobpilot.db.models import AiRun, CallOutcome, ModelCall
 from jobpilot.db.runs import ACTIVE_RUN_STATUSES
 from jobpilot.services.model_protocol import (
@@ -121,6 +123,15 @@ class IncompleteModelStreamError(RuntimeError):
 
 class BudgetExhaustedError(RuntimeError):
     """剩余额度不足以发送下一次模型请求。"""
+
+
+class DailyModelQuotaError(RuntimeError):
+    """账号当天的预扣额度不足。"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "今天的模型额度已用完，明天会恢复；可在 .env 调整 DAILY_TOKEN_LIMIT"
+        )
 
 
 class ContextOverflowError(APIStatusError):
@@ -510,6 +521,41 @@ async def _register_call(
     budget_run_id = budget.run_id if not isinstance(budget, ModelBudget) else None
     if isinstance(budget, ModelBudget):
         budget.reserve(estimated_tokens)
+    async with session_factory.begin() as session:
+        if not await lock_active_account(session, user_id):
+            raise ModelRunInactiveError("运行已取消或结束")
+        await lock_daily_quota(session, user_id)
+        now = datetime.now().astimezone()
+        used = await daily_reserved_tokens(session, user_id, now)
+        if used + estimated_tokens > settings.daily_token_limit:
+            raise DailyModelQuotaError()
+        if budget_run_id is not None:
+            await _check_persisted_budget(session, user_id, budget, estimated_tokens)
+        return await _insert_call(
+            session,
+            user_id,
+            run_id,
+            purpose,
+            prompt_version,
+            model_name,
+            budget_run_id=budget_run_id,
+            estimated_tokens=estimated_tokens,
+            now=now,
+        )
+
+
+async def _insert_call(
+    session: AsyncSession,
+    user_id: UUID,
+    run_id: UUID,
+    purpose: str,
+    prompt_version: str,
+    model_name: str,
+    *,
+    budget_run_id: UUID | None,
+    estimated_tokens: int,
+    now: datetime,
+) -> UUID:
     call_id = uuid4()
     # 共享行锁让登记和取消有明确的先后。模型请求在短事务提交后才发出。
     eligible_run = (
@@ -523,6 +569,7 @@ async def _register_call(
             literal(CallOutcome.UNKNOWN),
             literal(budget_run_id, type_=AiRun.run_id.type),
             literal(estimated_tokens),
+            literal(now, type_=ModelCall.created_at.type),
         )
         .where(
             AiRun.user_id == user_id,
@@ -531,29 +578,27 @@ async def _register_call(
         )
         .with_for_update(read=True, of=AiRun)
     )
-    async with session_factory.begin() as session:
-        if budget_run_id is not None:
-            await _check_persisted_budget(session, user_id, budget, estimated_tokens)
-        registered = await session.scalar(
-            insert(ModelCall)
-            .from_select(
-                [
-                    "call_id",
-                    "user_id",
-                    "run_id",
-                    "purpose",
-                    "prompt_version",
-                    "model",
-                    "outcome",
-                    "budget_run_id",
-                    "reserved_tokens",
-                ],
-                eligible_run,
-            )
-            .returning(ModelCall.call_id)
+    registered = await session.scalar(
+        insert(ModelCall)
+        .from_select(
+            [
+                "call_id",
+                "user_id",
+                "run_id",
+                "purpose",
+                "prompt_version",
+                "model",
+                "outcome",
+                "budget_run_id",
+                "reserved_tokens",
+                "created_at",
+            ],
+            eligible_run,
         )
-        if registered is None:
-            raise ModelRunInactiveError("运行已取消或结束")
+        .returning(ModelCall.call_id)
+    )
+    if registered is None:
+        raise ModelRunInactiveError("运行已取消或结束")
     return registered
 
 
@@ -564,9 +609,6 @@ async def _check_persisted_budget(
     estimated_tokens: int,
 ) -> None:
     """锁住父运行，确保并行子调用不能共享同一份剩余额度。"""
-    # 与删号事务使用相同的加锁顺序（账号，再到运行）。
-    if not await lock_active_account(session, user_id):
-        raise ModelRunInactiveError("运行已取消或结束")
     run_id = budget.run_id
     compact = isinstance(budget, CompactModelBudget)
     kind = "compact" if compact else "agent"

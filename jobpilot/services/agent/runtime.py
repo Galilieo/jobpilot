@@ -46,6 +46,7 @@ from jobpilot.services.agent.graph import build_agent_graph
 from jobpilot.services.agent.questions import load_question_card
 from jobpilot.services.agent.types import AgentDeps, Payload
 from jobpilot.services.agent.window_messages import CurrentInputOverflow
+from jobpilot.services.llm_gateway import DailyModelQuotaError
 
 logger = logging.getLogger("uvicorn.error").getChild("agent")
 _TIMEOUT_REPLY = "本轮已达到时长上限。已完成的步骤保留在对话中。"
@@ -240,7 +241,7 @@ class AgentRuntime:
                         automatic=True,
                     )
                 )
-        except CurrentInputOverflow as error:
+        except (CurrentInputOverflow, DailyModelQuotaError) as error:
             await _finish(
                 sessions, run, stream, RunStatus.FAILED, str(error), action_id
             )
