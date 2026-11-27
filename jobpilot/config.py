@@ -64,8 +64,9 @@ class AgentLimits(BaseModel):
     """同一轮对话及其工具共享的预算与历史窗口。"""
 
     model_calls: int = Field(default=65, ge=1, le=150)
-    # 校验要求至少为有效窗口的四倍；默认窗口 1M × 0.5 = 524,288。
-    model_tokens: int = Field(default=2_097_152, gt=0)
+    # 每轮 token 上限可选，默认不设：防失控靠调用和工具次数，费用靠服务商用量上限，
+    # 与 Hermes、Claude Agent SDK、Pydantic AI 的做法一致。设了就是固定数，不随窗口变。
+    model_tokens: int | None = Field(default=None, gt=0)
     tool_calls: int = Field(default=12, ge=1, le=30)
     seconds: float = Field(default=180, gt=0)
     context_window_ratio: float = Field(default=0.5, gt=0, le=1)
@@ -171,8 +172,6 @@ class Settings(BaseSettings):
             if model not in self.model_profiles:
                 raise ValueError(f"模型 {model} 没有登记档案")
         limits = self.agent_limits
-        if limits.model_tokens < 4 * self.effective_window(ModelPurpose.AGENT):
-            raise ValueError("每轮 token 预算必须至少为有效窗口的四倍")
         if limits.compact_target_ratio >= limits.compact_trigger_ratio:
             raise ValueError("压缩目标水位必须低于触发水位")
         return self

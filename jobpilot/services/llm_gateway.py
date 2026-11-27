@@ -147,17 +147,17 @@ class ModelBudget:
     """保存同一次业务运行共享的剩余调用次数和 token 额度。"""
 
     remaining_calls: int
-    remaining_tokens: int
+    remaining_tokens: int | None  # None 表示不限 token，只限次数
 
     def reserve(self, estimated_tokens: int) -> None:
         """检查两项额度，通过后一起扣减。"""
         if self.remaining_calls < 1:
             raise BudgetExhaustedError("模型调用次数已用完")
-        if estimated_tokens > self.remaining_tokens:
-            raise BudgetExhaustedError("模型 token 额度不足")
-
+        if self.remaining_tokens is not None:
+            if estimated_tokens > self.remaining_tokens:
+                raise BudgetExhaustedError("模型 token 额度不足")
+            self.remaining_tokens -= estimated_tokens
         self.remaining_calls -= 1
-        self.remaining_tokens -= estimated_tokens
 
 
 @dataclass(frozen=True)
@@ -640,11 +640,11 @@ async def _check_persisted_budget(
     )
     compact_tokens = (limits.compact_input_tokens + output) * call_limit
     token_limit = compact_tokens if compact else limits.model_tokens
-    # 旧记录没有预扣值。缺少实际用量时保守地用本轮 token 上限。
+    # 旧记录没有预扣值。缺少实际用量时保守地用本轮 token 上限；不限 token 时不用。
     reserved = func.coalesce(
         ModelCall.reserved_tokens,
         ModelCall.prompt_tokens + ModelCall.completion_tokens,
-        token_limit,
+        token_limit or 0,
     )
     calls, tokens = (
         await session.execute(
@@ -654,7 +654,8 @@ async def _check_persisted_budget(
             )
         )
     ).one()
-    ModelBudget(call_limit - calls, token_limit - tokens).reserve(estimated_tokens)
+    remaining = None if token_limit is None else token_limit - tokens
+    ModelBudget(call_limit - calls, remaining).reserve(estimated_tokens)
 
 
 async def _settle_call(
