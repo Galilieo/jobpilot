@@ -1,7 +1,7 @@
 """校验和渲染有来源的滚动工作摘要。"""
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from json import dumps
 from typing import Annotated
 from uuid import UUID
@@ -104,13 +104,20 @@ def contains_complete_quote(body: str, quote: str) -> bool:
     if not quote or not set(quote) - _BOUNDARY:
         return False
     for match in re.finditer(re.escape(quote), body):
-        before = body[: match.start()].rstrip(" \t\r")
-        after = body[match.end() :].lstrip(" \t\r")
-        if (not before or before[-1] in _BOUNDARY) and (
-            not after or after[0] in _BOUNDARY or quote[-1] in _BOUNDARY
+        if _touches_boundary(reversed(body[: match.start()])) and (
+            quote[-1] in _BOUNDARY or _touches_boundary(body[match.end() :])
         ):
             return True
     return False
+
+
+def _touches_boundary(characters: Iterable[str]) -> bool:
+    for character in characters:
+        if character in _BOUNDARY:
+            return True
+        if not character.isspace():
+            return False
+    return True
 
 
 def _has_quote(
@@ -153,7 +160,9 @@ def checked_summary(
     for question in summary.answered_questions:
         stored = answers.get((question.action_id, question.question_id))
         if stored != question:
-            unverified.append(preview_text(question.question, MAX_ITEM_CHARACTERS))
+            preview = preview_text(question.question, MAX_ITEM_CHARACTERS).strip()
+            if preview:
+                unverified.append(preview)
     confirmed = list(answers.values())
     if (
         len(unverified) > MAX_ITEMS

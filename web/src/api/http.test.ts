@@ -83,16 +83,14 @@ describe('request HTTP 错误整理与请求约定', () => {
       'fetch',
       vi.fn().mockResolvedValueOnce(
         jsonResponse(422, {
-          detail: [
-            { loc: ['body'], msg: 'Value error, 消息正文和附件的总长度不能超过 20833 字符' },
-          ],
+          detail: [{ loc: ['body'], msg: 'Value error, 这条消息和附件太长，请拆开发送' }],
         }),
       ),
     )
 
     await expect(request('/api/x', { json: {} })).rejects.toMatchObject({
       status: 422,
-      message: '消息正文和附件的总长度不能超过 20833 字符',
+      message: '这条消息和附件太长，请拆开发送',
     })
   })
 

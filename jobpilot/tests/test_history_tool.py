@@ -1,20 +1,25 @@
 """验证 Agent 历史工具只能找回当前对话，并在大附件中按字节续页。"""
 
 from json import loads
+from uuid import UUID
 
 import httpx
 import pytest
+from sqlalchemy import select
 
 from jobpilot.api.deps import get_model_client
+from jobpilot.db.models import AgentAction, Message
 from jobpilot.main import app
 from jobpilot.tests.test_agent_api import (
     batch,
+    card_of,
     conversation,
     message_body,
     reply,
     sign_in,
 )
 from jobpilot.tests.test_call_accounting import fake_upstream
+from jobpilot.tests.test_tailoring_graph import Factory
 
 
 @pytest.mark.parametrize(
@@ -148,3 +153,61 @@ async def test_jd_retrieved_from_history_cannot_create_a_memory(
             f"{path}/messages", json=message_body("按关键词查以前的 JD")
         )
     assert card_of(result)["tool"] == "ask_user"
+
+
+async def test_history_keyword_recovers_legacy_answer_and_unescaped_attachment(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+) -> None:
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    attachment_text = "标记\n\\下一行"
+    queries = {"查旧回答": "不接受外包", "查附件": attachment_text}
+    results = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = loads(request.content)["messages"][-1]
+        if last["role"] == "tool" and "next_cursor" in last["content"]:
+            content = last["content"]
+            results.append(
+                loads(content[content.index("\n") + 1 : content.rindex("\n")])
+            )
+        elif last.get("content", "").startswith("请提问"):
+            return batch(("ask_user", {"questions": ["接受外包吗？"]}))
+        elif query := queries.get(last.get("content")):
+            return batch(("read_conversation_history", {"query": query}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        card = card_of(
+            await async_client.post(
+                f"{path}/messages",
+                json=message_body("请提问", attachments=[{"text": attachment_text}]),
+            )
+        )
+        action_id = card["action_id"]
+        decision = await async_client.post(
+            f"{path}/actions/{action_id}",
+            json={"decision": "confirm", "answers": {"q1": "不接受外包"}},
+        )
+        assert decision.is_success
+        async with session_factory.begin() as db:
+            action = await db.get_one(AgentAction, UUID(action_id))
+            action.args_json = {"questions": ["接受外包吗？"]}
+            action.decision_json = {"decision": "confirm", "answers": ["不接受外包"]}
+            step = await db.scalar(
+                select(Message).where(
+                    Message.run_id == action.run_id,
+                    Message.event_key == f"tool:{action.tool_call_id}",
+                )
+            )
+            step.steps_json = [{**step.steps_json[0], "answers": ["不接受外包"]}]
+        for body in queries:
+            assert (
+                await async_client.post(f"{path}/messages", json=message_body(body))
+            ).is_success
+
+    answers = [row for row in results[0]["rows"] if row["source"] == "question_answer"]
+    assert [row["text"] for row in answers] == ["接受外包吗？\n不接受外包"]
+    assert any(row["text"] == attachment_text for row in results[1]["rows"])

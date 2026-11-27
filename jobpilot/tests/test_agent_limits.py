@@ -92,10 +92,10 @@ async def test_combined_input_limit_rejects_before_starting(
         app.dependency_overrides[get_model_client] = lambda: fake
         response = await async_client.post(
             f"{path}/messages",
-            json=message_body("字" * 10000, attachments=[{"text": "文" * 20000}]),
+            json=message_body("字" * 12000),
         )
     assert response.status_code == 422
-    assert "总长度" in response.json()["detail"][0]["msg"]
+    assert "这条消息和附件太长，请拆开发送" in response.json()["detail"][0]["msg"]
     assert requests == []
     assert (await async_client.get(path)).json()["run"] is None
 

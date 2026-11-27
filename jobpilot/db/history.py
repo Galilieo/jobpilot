@@ -3,10 +3,25 @@
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from sqlalchemy import Text, cast, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.models import Message
+from jobpilot.db.models import ActionStatus, AgentAction, Message
+
+
+async def legacy_question_card(
+    session: AsyncSession, message: Message
+) -> AgentAction | None:
+    return await session.scalar(
+        select(AgentAction).where(
+            AgentAction.user_id == message.user_id,
+            AgentAction.conversation_id == message.conversation_id,
+            AgentAction.run_id == message.run_id,
+            AgentAction.tool_call_id == message.event_key.removeprefix("tool:"),
+            AgentAction.tool == "ask_user",
+            AgentAction.status == ActionStatus.EXECUTED,
+        )
+    )
 
 
 async def history_rows(
@@ -16,7 +31,6 @@ async def history_rows(
     *,
     start_seq: int,
     end_seq: int | None,
-    query: str | None,
 ) -> AsyncIterator[Message]:
     statement = select(Message).where(
         Message.user_id == user_id,
@@ -25,16 +39,6 @@ async def history_rows(
     )
     if end_seq is not None:
         statement = statement.where(Message.seq <= end_seq)
-    if query:
-        needle = query.casefold()
-        statement = statement.where(
-            or_(
-                func.strpos(func.lower(Message.content), needle) > 0,
-                func.strpos(func.lower(cast(Message.attachments_json, Text)), needle)
-                > 0,
-                func.strpos(func.lower(cast(Message.steps_json, Text)), needle) > 0,
-            )
-        )
     rows = await session.stream_scalars(
         statement.order_by(Message.seq).execution_options(yield_per=25)
     )
@@ -56,6 +60,5 @@ async def unsummarized_messages(
             conversation_id,
             start_seq=through_seq + 1,
             end_seq=None,
-            query=None,
         )
     ]

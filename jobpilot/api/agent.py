@@ -10,7 +10,6 @@ from starlette.responses import StreamingResponse
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.api.tailoring import Launcher
-from jobpilot.config import settings
 from jobpilot.db.accounts import lock_active_account
 from jobpilot.db.conversations import (
     add_message,
@@ -35,6 +34,7 @@ from jobpilot.db.models import (
 )
 from jobpilot.services.agent.actions import undo_write, verify_action_version
 from jobpilot.services.agent.application_actions import confirm_application
+from jobpilot.services.agent.context import render_user_content
 from jobpilot.services.agent.memory_actions import MEMORY_TOOLS, confirm_memory
 from jobpilot.services.agent.questions import validate_card_decision
 from jobpilot.services.agent.runtime import (
@@ -43,7 +43,11 @@ from jobpilot.services.agent.runtime import (
     card_payload,
     done_event,
 )
+from jobpilot.services.agent.tools import TOOL_DEFINITIONS
 from jobpilot.services.agent.types import Decision, DecisionIn, Payload, ToolError
+from jobpilot.services.agent.window_messages import AgentWindow
+from jobpilot.services.prompts import load_prompt
+from jobpilot.services.request_window import InputTokenHistory
 
 router = APIRouter(prefix="/api", tags=["agent"])
 
@@ -67,10 +71,19 @@ class MessageIn(BaseModel):
     def validate_text_length(self) -> "MessageIn":
         if not self.content and not self.attachments:
             raise ValueError("请输入消息或添加附件")
-        limit = settings.agent_limits.input_characters
-        length = len(self.content) + sum(len(item.text) for item in self.attachments)
-        if length > limit:
-            raise ValueError(f"消息正文和附件的总长度不能超过 {limit} 字符")
+        user_input = render_user_content(
+            self.content, [item.text for item in self.attachments]
+        )
+        window = AgentWindow(InputTokenHistory(), TOOL_DEFINITIONS)
+        request = window.request(
+            [
+                {"role": "system", "content": load_prompt("agent").text},
+                {"role": "user", "content": user_input},
+            ],
+            [],
+        )
+        if request is None:
+            raise ValueError("这条消息和附件太长，请拆开发送")
         return self
 
 

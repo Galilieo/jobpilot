@@ -57,7 +57,7 @@ def test_summary_requirements_use_complete_source_clauses() -> None:
     )
     checked = checked_summary(
         summary,
-        {1: "  我不接受外包。下次再说", 2: "北京或上海都可以，但不去深圳！"},
+        {1: "期望条件。　我不接受外包。下次再说", 2: "北京或上海都可以，但不去深圳！"},
         {},
         through_seq=2,
     )

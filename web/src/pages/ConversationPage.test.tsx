@@ -95,9 +95,7 @@ describe('对话页发消息', () => {
       'GET /api/jobs': () => jsonResponse(200, []),
       'POST /api/conversations/c1/messages': () =>
         jsonResponse(422, {
-          detail: [
-            { loc: ['body'], msg: 'Value error, 消息正文和附件的总长度不能超过 20833 字符' },
-          ],
+          detail: [{ loc: ['body'], msg: 'Value error, 这条消息和附件太长，请拆开发送' }],
         }),
     })
     renderPage()
@@ -109,7 +107,7 @@ describe('对话页发消息', () => {
     await user.click(screen.getByRole('button', { name: '加入附件' }))
     await typeAndSend('看看这个')
 
-    expect(await screen.findByText(/总长度不能超过 20833 字符/)).toBeInTheDocument()
+    expect(await screen.findByText('这条消息和附件太长，请拆开发送')).toBeInTheDocument()
     expect(screen.getByText('附件 1')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByPlaceholderText(/发 JD/)).toHaveValue('看看这个'))
   })

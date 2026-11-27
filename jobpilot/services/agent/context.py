@@ -1,6 +1,6 @@
 """从业务消息重建最近对话，历史工具只携带简短结果。"""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from itertools import groupby
 from json import dumps
 from uuid import UUID
@@ -90,14 +90,24 @@ def summarize_tool(name: str, result: Payload) -> Payload:
     return {"tool": name, **summary}
 
 
+def render_user_content(content: str, attachments: Sequence[str]) -> str:
+    return "\n".join(
+        [
+            content,
+            *(
+                wrap_untrusted_text(f"attachment_{index}", text)
+                for index, text in enumerate(attachments, 1)
+            ),
+        ]
+    )
+
+
 def _history_content(message: Message, *, current: bool) -> str:
-    content = message.content
     if message.role == MessageRole.USER and current:
-        for index, attachment in enumerate(message.attachments_json, start=1):
-            content += "\n" + wrap_untrusted_text(
-                f"attachment_{index}", attachment["text"]
-            )
-    return content
+        return render_user_content(
+            message.content, [item["text"] for item in message.attachments_json]
+        )
+    return message.content
 
 
 async def system_message(

@@ -9,9 +9,14 @@ from typing import Self
 from pydantic import BaseModel, Field, model_validator
 
 from jobpilot.config import settings
-from jobpilot.db.history import history_rows
-from jobpilot.db.models import Message, MessageRole
+from jobpilot.db.history import history_rows, legacy_question_card
+from jobpilot.db.models import AgentAction, Message, MessageRole
 from jobpilot.services.agent.context import serialize
+from jobpilot.services.agent.questions import (
+    OrdinaryQuestions,
+    load_question_card,
+    question_results,
+)
 from jobpilot.services.agent.step_details import model_view
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext
 from jobpilot.services.llm_gateway import (
@@ -66,13 +71,40 @@ class HistoryPart:
     source: HistorySource
     text: str
     metadata: Payload | None = None
+    searchable_values: tuple[str, ...] | None = None
 
 
-def _tool_parts(message: Message) -> Iterator[HistoryPart]:
+def _text_values(value: object) -> Iterator[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from _text_values(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _text_values(child)
+
+
+def _old_answers(action: AgentAction | None) -> Payload:
+    if action is None or not action.decision_json:
+        return {}
+    card = load_question_card(action.args_json)
+    return (
+        question_results(card, action.decision_json)["answers"]
+        if isinstance(card, OrdinaryQuestions)
+        else {}
+    )
+
+
+def _tool_parts(
+    message: Message, legacy_card: AgentAction | None
+) -> Iterator[HistoryPart]:
     for step in message.steps_json:
         if "confirm" in step:
             continue
         answers = step.get("answers")
+        if isinstance(answers, list):
+            answers = _old_answers(legacy_card)
         for question_id, answer in answers.items() if isinstance(answers, dict) else ():
             if isinstance(answer, dict):
                 yield HistoryPart(
@@ -87,12 +119,19 @@ def _tool_parts(message: Message) -> Iterator[HistoryPart]:
         if summary.get("tool") in {"tailor_resume", "read_resume", "edit_resume_item"}:
             if "run_id" in summary:
                 readers["run_id"] = "read_resume"
-        yield HistoryPart(HistorySource.TOOL, serialize(summary), readers or None)
+        yield HistoryPart(
+            HistorySource.TOOL,
+            serialize(summary),
+            readers or None,
+            tuple(_text_values(summary)),
+        )
 
 
-def history_parts(message: Message) -> Iterator[HistoryPart]:
+def history_parts(
+    message: Message, legacy_card: AgentAction | None = None
+) -> Iterator[HistoryPart]:
     if message.role == MessageRole.TOOL:
-        yield from _tool_parts(message)
+        yield from _tool_parts(message, legacy_card)
     elif message.role == MessageRole.ASSISTANT:
         if message.content:
             yield HistoryPart(HistorySource.ASSISTANT, message.content)
@@ -146,12 +185,37 @@ def _page(rows: list[Payload], cursor: HistoryCursor | None) -> Payload:
     }
 
 
+def _text_offset(text: str, needle: str) -> int:
+    folded = text.casefold()
+    offset = folded.find(needle)
+    if offset < 0 or len(text) == len(folded):
+        return offset
+    for index, character in enumerate(text):
+        offset -= len(character.casefold())
+        if offset < 0:
+            return index
+    return -1
+
+
+def _search_offset(part: HistoryPart, needle: str) -> int:
+    if part.searchable_values is None:
+        return _text_offset(part.text, needle)
+    for value in part.searchable_values:
+        offset = _text_offset(value, needle)
+        if offset >= 0:
+            return (
+                part.text.index(serialize(value)) + len(serialize(value[:offset])) - 1
+            )
+    return -1
+
+
 async def read_history(context: ToolContext, args: HistoryArgs) -> Payload:
     agent = context.agent
     cursor = args.cursor or HistoryCursor(seq=args.start_seq or 1, part=0)
     rows: list[Payload] = []
     budget = min(MAX_HISTORY_BYTES, settings.agent_limits.tool_result_bytes)
     limit = min(MAX_HISTORY_PART_BYTES, budget // 3)
+    needle = args.query.casefold() if args.query else None
     async with agent.sessions() as session:
         messages = history_rows(
             agent.user_id,
@@ -159,11 +223,18 @@ async def read_history(context: ToolContext, args: HistoryArgs) -> Payload:
             agent.conversation_id,
             start_seq=max(args.start_seq or 1, cursor.seq),
             end_seq=args.end_seq,
-            query=args.query,
         )
         async with aclosing(messages):
             async for message in messages:
-                for index, part in enumerate(history_parts(message)):
+                legacy_card = (
+                    await legacy_question_card(session, message)
+                    if any(
+                        isinstance(step.get("answers"), list)
+                        for step in message.steps_json
+                    )
+                    else None
+                )
+                for index, part in enumerate(history_parts(message, legacy_card)):
                     if message.seq == cursor.seq and index < cursor.part:
                         continue
                     offset = (
@@ -171,8 +242,8 @@ async def read_history(context: ToolContext, args: HistoryArgs) -> Payload:
                         if (message.seq, index) == (cursor.seq, cursor.part)
                         else 0
                     )
-                    if args.query:
-                        found = part.text.casefold().find(args.query.casefold())
+                    if needle:
+                        found = _search_offset(part, needle)
                         if found < 0:
                             continue
                         offset = max(offset, found - limit // 12)

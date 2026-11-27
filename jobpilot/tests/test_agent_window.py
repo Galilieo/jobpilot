@@ -72,18 +72,34 @@ async def test_current_input_overflow_has_explicit_split_feedback(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from jobpilot.services.agent.tools import TOOL_DEFINITIONS
+    from jobpilot.services.agent.window_messages import AgentWindow, output_reserve
+    from jobpilot.services.prompts import load_prompt
+    from jobpilot.services.request_window import InputTokenHistory
+
     await sign_in(async_client)
     path = await conversation(async_client)
-    monkeypatch.setattr(settings.agent_limits, "context_window_cap_tokens", 9000)
+    body = "甲" * 1000
+    window = AgentWindow(InputTokenHistory(), TOOL_DEFINITIONS)
+    fixed_input = window.estimate(
+        [
+            {"role": "system", "content": load_prompt("agent").text},
+            {"role": "user", "content": body},
+        ]
+    )
+    monkeypatch.setattr(
+        settings.agent_limits,
+        "context_window_cap_tokens",
+        fixed_input + output_reserve() + 50,
+    )
+    # 静态输入能通过入口，实际发送前加入账号任务状态才超过窗口。
 
     def unexpected(request: httpx.Request) -> httpx.Response:
         raise AssertionError("超出窗口的正文不能发送给模型")
 
     async with fake_upstream(unexpected) as fake:
         app.dependency_overrides[get_model_client] = lambda: fake
-        response = await async_client.post(
-            f"{path}/messages", json=message_body("甲" * 8500)
-        )
+        response = await async_client.post(f"{path}/messages", json=message_body(body))
     assert done_of(response)["status"] == "failed"
     assert any(
         "请拆分" in item.get("message", "")
