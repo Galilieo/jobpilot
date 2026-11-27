@@ -29,7 +29,7 @@ import {
   jobQuery,
   matchesQuery,
 } from '../../queryKeys'
-import { ApplicationRecords } from './ApplicationRecords'
+import { ApplicationRecords } from '../application/ApplicationRecords'
 import { InjectionAlert, JobInfo } from './JobInfo'
 import { MatchPanel } from './MatchPanel'
 import { ResumePanel } from './ResumePanel'

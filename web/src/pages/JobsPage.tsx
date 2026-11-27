@@ -13,7 +13,7 @@ import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
 import { JOB_STAGE, formatMatchSummary, jobMetaParts } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
-import { DetachedApplicationsDrawer } from './job/ApplicationRecords'
+import { DetachedApplicationsDrawer } from './application/ApplicationRecords'
 
 const JD_COPY = {
   filePrompt: '点击或拖入 JD 文件',

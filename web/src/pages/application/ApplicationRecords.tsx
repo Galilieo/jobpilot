@@ -1,5 +1,5 @@
 // 岗位投递记录、阶段历史以及只读快照的入口。
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Drawer, Skeleton, Space, Tag, Timeline, Typography } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { applications } from '../../api/endpoints'
@@ -7,15 +7,10 @@ import { ApiError } from '../../api/http'
 import type { ApplicationRecord } from '../../api/types'
 import { MetaList } from '../../components/MetaList'
 import { APPLICATION_STAGE } from '../../labels'
-import {
-  APPLICATIONS_QUERY,
-  JOBS_QUERY,
-  OVERVIEW_QUERY,
-  applicationQuery,
-  applicationsQuery,
-} from '../../queryKeys'
+import { APPLICATIONS_QUERY, applicationQuery, applicationsQuery } from '../../queryKeys'
 import { ApplicationDiffDrawer } from './ApplicationDiffDrawer'
 import { EditApplicationModal, NewApplicationModal } from './ApplicationForm'
+import { useRefreshApplications } from './useRefreshApplications'
 
 export function ApplicationRecords({ jobId }: { jobId: string }): ReactElement {
   const refresh = useRefreshApplications()
@@ -56,17 +51,6 @@ export function ApplicationRecords({ jobId }: { jobId: string }): ReactElement {
   )
 }
 
-function useRefreshApplications(): () => Promise<void> {
-  const queryClient = useQueryClient()
-  return async () => {
-    await Promise.all(
-      [APPLICATIONS_QUERY, JOBS_QUERY, OVERVIEW_QUERY].map((queryKey) =>
-        queryClient.invalidateQueries({ queryKey }),
-      ),
-    )
-  }
-}
-
 export function DetachedApplicationsDrawer({ close }: { close: () => void }): ReactElement {
   const refresh = useRefreshApplications()
   const query = useQuery({
@@ -88,12 +72,14 @@ export function DetachedApplicationsDrawer({ close }: { close: () => void }): Re
   )
 }
 
-function ApplicationRow({
+export function ApplicationRow({
   record,
   refresh,
+  showJobInfo,
 }: {
   record: ApplicationRecord
   refresh: () => Promise<void>
+  showJobInfo?: boolean
 }): ReactElement {
   const { modal, message } = App.useApp()
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -124,10 +110,11 @@ function ApplicationRow({
   }
 
   const version = record.resume_version != null ? [`第 ${record.resume_version} 版简历`] : []
+  const shouldShowJobInfo = showJobInfo ?? record.user_job_id === null
 
   return (
     <article className="application-row">
-      {record.user_job_id === null && (
+      {shouldShowJobInfo && (
         <>
           <Typography.Text strong>{record.job_snapshot_json.title ?? '未命名岗位'}</Typography.Text>
           <MetaList
