@@ -1,6 +1,7 @@
 """从业务消息重建最近对话，历史工具只携带简短结果。"""
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from itertools import groupby
 from json import dumps
 from uuid import UUID
@@ -12,6 +13,7 @@ from jobpilot.config import settings
 from jobpilot.db.conversations import find_conversation
 from jobpilot.db.history import unsummarized_messages
 from jobpilot.db.models import Conversation, Message, MessageRole
+from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.read_tools import current_job_summary
 from jobpilot.services.agent.step_details import DETAIL_KEY, model_view, step_detail
 from jobpilot.services.agent.types import (
@@ -110,35 +112,46 @@ def _history_content(message: Message, *, current: bool) -> str:
     return message.content
 
 
-async def system_message(
+@dataclass(frozen=True)
+class SystemContext:
+    memories: Payload
+    tasks: Payload | None
+
+    def render(self, summary: Payload | None) -> ChatCompletionSystemMessageParam:
+        blocks = [load_prompt("agent").text]
+        if self.memories:
+            blocks.append(
+                "长期记忆\n"
+                + wrap_untrusted_text("long_term_memory", serialize(self.memories))
+            )
+        if summary:
+            work = StoredWorkSummary.model_validate(summary)
+            blocks.append(
+                "工作摘要\n" + wrap_untrusted_text("work_summary", render_summary(work))
+            )
+        if self.tasks is not None:
+            blocks.append(
+                "任务状态\n" + wrap_untrusted_text("task_state", serialize(self.tasks))
+            )
+        return {"role": "system", "content": "\n".join(blocks)}
+
+
+async def read_system_context(
     user_id: UUID,
     session: AsyncSession,
     conversation: Conversation | None,
-    *,
-    summary: Payload | None,
-) -> ChatCompletionSystemMessageParam:
+) -> SystemContext:
     active_memories = {
         item.key: item.value
         for item in await memory_views(session, user_id)
         if item.value is not None
     }
-    blocks = [load_prompt("agent").text]
-    if active_memories:
-        blocks.append(
-            "长期记忆\n"
-            + wrap_untrusted_text("long_term_memory", serialize(active_memories))
-        )
-    if summary:
-        work = StoredWorkSummary.model_validate(summary)
-        blocks.append(
-            "工作摘要\n" + wrap_untrusted_text("work_summary", render_summary(work))
-        )
-    if conversation is not None:
-        tasks = await current_job_summary(user_id, session, conversation)
-        blocks.append(
-            "任务状态\n" + wrap_untrusted_text("task_state", serialize(tasks))
-        )
-    return {"role": "system", "content": "\n".join(blocks)}
+    tasks = (
+        await current_job_summary(user_id, session, conversation)
+        if conversation is not None
+        else None
+    )
+    return SystemContext(active_memories, tasks)
 
 
 async def agent_system_message(
@@ -147,7 +160,8 @@ async def agent_system_message(
     conversation = await find_conversation(
         agent.user_id, session, agent.conversation_id
     )
-    return await system_message(agent.user_id, session, conversation, summary=summary)
+    context = await read_system_context(agent.user_id, session, conversation)
+    return context.render(summary)
 
 
 def render_turn(messages: Iterable[Message], *, current: bool) -> list[Payload]:
@@ -195,19 +209,15 @@ def _render_history(
 async def build_context(agent: AgentDeps) -> AgentState:
     """读取本轮可用的对话记录并初始化 Agent 图状态。"""
     limits = settings.agent_limits
-    async with agent.sessions() as session, session.begin():
-        await session.connection(
-            execution_options={"isolation_level": "REPEATABLE READ"}
-        )
+    async with read_snapshot(agent.sessions) as session:
         user_id, conversation_id = agent.user_id, agent.conversation_id
         conversation = await find_conversation(user_id, session, conversation_id)
         summary = conversation.summary_json if conversation else None
         through = conversation.summary_through_seq if conversation else 0
         rows = await unsummarized_messages(user_id, session, conversation_id, through)
-        system = await system_message(user_id, session, conversation, summary=summary)
     messages, boundaries = _render_history(rows, agent.run_id)
     return {
-        "messages": [system, *messages],
+        "messages": messages,
         "history_boundaries": boundaries,
         "work_summary": summary,
         "run_id": str(agent.run_id),

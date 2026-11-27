@@ -8,7 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletion
+from openai.types.chat import ChatCompletion, ChatCompletionSystemMessageParam
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -36,7 +36,7 @@ from jobpilot.services.agent.compact_sources import (
     verified_actions,
     verified_sources,
 )
-from jobpilot.services.agent.context import render_turn, system_message
+from jobpilot.services.agent.context import read_system_context, render_turn
 from jobpilot.services.agent.tools import TOOL_DEFINITIONS
 from jobpilot.services.agent.types import Payload
 from jobpilot.services.agent.work_summary import (
@@ -254,17 +254,12 @@ async def _schedule(
     return work or CompactResult(status="not_needed")
 
 
-async def _projected_request_tokens(
-    user_id: UUID,
-    session: AsyncSession,
-    conversation: Conversation,
+def _projected_request_tokens(
+    system: ChatCompletionSystemMessageParam,
     history: list[list[Payload]],
 ) -> int:
     """下一次主调用的输入估算：当前摘要、摘要之后的完整轮次和工具定义。"""
-    current_system = await system_message(
-        user_id, session, conversation, summary=conversation.summary_json
-    )
-    context = [current_system, *(item for turn in history for item in turn)]
+    context = [system, *(item for turn in history for item in turn)]
     return estimate_request_tokens(
         request_messages_for_model(context), TOOL_DEFINITIONS
     )
@@ -291,9 +286,10 @@ async def context_usage(
     history = [render_turn(turn.messages, current=False) for turn in turns]
     window = settings.effective_window(ModelPurpose.AGENT)
     trigger = int(window * settings.agent_limits.compact_trigger_ratio)
+    system = await read_system_context(user_id, session, conversation)
     return ContextUsage(
-        used_tokens=await _projected_request_tokens(
-            user_id, session, conversation, history
+        used_tokens=_projected_request_tokens(
+            system.render(conversation.summary_json), history
         ),
         window_tokens=window,
         compact_at_tokens=trigger - _output_tokens(ModelPurpose.AGENT),
@@ -311,15 +307,8 @@ async def _compaction_candidates(
     limits = settings.agent_limits
     window = settings.effective_window(ModelPurpose.AGENT)
     output = _output_tokens(ModelPurpose.AGENT)
-    fixed = await system_message(
-        schedule.user_id,
-        session,
-        conversation,
-        summary=None,
-    )
-    fixed_tokens = estimate_request_tokens(
-        request_messages_for_model([fixed]), TOOL_DEFINITIONS
-    )
+    system = await read_system_context(schedule.user_id, session, conversation)
+    fixed_tokens = _projected_request_tokens(system.render(None), [])
     remaining = int(window * limits.compact_target_ratio) - fixed_tokens - output
     if remaining <= 0 and schedule.automatic:
         logger.info("对话 %s 固定上下文已超过压缩目标", conversation.conversation_id)
@@ -327,8 +316,8 @@ async def _compaction_candidates(
     if not schedule.automatic:
         return turns[:-1], summary_bytes
     history = [render_turn(turn.messages, current=False) for turn in turns]
-    projected = await _projected_request_tokens(
-        schedule.user_id, session, conversation, history
+    projected = _projected_request_tokens(
+        system.render(conversation.summary_json), history
     )
     if projected + output <= window * limits.compact_trigger_ratio:
         return [], 0

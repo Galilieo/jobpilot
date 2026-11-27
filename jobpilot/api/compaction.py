@@ -5,9 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
+from jobpilot.api.deps import CurrentUser, ModelClient, SessionFactory
 from jobpilot.api.tailoring import Launcher
 from jobpilot.db.conversations import find_conversation
+from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.compaction import (
     CompactConflict,
     CompactResult,
@@ -28,12 +29,13 @@ class CompactIn(BaseModel):
 
 @router.get("/{conversation_id}/context")
 async def read_context_usage(
-    conversation_id: UUID, user: CurrentUser, db: DbSession
+    conversation_id: UUID, user: CurrentUser, sessions: SessionFactory
 ) -> ContextUsage:
-    conversation = await find_conversation(user.user_id, db, conversation_id)
-    if conversation is None:
-        raise HTTPException(404, "对话不存在")
-    return await context_usage(user.user_id, db, conversation)
+    async with read_snapshot(sessions) as db:
+        conversation = await find_conversation(user.user_id, db, conversation_id)
+        if conversation is None:
+            raise HTTPException(404, "对话不存在")
+        return await context_usage(user.user_id, db, conversation)
 
 
 @router.post("/{conversation_id}/compact")

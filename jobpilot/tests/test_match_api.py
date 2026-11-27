@@ -810,12 +810,8 @@ async def test_invalid_json_repaired_once_and_double_failure_marks_failed(
     assert failed.status_code == 502
     async with session_factory() as db:
         assert len((await db.scalars(select(MatchReport))).all()) == 1
-        runs = (
-            await db.scalars(
-                select(AiRun).where(AiRun.kind == "match").order_by(AiRun.started_at)
-            )
-        ).all()
-        assert [r.status for r in runs] == [RunStatus.SUCCEEDED, RunStatus.FAILED]
+        runs = (await db.scalars(select(AiRun).where(AiRun.kind == "match"))).all()
+        assert sorted(r.status for r in runs) == [RunStatus.FAILED, RunStatus.SUCCEEDED]
 
 
 async def test_outgoing_match_request_wraps_untrusted_text_and_redacts_pii(

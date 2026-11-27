@@ -31,6 +31,7 @@ from jobpilot.db.models import (
     MessageRole,
     RunStatus,
 )
+from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.actions import apply_write, bind_job, lock_agent_job
 from jobpilot.services.agent.arguments import JobArgs, ParseJobArgs
 from jobpilot.services.agent.context import (
@@ -228,14 +229,15 @@ async def _send_main(
 async def _call_model(
     agent: AgentDeps, state: AgentState, window: AgentWindow
 ) -> AgentState:
-    async with agent.sessions() as session, session.begin():
-        await session.connection(
-            execution_options={"isolation_level": "REPEATABLE READ"}
-        )
+    async with read_snapshot(agent.sessions) as session:
         system = await agent_system_message(
             agent, session, summary=state.get("work_summary")
         )
-    messages = [system, *state["messages"][1:]]
+    history = state["messages"]
+    # 老检查点和后续工具轮次会带上一份系统消息，主调用前替换为最新状态。
+    if history and history[0]["role"] == "system":
+        history = history[1:]
+    messages = [system, *history]
     try:
         completion = await _send_main(agent, state, messages, window)
     except BudgetExhaustedError:
