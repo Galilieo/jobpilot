@@ -1,6 +1,7 @@
 """验证幂等键迁移与已有事实、草稿数据的兼容性。"""
 
 from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 from alembic.config import Config
@@ -33,6 +34,43 @@ async def test_idempotency_revision_round_trip(
     async with db_engine.connect() as connection:
         await connection.run_sync(_check_revision)
         await connection.rollback()
+
+
+async def test_retired_idempotency_key_migration_round_trip(
+    db_engine: AsyncEngine, session_factory: Factory
+) -> None:
+    user_id = await add_user(session_factory, "retired-key@example.invalid")
+    async with db_engine.connect() as connection:
+        await connection.run_sync(_check_retired_key, user_id)
+        await connection.rollback()
+
+
+def _check_retired_key(connection: Connection, user_id: UUID) -> None:
+    connection.begin()
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.attributes["connection"] = connection
+    insert_key = text(
+        "INSERT INTO idempotency_key "
+        "(user_id, operation, key, request_hash, attempt_id, status) "
+        "VALUES (:user, 'parse_jd', :key, :hash, :attempt, 'retired')"
+    )
+    values = {
+        "user": user_id,
+        "key": "deleted-job",
+        "hash": "a" * 64,
+        "attempt": uuid4(),
+    }
+    connection.execute(insert_key, values)
+    with (
+        pytest.raises(DBAPIError, match="ck_idempotency_key_response"),
+        connection.begin_nested(),
+    ):
+        connection.execute(text("UPDATE idempotency_key SET response_body = '{}'"))
+    command.downgrade(config, "20261127_01")
+    assert connection.scalar(text("SELECT count(*) FROM idempotency_key")) == 0
+    command.upgrade(config, "head")
+    connection.execute(insert_key, values)
+    command.check(config)
 
 
 def _check_revision(connection: Connection) -> None:

@@ -865,7 +865,7 @@ class IdempotencyKey(Base):
             name="ck_idempotency_key_operation",
         ),
         CheckConstraint(
-            "status IN ('processing', 'succeeded', 'failed')",
+            "status IN ('processing', 'succeeded', 'failed', 'retired')",
             name="ck_idempotency_key_status",
         ),
         CheckConstraint(
