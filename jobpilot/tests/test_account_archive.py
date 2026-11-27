@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import timedelta
+from html import unescape
 from uuid import UUID
 
 import httpx
@@ -16,6 +17,7 @@ from jobpilot.db.models import (
     FactSetCriterion,
     FactSetEducation,
     ModelCall,
+    ResumeVersion,
     User,
 )
 from jobpilot.services.accounts import PurgeResult, purge_accounts
@@ -224,6 +226,37 @@ async def test_pending_export_and_restore_preserve_the_full_archive(
     assert original == pending
     assert (await async_client.post("/api/account/restore")).status_code == 204
     assert await _download(async_client) == original
+
+
+async def test_export_renders_legacy_and_current_fonts_from_stored_versions(
+    async_client: httpx.AsyncClient, session_factory: Factory, portfolio: Portfolio
+) -> None:
+    await _save_new_resume_version(async_client, portfolio.run_id)
+    legacy_fonts = ["", '"Songti SC", serif']
+    async with session_factory.begin() as db:
+        versions = list(
+            await db.scalars(
+                select(ResumeVersion)
+                .where(ResumeVersion.user_id == portfolio.user_id)
+                .order_by(ResumeVersion.version)
+            )
+        )
+        for version, font in zip(versions[:2], legacy_fonts, strict=True):
+            original = version.content_json
+            version.content_json = {
+                **original,
+                "style": {**original["style"], "font": font},
+            }
+
+    first, second, current = (await _download(async_client))["resume_versions"]
+    assert [
+        first["content_json"]["style"]["font"],
+        second["content_json"]["style"]["font"],
+    ] == legacy_fonts
+    assert current["content_json"]["style"]["font"] == "default"
+    for version in (first, current):
+        assert '--font: "PingFang SC", "Hiragino Sans GB"' in version["html"]
+    assert '--font: "Songti SC", SimSun, serif' in unescape(second["html"])
 
 
 async def test_purge_cascades_business_rows_and_anonymizes_model_calls(

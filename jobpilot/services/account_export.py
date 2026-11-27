@@ -24,7 +24,7 @@ async def build_account_export(
         records = await export_business_records(session, user_id)
 
     for version in records["resume_versions"]:
-        content = ResumeContent.model_validate(version["content_json"])
+        content = ResumeContent.from_stored(version["content_json"])
         version["html"] = render_html(
             content, mode=RenderMode.EXPORT, version=version["version"]
         )
