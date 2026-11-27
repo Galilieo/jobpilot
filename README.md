@@ -81,6 +81,7 @@ pnpm --dir web install --frozen-lockfile
 ```bash
 (cd jobpilot && uv run --locked pytest -q)
 (cd jobpilot && uv run --locked ruff check && uv run --locked ruff format --check)
+pnpm --dir web format:check
 pnpm --dir web lint
 pnpm --dir web test
 pnpm --dir web build
