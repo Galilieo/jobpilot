@@ -1,7 +1,7 @@
 {
   "agent": {
-    "sha256": "160f81da41adf0051fe1e613f0b0d385f8c4221a6617470076ab1194716e47f6",
-    "version": 4
+    "sha256": "c50e70cc649e8d98df3bc949a863a8f0ed90d7b428339ec5898a2c9b13a963a0",
+    "version": 5
   },
   "compact_conversation": {
     "sha256": "0f47b6714de7d16524f3d193f15a13fcd47eb90f2c060b688ac6a44592af01b1",

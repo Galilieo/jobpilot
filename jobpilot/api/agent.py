@@ -34,6 +34,7 @@ from jobpilot.db.models import (
     RunStatus,
 )
 from jobpilot.services.agent.actions import undo_write, verify_action_version
+from jobpilot.services.agent.application_actions import confirm_application
 from jobpilot.services.agent.memory_actions import MEMORY_TOOLS, confirm_memory
 from jobpilot.services.agent.questions import validate_card_decision
 from jobpilot.services.agent.runtime import (
@@ -223,9 +224,16 @@ async def _store_decision(
         else ActionStatus.REJECTED
     )
     action.decided_at = func.now()
-    if body.decision == Decision.CONFIRM and action.tool in MEMORY_TOOLS:
+    if body.decision != Decision.CONFIRM:
+        return
+    apply = (
+        confirm_memory
+        if action.tool in MEMORY_TOOLS
+        else (confirm_application if action.tool == "record_application" else None)
+    )
+    if apply is not None:
         try:
-            await confirm_memory(db, action)
+            await apply(db, action)
         except ToolError as error:
             raise HTTPException(error.status, str(error)) from None
 

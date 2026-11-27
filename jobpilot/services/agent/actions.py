@@ -11,6 +11,7 @@ from jobpilot.db.conversations import agent_input, find_conversation, set_job_bi
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import ActionStatus, AgentAction, AiRun, Conversation
 from jobpilot.services import drafts
+from jobpilot.services.agent.application_actions import undo_application
 from jobpilot.services.agent.arguments import EditResumeArgs, SetJobArgs, ShortText
 from jobpilot.services.agent.edit_request import authorized_edit
 from jobpilot.services.agent.memory_actions import undo_memory
@@ -325,6 +326,7 @@ async def undo_write(session: AsyncSession, action: AgentAction) -> Payload:
         "ask_user": _undo_job,
         "edit_resume_item": _undo_resume,
         "remember": undo_memory,
+        "record_application": undo_application,
         "forget": undo_memory,
     }[action.tool]
     result = await undo(session, action, action.undo_json)

@@ -8,6 +8,10 @@ from openai.types.chat import ChatCompletionToolUnionParam
 from pydantic import ValidationError
 
 from jobpilot.services.agent import actions, generation, read_tools
+from jobpilot.services.agent.application_actions import (
+    RecordApplicationArgs,
+    prepare_application,
+)
 from jobpilot.services.agent.arguments import (
     AskArgs,
     EditResumeArgs,
@@ -161,6 +165,13 @@ TOOLS = {
             "引用本轮替换正文或润色要求，提议修改一条定制简历条目，须用户确认",
             EditResumeArgs,
             actions.prepare_resume,
+        ),
+        _register(
+            "record_application",
+            ToolCategory.WRITE,
+            "提议记录用户已经完成的投递及所用简历版本，须用户确认",
+            RecordApplicationArgs,
+            prepare_application,
         ),
         _register(
             "remember",
