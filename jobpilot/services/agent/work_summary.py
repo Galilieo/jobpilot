@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from jobpilot.services.llm_gateway import wrap_untrusted_text
+from jobpilot.services.llm_gateway import preview_text, wrap_untrusted_text
 from jobpilot.services.text_clauses import CLAUSE_PUNCTUATION
 
 MAX_ITEMS = 12
@@ -153,7 +153,7 @@ def checked_summary(
     for question in summary.answered_questions:
         stored = answers.get((question.action_id, question.question_id))
         if stored != question:
-            unverified.append(question.question[:MAX_ITEM_CHARACTERS])
+            unverified.append(preview_text(question.question, MAX_ITEM_CHARACTERS))
     confirmed = list(answers.values())
     if (
         len(unverified) > MAX_ITEMS

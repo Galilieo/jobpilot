@@ -34,6 +34,7 @@ from jobpilot.services.agent.arguments import (
 )
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext, ToolError
 from jobpilot.services.jobs import effective_parsed_job
+from jobpilot.services.llm_gateway import preview_text
 from jobpilot.services.matching import load_match_inputs
 from jobpilot.services.resume_versions import ResumeNotFoundError, load_resume
 
@@ -235,8 +236,8 @@ async def current_job_summary(
         "job": {
             "id": str(job_id),
             "version": _job_version(snapshot),
-            "title": (parsed.basic_fields.title or "")[:80],
-            "company": (parsed.basic_fields.company or "")[:80],
+            "title": preview_text(parsed.basic_fields.title or "", 80),
+            "company": preview_text(parsed.basic_fields.company or "", 80),
         },
         "match": match,
         "resume": await _latest_resume(session, user_id, job_id),

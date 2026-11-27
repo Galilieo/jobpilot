@@ -3,6 +3,7 @@
 from json import loads
 
 import httpx
+import pytest
 
 from jobpilot.api.deps import get_model_client
 from jobpilot.main import app
@@ -14,6 +15,57 @@ from jobpilot.tests.test_agent_api import (
     sign_in,
 )
 from jobpilot.tests.test_call_accounting import fake_upstream
+
+
+@pytest.mark.parametrize(
+    ("contact", "placeholder"),
+    [("history-contact@example.invalid", "[EMAIL]"), ("13800138000", "[PHONE]")],
+)
+async def test_history_page_resumes_at_whole_contact_before_redaction(
+    async_client: httpx.AsyncClient,
+    contact: str,
+    placeholder: str,
+) -> None:
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    results = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = loads(request.content)["messages"][-1]
+        if last["role"] == "tool":
+            content = last["content"]
+            page = loads(content[content.index("\n") + 1 : content.rindex("\n")])
+            results.append(page)
+            if len(results) == 1:
+                return batch(
+                    (
+                        "read_conversation_history",
+                        {"start_seq": 1, "cursor": page["next_cursor"]},
+                    )
+                )
+        elif last["content"] == "分页找历史":
+            return batch(("read_conversation_history", {"start_seq": 1}))
+        return reply()
+
+    # 单段上限 1500 出站字节，JSON 两个引号之后还剩 1498 字节。
+    prefix = "甲" * 498
+    assert len(prefix.encode()) == 1494
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        attachment = {"text": prefix + contact + "乙"}
+        assert (
+            await async_client.post(
+                f"{path}/messages", json=message_body(attachments=[attachment])
+            )
+        ).is_success
+        assert (
+            await async_client.post(f"{path}/messages", json=message_body("分页找历史"))
+        ).is_success
+
+    first, second = results
+    assert first["next_cursor"]["offset"] == len(prefix)
+    assert first["rows"][-1]["text"] == prefix
+    assert second["rows"][0]["text"] == placeholder + "乙"
 
 
 async def test_search_returns_current_attachment_and_a_cursor(

@@ -5,6 +5,7 @@ from json import dumps, loads
 from uuid import UUID
 
 import httpx
+import pytest
 from sqlalchemy import select
 
 from jobpilot.api.deps import get_model_client
@@ -68,6 +69,41 @@ def test_summary_requirements_use_complete_source_clauses() -> None:
     assert "三个城市都接受" not in rendered
     assert "颠倒了原话" not in rendered
     assert rendered.count("模型概括，未核实") == 2
+
+
+@pytest.mark.parametrize("contact", ["archive-contact@example.invalid", "13800138000"])
+async def test_compact_preview_does_not_send_partial_contact(
+    async_client, contact
+) -> None:
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    compact_input = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        payload = loads(request.content)
+        if payload.get("stream"):
+            return reply()
+        compact_input.append(payload["messages"][1]["content"])
+        return completion_response("{}")
+
+    prefix = "甲" * 494
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        attachment = {"text": prefix + contact + "乙"}
+        assert (
+            await async_client.post(
+                f"{path}/messages",
+                json=message_body("第一轮", attachments=[attachment]),
+            )
+        ).is_success
+        assert (
+            await async_client.post(f"{path}/messages", json=message_body("第二轮"))
+        ).is_success
+        assert (await async_client.post(f"{path}/compact")).status_code == 202
+        await app.state.run_launcher.wait_all()
+    assert len(compact_input) == 1
+    assert prefix in compact_input[0]
+    assert contact[:6] not in compact_input[0]
 
 
 async def test_compaction_is_deduplicated_and_does_not_cover_later_messages(

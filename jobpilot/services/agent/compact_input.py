@@ -13,6 +13,8 @@ from jobpilot.services.agent.context import serialize
 from jobpilot.services.agent.history import HistorySource, history_parts
 from jobpilot.services.agent.work_summary import AnsweredQuestion, WorkSummary
 from jobpilot.services.llm_gateway import (
+    preview_text,
+    redact_pii,
     request_messages_for_model,
     wrap_untrusted_text,
 )
@@ -60,9 +62,9 @@ def _turn_rows(turn: CompletedTurn, *, preview_chars: int | None = None) -> list
             if part.metadata:
                 row["metadata"] = part.metadata
             if limit is None or len(part.text) <= limit:
-                row["text"] = part.text
+                row["text"] = redact_pii(part.text)
             else:
-                row["text"] = part.text[:limit]
+                row["text"] = preview_text(part.text, limit)
                 row["reference"] = f"原文见消息 {message.seq}"
             rows.append(row)
     return rows

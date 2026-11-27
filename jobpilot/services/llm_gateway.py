@@ -84,6 +84,33 @@ def redact_pii(text: str) -> str:
     return text
 
 
+def pii_spans(text: str) -> list[tuple[int, int]]:
+    """返回原文字索引，合并重叠片段，切分时一次保留完整片段。"""
+    ranges = sorted(
+        match.span() for pattern, _ in _PII_RULES for match in pattern.finditer(text)
+    )
+    merged: list[tuple[int, int]] = []
+    for start, end in ranges:
+        if merged and start < merged[-1][1]:
+            previous_start, previous_end = merged[-1]
+            merged[-1] = (previous_start, max(previous_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def pii_at_boundary(
+    spans: Sequence[tuple[int, int]], cut: int
+) -> tuple[int, int] | None:
+    return next(((start, end) for start, end in spans if start < cut < end), None)
+
+
+def preview_text(text: str, limit: int) -> str:
+    """在原文上限制预览长度，切点避开联系方式，再遮蔽整段。"""
+    span = pii_at_boundary(pii_spans(text), limit) if len(text) > limit > 0 else None
+    return redact_pii(text[: span[0] if span else limit])
+
+
 class EmptyModelResponseError(RuntimeError):
     """上游返回成功，但没有候选消息可供解析。"""
 

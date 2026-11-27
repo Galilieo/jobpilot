@@ -14,6 +14,12 @@ from jobpilot.db.models import Message, MessageRole
 from jobpilot.services.agent.context import serialize
 from jobpilot.services.agent.step_details import model_view
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext
+from jobpilot.services.llm_gateway import (
+    pii_at_boundary,
+    pii_spans,
+    preview_text,
+    redact_pii,
+)
 
 MAX_HISTORY_PARTS = 10
 MAX_HISTORY_BYTES = 4500
@@ -99,14 +105,14 @@ def history_parts(message: Message) -> Iterator[HistoryPart]:
                 attachment["text"],
                 {
                     "index": index,
-                    "name": (attachment.get("name") or "")[:24] or None,
+                    "name": preview_text(attachment.get("name") or "", 24) or None,
                     "kind": attachment.get("kind"),
                 },
             )
 
 
 def _part_payload(
-    seq: int, part: HistoryPart, offset: int, limit: int
+    seq: int, part: HistoryPart, offset: int, limit: int, spans: list[tuple[int, int]]
 ) -> tuple[Payload, int]:
     # JSON 转义也占出站字节，不能按 Python 字符数直接分页。
     left, right = 0, min(limit, len(part.text) - offset)
@@ -118,10 +124,14 @@ def _part_payload(
         else:
             left = middle
     end = offset + left
+    if span := pii_at_boundary(spans, end):
+        start, contact_end = span
+        # 极长的单个联系方式也要让下一页前进；它只占一个脱敏占位符。
+        end = start if start > offset else contact_end
     row = {
         "seq": seq,
         "source": part.source,
-        "text": part.text[offset:end],
+        "text": redact_pii(part.text[offset:end]),
         "truncated": offset > 0 or end < len(part.text),
     }
     if part.metadata:
@@ -166,8 +176,11 @@ async def read_history(context: ToolContext, args: HistoryArgs) -> Payload:
                         if found < 0:
                             continue
                         offset = max(offset, found - limit // 12)
+                    spans = pii_spans(part.text)
+                    if span := pii_at_boundary(spans, offset):
+                        offset = span[0]
                     current = HistoryCursor(seq=message.seq, part=index, offset=offset)
-                    row, end = _part_payload(message.seq, part, offset, limit)
+                    row, end = _part_payload(message.seq, part, offset, limit, spans)
                     next_chunk = HistoryCursor(seq=message.seq, part=index, offset=end)
                     next_part = HistoryCursor(seq=message.seq, part=index + 1)
                     following = next_chunk if end < len(part.text) else next_part
