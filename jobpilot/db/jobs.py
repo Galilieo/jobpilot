@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.idempotency import Operation, delete_result_snapshots
+from jobpilot.db.idempotency import retire_job_snapshots
 from jobpilot.db.models import AiRun, JobPosting, UserJob
 
 
@@ -58,7 +58,7 @@ async def delete_user_job(
 
     ai_run.(user_job_id, user_id) -> user_job 是延迟检查的 NO ACTION 外键，
     必须先删 ai_run；删它会级联清理 match_report、tailored_bullet、bullet_fact、
-    tailored_resume、resume_version、idempotency_key，并置空 model_call 匿名保留。
+    tailored_resume、resume_version、未退役的 idempotency_key，并将关联的模型用量匿名保留。
     """
     user_job = await db.scalar(
         select(UserJob)
@@ -68,7 +68,7 @@ async def delete_user_job(
     if user_job is None:
         return None
     posting_id = user_job.posting_id
-    await delete_result_snapshots(db, user_id, Operation.PARSE_JD, job_id)
+    await retire_job_snapshots(db, user_id, job_id)
 
     deleted_run_ids = list(
         await db.scalars(

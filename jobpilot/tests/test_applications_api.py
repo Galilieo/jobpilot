@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from jobpilot.db.jobs import get_user_job
@@ -96,6 +96,30 @@ async def test_application_freezes_selected_resume_and_survives_job_deletion(
     assert detail["snapshot_json"] == version["content"]
     assert detail["job_snapshot_json"]["title"] == "用户改名"
     assert snapshot.text == (await async_client.get(f"{path}/snapshot.html")).text
+
+
+async def test_deleted_application_cannot_be_recreated_by_old_request(
+    async_client: httpx.AsyncClient,
+    presented_resume: tuple[UUID, str, dict],
+    session_factory: Factory,
+) -> None:
+    _, job_id, version = presented_resume
+    headers = new_idempotency_headers()
+    payload = {"job_id": job_id, "resume_version_id": version["version_id"]}
+    first = await async_client.post("/api/applications", json=payload, headers=headers)
+    assert first.status_code == 201, first.text
+    path = f"/api/applications/{first.json()['application_id']}"
+    deleted = await async_client.request("DELETE", path, json={"expected_revision": 1})
+    assert deleted.status_code == 204
+    replay = await async_client.post("/api/applications", json=payload, headers=headers)
+    assert replay.status_code == 410
+    assert replay.json()["detail"] == "这条记录已经删除，如需重新记录请重新提交"
+    async with session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(Application)) == 0
+        assert (
+            await db.scalar(select(func.count()).select_from(ApplicationStageEvent))
+            == 0
+        )
 
 
 async def test_second_application_and_stage_events_determine_job_stage(

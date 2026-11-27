@@ -14,7 +14,7 @@ import {
 } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { jobs } from '../../api/endpoints'
-import { newIdempotencyKey } from '../../api/http'
+import { ApiError, newIdempotencyKey } from '../../api/http'
 import type { Coverage, MatchReport, MatchSummary } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
 import { FactBadge } from '../../components/FactBadge'
@@ -61,6 +61,7 @@ export function MatchPanel({
       ])
     },
     onError: (error) => {
+      if (error instanceof ApiError && error.status === 410) key.current = newIdempotencyKey()
       void message.error(error.message)
     },
   })

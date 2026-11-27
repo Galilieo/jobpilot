@@ -57,7 +57,12 @@ export function NewApplicationModal({
       await refresh()
       void message.success('已记录投递')
     },
-    onError: (error) => void message.error(error.message),
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 410) {
+        request.current = { key: newIdempotencyKey(), payload: '' }
+      }
+      void message.error(error.message)
+    },
   })
 
   const loading = runs.isPending || resumes.some((resume) => resume.isPending)

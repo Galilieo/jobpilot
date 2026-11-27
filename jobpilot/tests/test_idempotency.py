@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from jobpilot.api import jobs
 from jobpilot.api.jobs import JobIn
@@ -211,15 +211,20 @@ async def test_losing_job_insert_saves_200_for_its_own_run(
     job_id = winner.json()["job_id"]
     assert (await async_client.delete(f"/api/jobs/{job_id}")).status_code == 204
     model_outputs.append(json.dumps(OUTPUT))
-    reimported = await async_client.post(
+    retired = await async_client.post(
         "/api/jobs", json=body, headers=_headers("paused")
+    )
+    assert retired.status_code == 410
+    assert len(model_outputs) == 1
+    reimported = await async_client.post(
+        "/api/jobs", json=body, headers=_headers("fresh")
     )
     assert reimported.status_code == 201
     assert reimported.json()["job_id"] != job_id
 
 
-async def test_delete_job_removes_snapshot_from_ordinary_duplicate(
-    async_client, model_outputs
+async def test_delete_job_retires_original_and_ordinary_duplicate(
+    async_client, model_outputs, session_factory
 ):
     await sign_in(async_client, "key-job-delete@example.invalid")
     model_outputs.extend([json.dumps(OUTPUT)] * 2)
@@ -231,11 +236,49 @@ async def test_delete_job_removes_snapshot_from_ordinary_duplicate(
     assert created.status_code == 201 and duplicate.status_code == 200
     job_id = duplicate.json()["job_id"]
     assert (await async_client.delete(f"/api/jobs/{job_id}")).status_code == 204
+    for key in ("first", "reuse"):
+        retired = await async_client.post("/api/jobs", json=body, headers=_headers(key))
+        assert retired.status_code == 410
+        assert retired.json()["detail"] == "这条记录已经删除，如需重新记录请重新提交"
+    assert len(model_outputs) == 1
+    async with session_factory() as db:
+        keys = list(await db.scalars(select(IdempotencyKey)))
+        assert len(keys) == 2
+        assert all(
+            key.status == "retired" and key.response_body is None for key in keys
+        )
+        assert all(key.response_status is None for key in keys)
+    changed = await async_client.post(
+        "/api/jobs", json={"raw_text": "其他岗位"}, headers=_headers("first")
+    )
+    assert changed.status_code == 422
     reimported = await async_client.post(
-        "/api/jobs", json=body, headers=_headers("reuse")
+        "/api/jobs", json=body, headers=_headers("fresh")
     )
     assert reimported.status_code == 201
     assert reimported.json()["job_id"] != job_id
+
+
+async def test_claim_key_removed_between_insert_and_select_returns_conflict(
+    async_client, session_factory, monkeypatch
+):
+    await sign_in(async_client, "lost-idempotency-key@example.invalid")
+    user_id = UUID((await async_client.get("/api/me")).json()["user_id"])
+    scope = KeyScope(user_id, Operation.PARSE_JD, "removed")
+    request_hash = "a" * 64
+    async with session_factory.begin() as db:
+        await claim(db, scope, request_hash)
+    async with session_factory.begin() as db:
+        original = db.scalars
+
+        async def remove_key_before_read(*args, **kwargs):
+            async with session_factory.begin() as other:
+                await other.execute(delete(IdempotencyKey).filter_by(**scope.columns()))
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(db, "scalars", remove_key_before_read)
+        async with asyncio.timeout(3):
+            assert await claim(db, scope, request_hash) == "missing"
 
 
 async def test_match_replays_report_and_checks_job_path(

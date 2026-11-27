@@ -5,11 +5,12 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Update, delete, select, update
+from sqlalchemy import Update, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.unitofwork import UOWTransaction
+from sqlalchemy.sql.elements import ColumnElement
 
 from jobpilot.db.models import AiRun, IdempotencyKey, ResumeDocument, RunStatus
 from jobpilot.db.runs import set_run_status
@@ -26,6 +27,8 @@ class Operation(StrEnum):
 class ClaimConflict(StrEnum):
     PROCESSING = "processing"
     HASH_MISMATCH = "hash_mismatch"
+    MISSING = "missing"
+    RETIRED = "retired"
 
 
 @dataclass(frozen=True)
@@ -134,11 +137,15 @@ async def claim(
         await db.scalars(
             select(IdempotencyKey).filter_by(**scope.columns()).with_for_update()
         )
-    ).one()
+    ).one_or_none()
+    if existing is None:
+        return ClaimConflict.MISSING
     if existing.request_hash != request_hash:
         return ClaimConflict.HASH_MISMATCH
     if existing.status == "processing":
         return ClaimConflict.PROCESSING
+    if existing.status == "retired":
+        return ClaimConflict.RETIRED
     if existing.status == "succeeded":
         assert existing.response_status is not None
         assert existing.response_body is not None
@@ -159,15 +166,42 @@ async def fail_interrupted_keys(db: AsyncSession) -> None:
     )
 
 
-async def delete_result_snapshots(
+async def retire_result_snapshots(
     db: AsyncSession, user_id: UUID, operation: Operation, result_id: UUID
 ) -> None:
-    """删除已被移除的业务结果所对应的所有成功快照。"""
+    """删除响应，保留已移除业务结果的请求指纹。"""
+    await _retire(
+        db,
+        user_id,
+        (IdempotencyKey.operation == operation)
+        & (IdempotencyKey.result_id == result_id),
+    )
+
+
+async def retire_job_snapshots(db: AsyncSession, user_id: UUID, job_id: UUID) -> None:
+    runs = select(AiRun.run_id).where(
+        AiRun.user_id == user_id, AiRun.user_job_id == job_id
+    )
+    await _retire(
+        db,
+        user_id,
+        or_(
+            (IdempotencyKey.operation == Operation.PARSE_JD)
+            & (IdempotencyKey.result_id == job_id),
+            IdempotencyKey.run_id.in_(runs),
+        ),
+    )
+
+
+async def _retire(
+    db: AsyncSession, user_id: UUID, related: ColumnElement[bool]
+) -> None:
     await db.execute(
-        delete(IdempotencyKey).where(
+        update(IdempotencyKey)
+        .where(
             IdempotencyKey.user_id == user_id,
-            IdempotencyKey.operation == operation,
-            IdempotencyKey.result_id == result_id,
+            related,
             IdempotencyKey.status == "succeeded",
         )
+        .values(status="retired", response_status=None, response_body=None, run_id=None)
     )

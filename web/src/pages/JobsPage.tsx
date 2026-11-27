@@ -6,7 +6,7 @@ import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
 import type { JobStage } from '../api/types'
-import { newIdempotencyKey } from '../api/http'
+import { ApiError, newIdempotencyKey } from '../api/http'
 import { EmptyHint } from '../components/EmptyHint'
 import { MetaList } from '../components/MetaList'
 import { PageHeader } from '../components/PageHeader'
@@ -169,6 +169,7 @@ function AddJobModal({ open, onClose }: { open: boolean; onClose: () => void }):
       void navigate(`/jobs/${job.job_id}`)
     },
     onError: (error) => {
+      if (error instanceof ApiError && error.status === 410) key.current = newIdempotencyKey()
       void message.error(error.message) // 保留已输入的内容
     },
   })

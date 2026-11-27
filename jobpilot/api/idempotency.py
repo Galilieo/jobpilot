@@ -85,6 +85,14 @@ async def idempotent_request(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="此请求仍在处理中"
         )
+    if outcome == ClaimConflict.MISSING:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "这次提交的记录已变化，请重新提交"
+        )
+    if outcome == ClaimConflict.RETIRED:
+        raise HTTPException(
+            status.HTTP_410_GONE, "这条记录已经删除，如需重新记录请重新提交"
+        )
     if isinstance(outcome, StoredResponse):
         raise IdempotentReplay(outcome)
 

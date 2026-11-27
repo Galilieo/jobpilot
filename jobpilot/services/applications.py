@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db import applications as records
 from jobpilot.db.application_schema import CHANNEL_LENGTH, ApplicationStage
-from jobpilot.db.idempotency import Operation, delete_result_snapshots
+from jobpilot.db.idempotency import Operation, retire_result_snapshots
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
     Application,
@@ -308,7 +308,7 @@ async def delete_application(
     row = await require_application(
         user_id, session, application_id, revision=expected_revision
     )
-    await delete_result_snapshots(
+    await retire_result_snapshots(
         session, user_id, Operation.RECORD_APPLICATION, application_id
     )
     await session.delete(row)

@@ -109,6 +109,7 @@ export function ResumePanel({
       ])
     },
     onError: (error) => {
+      if (error instanceof ApiError && error.status === 410) key.current = newIdempotencyKey()
       const detail = error instanceof ApiError ? error.detail : null
       if (detail && typeof detail === 'object' && 'experiences' in detail) {
         setUnsectioned(detail.experiences as string[]) // 让用户指定栏目后重试
