@@ -2,6 +2,7 @@
 import type { ReactElement } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 import { AppShell } from './layouts/AppShell'
+import { ApplicationsPage } from './pages/ApplicationsPage'
 import { ConversationPage } from './pages/ConversationPage'
 import { JobDetailPage } from './pages/job/JobDetailPage'
 import { JobsPage } from './pages/JobsPage'
@@ -21,6 +22,7 @@ export default function App(): ReactElement {
         <Route path="conversations/:conversationId" element={<ConversationPage />} />
         <Route path="jobs" element={<JobsPage />} />
         <Route path="jobs/:jobId" element={<JobDetailPage />} />
+        <Route path="applications" element={<ApplicationsPage />} />
         <Route path="me" element={<ProfilePage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="*" element={<NotFoundPage />} />

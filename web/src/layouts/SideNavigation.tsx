@@ -3,6 +3,7 @@ import {
   AppstoreOutlined,
   LogoutOutlined,
   PlusOutlined,
+  SendOutlined,
   SettingOutlined,
   SolutionOutlined,
   UpOutlined,
@@ -24,6 +25,7 @@ interface SideNavigationProps {
 const navigationItems = [
   { key: '/workspace', icon: <AppstoreOutlined />, label: '工作台' },
   { key: '/jobs', icon: <SolutionOutlined />, label: '岗位库' },
+  { key: '/applications', icon: <SendOutlined />, label: '投递' },
   { key: '/me', icon: <UserOutlined />, label: '我的' },
 ] satisfies MenuProps['items']
 

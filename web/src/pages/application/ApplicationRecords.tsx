@@ -76,13 +76,17 @@ export function ApplicationRow({
   record,
   refresh,
   showJobInfo,
+  defaultHistoryOpen = false,
+  onDeleted,
 }: {
   record: ApplicationRecord
   refresh: () => Promise<void>
   showJobInfo?: boolean
+  defaultHistoryOpen?: boolean
+  onDeleted?: () => void
 }): ReactElement {
   const { modal, message } = App.useApp()
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
   const [editing, setEditing] = useState<ApplicationRecord | null>(null)
   const [panel, setPanel] = useState<'snapshot' | 'diff' | null>(null)
 
@@ -96,6 +100,7 @@ export function ApplicationRow({
       async onOk() {
         try {
           await applications.remove(record.application_id, record.revision)
+          onDeleted?.()
           await refresh()
         } catch (error) {
           if (error instanceof ApiError && error.status === 409) {
@@ -156,6 +161,7 @@ export function ApplicationRow({
       </Space>
       <details
         className="application-history"
+        open={historyOpen}
         onToggle={(event) => setHistoryOpen(event.currentTarget.open)}
       >
         <summary>阶段记录</summary>

@@ -633,6 +633,10 @@ export interface ApplicationRecord {
   updated_at: string
 }
 
+export interface ApplicationListItem extends ApplicationRecord {
+  stage_changed_at: string
+}
+
 export interface ApplicationDetail extends ApplicationRecord {
   snapshot_json: TailoredResumeData['content'] | null
   stage_events: {

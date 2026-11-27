@@ -7,17 +7,12 @@ import { ApiError, newIdempotencyKey } from '../../api/http'
 import type { ApplicationRecord, ApplicationStage, VersionSummary } from '../../api/types'
 import { APPLICATION_STAGE } from '../../labels'
 import { tailorResumeQuery, tailorRunsQuery } from '../../queryKeys'
+import { todayLocalDate } from './applicationStatus'
 
 const STAGES = (Object.keys(APPLICATION_STAGE) as ApplicationStage[]).map((value) => ({
   value,
   label: APPLICATION_STAGE[value],
 }))
-
-function today(): string {
-  const current = new Date()
-  const local = new Date(current.getTime() - current.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 10)
-}
 
 type SubmissionFields = {
   applied_at: string
@@ -96,7 +91,7 @@ export function NewApplicationModal({
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ applied_at: today(), resume_version_id: currentVersion }}
+          initialValues={{ applied_at: todayLocalDate(), resume_version_id: currentVersion }}
           onFinish={(values) => create.mutate(values)}
         >
           <Form.Item name="applied_at" label="投递日期" rules={[{ required: true }]}>
@@ -168,7 +163,7 @@ export function EditApplicationModal({
           applied_at: record.applied_at,
           channel: record.channel,
           stage: record.stage,
-          occurred_at: today(),
+          occurred_at: todayLocalDate(),
         }}
         onFinish={(values) => save.mutate(values)}
       >

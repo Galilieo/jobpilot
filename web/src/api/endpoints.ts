@@ -8,6 +8,7 @@ import type {
   ApplicationDetail,
   ApplicationDiff,
   ApplicationInput,
+  ApplicationListItem,
   ApplicationRecord,
   CompactResult,
   ContextUsage,
@@ -262,7 +263,7 @@ export const memories = {
 export const applications = {
   list: (jobId?: string, signal?: AbortSignal) => {
     const filter = jobId ? `?job_id=${encodeURIComponent(jobId)}` : ''
-    return request<ApplicationRecord[]>(`/api/applications${filter}`, { signal })
+    return request<ApplicationListItem[]>(`/api/applications${filter}`, { signal })
   },
   detail: (id: string, signal?: AbortSignal) =>
     request<ApplicationDetail>(`/api/applications/${id}`, { signal }),
