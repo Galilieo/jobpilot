@@ -62,6 +62,7 @@ class CriteriaRules:
     onsite_cues: tuple[str, ...]
     months_cues: tuple[str, ...]
     education_cues: tuple[str, ...]
+    education_review_cues: tuple[str, ...]
     chinese_numbers: dict[str, int]
     filler_clauses: frozenset[str]
     education_modifiers: tuple[str, ...]
@@ -100,6 +101,7 @@ def load_criteria_rules(path: Path) -> CriteriaRules:
         onsite_cues=tuple(data.get("onsite_cues") or ()),
         months_cues=tuple(data.get("months_cues") or ()),
         education_cues=tuple(data.get("education_cues") or ()),
+        education_review_cues=tuple(data.get("education_review_cues") or ()),
         chinese_numbers={
             str(k): int(v) for k, v in (data.get("chinese_numbers") or {}).items()
         },
@@ -475,6 +477,13 @@ def parse_requirement(
 ) -> ParsedRequirement:
     """把一条 JD 要求解析成可由程序比对的子句；不确定时标 needs_review。"""
     rules = default_criteria_rules()
+    qualifiers = [cue for cue in rules.education_review_cues if cue in req.text]
+    if qualifiers:
+        return ParsedRequirement(
+            clauses=(),
+            needs_review=True,
+            review_note=f"教育资料缺少{'、'.join(qualifiers)}对应的字段，需进一步核对",
+        )
     if not _has_criteria_cue(req.text, rules):
         return ParsedRequirement(clauses=())
 

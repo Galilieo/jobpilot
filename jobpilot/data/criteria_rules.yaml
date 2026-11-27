@@ -57,12 +57,11 @@ chinese_numbers:
 
 # 只包含这些补充说明词的剩余小句，不视为混入技术/经历的复合要求。
 filler_clauses:
-  - 统招
-  - 全日制
   - 可投
   - 即可
   - 均可
 
 # 这些词只组成条件表达，专业、届别、提前到岗等仍需模型核对。
 education_modifiers: [学历]
+education_review_cues: [全日制, 统招]
 schedule_modifiers: [可以, 可, 需, 须, 要求, 实习]

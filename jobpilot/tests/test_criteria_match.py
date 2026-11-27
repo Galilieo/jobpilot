@@ -126,6 +126,18 @@ def test_bachelor_required_master_preferred() -> None:
     assert "低于岗位要求" in decision_a.reason
 
 
+@pytest.mark.parametrize(
+    "condition", ["全日制本科及以上", "本科及以上，统招", "本科及以上，且全日制"]
+)
+def test_education_delivery_mode_needs_review_even_with_sufficient_degree(
+    condition: str,
+) -> None:
+    req = Requirement(type=RequirementType.HARD, text=condition)
+    bachelor = _edu("示例大学", DegreeLevel.BACHELOR, EducationStatus.COMPLETED)
+    decision, note = evaluate_requirement(req, [], [bachelor])
+    assert decision is None and note is not None
+
+
 def test_multiple_education_records_check_each_record_independently() -> None:
     """不能拼凑「本科已取得 + 硕士」或「本科在读 + 已取得硕士」满足「硕士在读」。"""
     req = Requirement(type=RequirementType.HARD, text="硕士在读可投")
