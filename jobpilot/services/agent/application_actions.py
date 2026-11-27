@@ -107,6 +107,8 @@ async def undo_application(
         await delete_application(
             action.user_id, session, previous.application_id, previous.applied_revision
         )
-    except ApplicationError:
+    except ApplicationError as error:
+        if error.status == 403:
+            raise ToolError(str(error), 403) from None
         raise ToolError("投递记录已变更，请到岗位详情处理", 409) from None
     return {"application_id": str(previous.application_id), "deleted": True}

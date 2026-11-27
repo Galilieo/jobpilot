@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db import applications as records
+from jobpilot.db.accounts import lock_active_account
 from jobpilot.db.application_schema import CHANNEL_LENGTH, ApplicationStage
 from jobpilot.db.idempotency import Operation, retire_result_snapshots
 from jobpilot.db.jobs import get_user_job
@@ -286,6 +287,7 @@ async def update_application(
     application_id: UUID,
     changes: ApplicationChanges,
 ) -> Application:
+    await _require_active_writer(session, user_id)
     row = await require_application(
         user_id, session, application_id, revision=changes.expected_revision
     )
@@ -318,6 +320,7 @@ async def update_application(
 async def delete_application(
     user_id: UUID, session: AsyncSession, application_id: UUID, expected_revision: int
 ) -> None:
+    await _require_active_writer(session, user_id)
     row = await require_application(
         user_id, session, application_id, revision=expected_revision
     )
@@ -325,3 +328,8 @@ async def delete_application(
         session, user_id, Operation.RECORD_APPLICATION, application_id
     )
     await session.delete(row)
+
+
+async def _require_active_writer(session: AsyncSession, user_id: UUID) -> None:
+    if not await lock_active_account(session, user_id):
+        raise ApplicationError(403, "账号当前无法修改投递记录")

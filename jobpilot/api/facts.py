@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.api.deps import CurrentUser, DbSession
@@ -503,6 +504,13 @@ async def commit(body: CommitIn, user: CurrentUser, db: DbSession) -> PublishOut
     except DraftRevisionConflictError as error:
         raise _revision_conflict(error) from None
     except VersionConflictError:
+        if body.base_fact_set_id is not None and not await db.scalar(
+            select(FactSet.fact_set_id).where(
+                FactSet.user_id == user.user_id,
+                FactSet.fact_set_id == body.base_fact_set_id,
+            )
+        ):
+            raise HTTPException(404, "事实库版本不存在") from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="事实库已在别处更新，请刷新后再发布",

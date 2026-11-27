@@ -396,6 +396,15 @@ async def _locked_resume(
     """保存、重置这类编辑动作的共同起点：锁住简历行，核对请求依据的还是当前版本。"""
     resume = await _resume_of(db, user_id, run_id, for_update=True)
     if resume.current_version_id != base_version_id:
+        owned = await db.scalar(
+            select(ResumeVersion.resume_version_id).where(
+                ResumeVersion.user_id == user_id,
+                ResumeVersion.resume_id == resume.resume_id,
+                ResumeVersion.resume_version_id == base_version_id,
+            )
+        )
+        if owned is None:
+            raise ResumeNotFoundError(run_id)
         raise VersionConflictError(resume.current_version_id)
     return resume
 

@@ -1,12 +1,14 @@
 """用户隔离测试框架：用户 A 不能读、改、删用户 B 的资源，且每个接口都必须归类。
 
-新增接口时在下面三处之一登记，否则 test_every_api_route_is_classified 失败：
+新增接口必须登记到下面三处之一，并补对应的 A/B 用例。
+test_every_api_route_is_classified 会报告漏登的路由。
 - PUBLIC_ROUTES：不需要登录（注册、登录、健康检查）。
 - SELF_ROUTES：只作用于调用者自己，路径里没有资源 ID（登出、当前用户）。
 - OWNED_RESOURCES：属于某个用户的资源。登记创建方式、B 读取自己资源的接口，
   以及 A 会尝试的每个请求；A 的每次尝试都应返回 404，且 B 的资源保持不变。
 """
 
+import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -18,6 +20,7 @@ import httpx
 import pytest
 
 from jobpilot.api.deps import get_session_factory
+from jobpilot.db.account_export import export_business_records
 from jobpilot.db.models import FactSet, ResumeDocument
 from jobpilot.main import app
 from jobpilot.tests.test_auth import login, register
@@ -477,9 +480,8 @@ def _api_routes() -> set[Route]:
 
 
 async def _sign_in(client: httpx.AsyncClient, email: str) -> None:
-    credentials = {"email": email, "password": "isolation-test-1"}
-    assert (await client.post("/api/auth/register", json=credentials)).is_success
-    assert (await client.post("/api/auth/login", json=credentials)).is_success
+    assert (await register(client, email)).is_success
+    assert (await login(client, email)).is_success
 
 
 @pytest.fixture
@@ -625,3 +627,435 @@ async def test_application_cannot_reference_another_users_resume_version(
     )
     assert response.status_code == 404, response.text
     assert (await user_a.get("/api/applications")).json() == []
+
+
+async def _owner_id(client: httpx.AsyncClient) -> UUID:
+    response = await client.get("/api/me")
+    assert response.status_code == 200, response.text
+    return UUID(response.json()["user_id"])
+
+
+async def _database_records(*clients: httpx.AsyncClient) -> list[dict]:
+    factory = app.dependency_overrides[get_session_factory]()
+    owners = [await _owner_id(client) for client in clients]
+    async with factory() as db:
+        return [await export_business_records(db, owner) for owner in owners]
+
+
+async def _add_named_fact(client: httpx.AsyncClient, text: str) -> dict:
+    response = await client.post(
+        "/api/facts",
+        json={
+            "experience": "隔离测试项目",
+            "kind": "action",
+            "responsibility": "own",
+            "text": text,
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def _publish(client: httpx.AsyncClient, base: str | None, revision: int) -> str:
+    response = await client.post(
+        "/api/facts/commit",
+        json={"base_fact_set_id": base, "expected_revision": revision},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["fact_set_id"]
+
+
+async def _personal_lists(client: httpx.AsyncClient) -> dict:
+    paths = ("conversations", "jobs", "facts", "tailored-resumes", "overview")
+    responses = {name: await client.get(f"/api/{name}") for name in paths}
+    assert all(response.status_code == 200 for response in responses.values())
+    return {name: response.json() for name, response in responses.items()}
+
+
+async def _seed_list_contents(client: httpx.AsyncClient, label: str) -> dict:
+    from jobpilot.tests.test_applications_api import save_application
+
+    job_id, version_id = await _application_source(client)
+    conversation = await client.post(
+        "/api/conversations", json={"current_job_id": job_id, "title": label}
+    )
+    assert conversation.status_code == 201
+    existing = (await client.get("/api/facts")).json()["fact_set"]["fact_set_id"]
+    saved = await _add_named_fact(client, f"{label}已发布")
+    await _publish(client, existing, saved["revision"])
+    draft = await _add_named_fact(client, f"{label}草稿")
+    await save_application(client, job_id, version_id)
+    return {
+        "job": job_id,
+        "conversation": conversation.json(),
+        "fact": saved,
+        "draft": draft,
+    }
+
+
+async def test_lists_facts_and_overview_stay_scoped_with_two_populated_accounts(
+    user_a: httpx.AsyncClient, user_b: httpx.AsyncClient
+) -> None:
+    a = await _seed_list_contents(user_a, "A 的专用记录")
+    before_b = await _personal_lists(user_a)
+    b = await _seed_list_contents(user_b, "B 的专用记录")
+    assert await _personal_lists(user_a) == before_b
+
+    for records, own, other in (
+        (before_b, a, b),
+        (await _personal_lists(user_b), b, a),
+    ):
+        assert records["conversations"] == [own["conversation"]]
+        assert [job["job_id"] for job in records["jobs"]] == [own["job"]]
+        assert [row["job_id"] for row in records["tailored-resumes"]] == [own["job"]]
+        assert [row["text"] for row in records["facts"]["facts"]] == [
+            own["fact"]["text"]
+        ]
+        assert [row["text"] for row in records["facts"]["draft"]["items"]] == [
+            own["draft"]["text"]
+        ]
+        assert records["overview"]["facts"]["published_count"] == 1
+        assert records["overview"]["grounding"]["resume_count"] == 1
+        cards = [
+            card for column in records["overview"]["board"].values() for card in column
+        ]
+        assert [(card["job_id"], card["stage"]) for card in cards] == [
+            (own["job"], "applied")
+        ]
+        assert other["job"] not in str(records)
+
+
+async def test_application_list_stays_private_after_job_deletion(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    own_id = await _create_application(user_a, model_outputs)
+    other_id = await _create_application(user_b, model_outputs)
+    [before] = (await user_a.get("/api/applications")).json()
+    [other] = (await user_b.get("/api/applications")).json()
+    assert before["application_id"] == own_id and other["application_id"] == other_id
+    assert (await user_b.delete(f"/api/jobs/{other['user_job_id']}")).status_code == 204
+    [deleted_job_record] = (await user_b.get("/api/applications")).json()
+    assert deleted_job_record["application_id"] == other_id
+    assert deleted_job_record["user_job_id"] is None
+    assert (await user_a.get("/api/applications")).json() == [before]
+
+
+async def test_application_combinations_cannot_write_either_owners_rows(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+) -> None:
+    a_job, a_version = await _application_source(user_a)
+    b_job, b_version = await _application_source(user_b)
+    before = await _database_records(user_a, user_b)
+    for job, version in ((a_job, b_version), (b_job, a_version)):
+        response = await user_a.post(
+            "/api/applications",
+            json={"job_id": job, "resume_version_id": version},
+            headers=new_idempotency_headers(),
+        )
+        assert response.status_code == 404, response.text
+    assert await _database_records(user_a, user_b) == before
+
+
+async def test_own_conversation_rejects_other_users_job(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    other_job = await _create_job(user_b, model_outputs)
+    conversation_id = await _create_conversation(user_a, model_outputs)
+    before = await _database_records(user_a, user_b)
+    path = f"/api/conversations/{conversation_id}"
+    response = await user_a.put(
+        path, json={"title": "不能留下这次修改", "current_job_id": other_job}
+    )
+    assert response.status_code == 404, response.text
+    assert (await user_a.get(path)).json()["current_job_id"] is None
+    assert await _database_records(user_a, user_b) == before
+
+
+async def test_real_card_ids_cannot_be_decided_or_undone_outside_owner_and_conversation(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    from jobpilot.api.deps import get_model_client
+    from jobpilot.tests.test_agent_api import batch, card_of, message_body, reply
+    from jobpilot.tests.test_call_accounting import fake_upstream
+
+    a_id = await _create_conversation(user_a, model_outputs)
+    a_other_id = await _create_conversation(user_a, model_outputs)
+    b_id = await _create_conversation(user_b, model_outputs)
+    b_job = await _create_job(user_b, model_outputs)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = json.loads(request.content)["messages"][-1]
+        if last["role"] == "tool":
+            return reply()
+        return batch(
+            (
+                "set_current_job",
+                {"job_id": b_job if last["content"] == "B 的卡" else None},
+            )
+        )
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        a = card_of(
+            await user_a.post(
+                f"/api/conversations/{a_id}/messages", json=message_body("A 的卡")
+            )
+        )
+        b = card_of(
+            await user_b.post(
+                f"/api/conversations/{b_id}/messages", json=message_body("B 的卡")
+            )
+        )
+        before = await _database_records(user_a, user_b)
+        for conversation_id, action_id in (
+            (a_id, b["action_id"]),
+            (a_other_id, a["action_id"]),
+        ):
+            attempt = await user_a.post(
+                f"/api/conversations/{conversation_id}/actions/{action_id}",
+                json={"decision": "confirm"},
+            )
+            assert attempt.status_code == 404, attempt.text
+        assert await _database_records(user_a, user_b) == before
+        assert (
+            await user_b.post(
+                f"/api/conversations/{b_id}/actions/{b['action_id']}",
+                json={"decision": "confirm"},
+            )
+        ).is_success
+
+    path = f"/api/actions/{b['action_id']}/undo"
+    before = await _database_records(user_a, user_b)
+    refused = await user_a.post(path)
+    assert refused.status_code == 404, refused.text
+    assert await _database_records(user_a, user_b) == before
+    assert (await user_b.post(path)).is_success
+
+
+async def test_fact_writes_do_not_change_the_other_draft_or_published_versions(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    await _create_fact(user_b, model_outputs)
+    other = await _add_named_fact(user_b, "B 未发布的草稿")
+    b_criterion = await user_b.put(
+        "/api/facts/criteria",
+        json={
+            "field": "onsite_days_per_week",
+            "int_value": 4,
+            "confirmed": True,
+            "expected_revision": other["revision"],
+        },
+    )
+    assert b_criterion.is_success, b_criterion.text
+    [before_b] = await _database_records(user_b)
+    b_base = (await user_b.get("/api/facts")).json()["fact_set"]["fact_set_id"]
+    own = await _add_named_fact(user_a, "A 的新事实")
+    education = await user_a.post(
+        "/api/facts/education",
+        json={
+            "school": "示例大学",
+            "degree": "bachelor",
+            "status": "completed",
+            "expected_revision": own["revision"],
+        },
+    )
+    assert education.is_success, education.text
+    criterion = await user_a.put(
+        "/api/facts/criteria",
+        json={
+            "field": "onsite_days_per_week",
+            "int_value": 3,
+            "confirmed": True,
+            "expected_revision": education.json()["revision"],
+        },
+    )
+    assert criterion.is_success, criterion.text
+    batch = await user_a.post(
+        "/api/facts/batch",
+        json={
+            "action": "confirm_clean",
+            "expected_revision": criterion.json()["revision"],
+        },
+    )
+    assert batch.is_success, batch.text
+    revision = batch.json()["revision"]
+    before = await _database_records(user_a, user_b)
+    denied = await user_a.post(
+        "/api/facts/commit",
+        json={"base_fact_set_id": b_base, "expected_revision": revision},
+    )
+    assert denied.status_code == 404, denied.text
+    assert await _database_records(user_a, user_b) == before
+    published = await _publish(user_a, None, revision)
+    assert published != b_base
+    assert await _database_records(user_b) == [before_b]
+
+
+@pytest.mark.parametrize(
+    ("path", "id_field"), [("/api/resumes", "doc_id"), ("/api/jobs", "job_id")]
+)
+async def test_same_idempotency_key_and_text_are_independent_for_each_owner(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+    path: str,
+    id_field: str,
+) -> None:
+    body = {"raw_text": "两位用户提交的同一份合成正文"}
+    headers = new_idempotency_headers()
+    a = await user_a.post(path, json=body, headers=headers)
+    b = await user_b.post(path, json=body, headers=headers)
+    assert a.status_code == b.status_code == 201, (a.text, b.text)
+    assert a.json()[id_field] != b.json()[id_field]
+    for caller, own, other in ((user_a, a, b), (user_b, b, a)):
+        replay = await caller.post(path, json=body, headers=headers)
+        assert replay.status_code == 201 and replay.json() == own.json()
+        assert (await caller.get(f"{path}/{other.json()[id_field]}")).status_code == 404
+
+
+async def test_tailor_job_rejects_another_owners_base_document(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    job_id = await _create_job(user_a, model_outputs)
+    document_id = await _create_resume(user_b, model_outputs)
+    edited = await user_a.put(
+        f"/api/jobs/{job_id}",
+        json={"requirements": [{"type": "hard", "text": "熟悉 Python"}]},
+    )
+    assert edited.is_success
+    before = await _database_records(user_a, user_b)
+    response = await user_a.post(
+        f"/api/jobs/{job_id}/tailor",
+        json={"base_doc_id": document_id},
+        headers=new_idempotency_headers(),
+    )
+    assert response.status_code == 404, response.text
+    assert await _database_records(user_a, user_b) == before
+
+
+async def test_resume_writes_reject_versions_and_bullets_from_other_owners(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    session_factory,
+) -> None:
+    from jobpilot.tests.test_agent_resume_actions import _resume
+
+    own = await _resume(user_a, session_factory, "a-resume@isolation.invalid")
+    other = await _resume(user_b, session_factory, "b-resume@isolation.invalid")
+    before = await _database_records(user_a, user_b)
+    borrower = {"base_version_id": other.current["version_id"]}
+    responses = [
+        await user_a.put(
+            own.path, json={**borrower, "content": own.current["content"]}
+        ),
+        await user_a.post(f"{own.path}/reset", json=borrower),
+        await user_a.post(
+            f"{own.path}/bullets/{other.bullet_id}/use-facts",
+            json={"base_version_id": own.current["version_id"]},
+        ),
+    ]
+    assert [response.status_code for response in responses] == [404, 404, 404]
+    assert (await user_b.get(other.path)).json() == other.current
+    assert await _database_records(user_a, user_b) == before
+
+
+async def test_same_memory_key_has_independent_values_and_revisions(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+) -> None:
+    key = "/api/memories/cities"
+    for client, city in ((user_a, "上海"), (user_b, "北京")):
+        saved = await client.put(key, json={"value": [city], "expected_revision": 0})
+        assert saved.is_success and saved.json()["revision"] == 1, saved.text
+    b_list = (await user_b.get("/api/memories")).json()
+    assert [row["value"] for row in b_list if row["key"] == "cities"] == [["北京"]]
+    a_list = (await user_a.get("/api/memories")).json()
+    assert [row["value"] for row in a_list if row["key"] == "cities"] == [["上海"]]
+    updated = await user_a.put(key, json={"value": ["杭州"], "expected_revision": 1})
+    assert updated.is_success and updated.json()["revision"] == 2
+    deleted = await user_a.request("DELETE", key, json={"expected_revision": 2})
+    assert deleted.is_success and deleted.json()["revision"] == 3
+    assert (await user_b.get("/api/memories")).json() == b_list
+
+
+async def test_account_archive_delete_restore_and_logout_do_not_affect_other_user(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    a_job = await _create_job(user_a, model_outputs)
+    b_job = await _create_job(user_b, model_outputs)
+    b_identity = (await user_b.get("/api/me")).json()
+    b_archive = (await user_b.get("/api/account/export")).json()
+    assert [row["user_job_id"] for row in b_archive["user_jobs"]] == [b_job]
+    a_archive = (
+        await user_a.get(f"/api/account/export?user_id={b_identity['user_id']}")
+    ).json()
+    assert [row["user_job_id"] for row in a_archive["user_jobs"]] == [a_job]
+    assert b_identity["user_id"] not in str(a_archive)
+    assert (await user_a.delete("/api/account")).status_code == 204
+    assert (await user_a.get("/api/me")).status_code == 401
+    assert (await user_b.get("/api/me")).json() == b_identity
+    assert (await login(user_a, "a@isolation.invalid")).status_code == 204
+    assert (await user_a.post("/api/account/restore")).status_code == 204
+    assert (await user_a.post("/api/auth/logout")).status_code == 204
+    assert (await user_b.get("/api/me")).json() == b_identity
+    assert (await user_b.get("/api/account/export")).json() == b_archive
+
+
+@pytest.mark.parametrize(
+    ("method", "changes"), [("PUT", {"stage": "offer"}), ("DELETE", {})]
+)
+async def test_in_flight_application_write_stops_after_account_deletion(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    changes: dict,
+) -> None:
+    from jobpilot.api.deps import AuthenticatedSession, current_user
+
+    application = await _create_application(user_a, model_outputs)
+    await _create_application(user_b, model_outputs)
+    before = await _database_records(user_a, user_b)
+    passed_auth, release = asyncio.Event(), asyncio.Event()
+
+    async def pause_after_auth(login: AuthenticatedSession):
+        user = await current_user(login)
+        if not passed_auth.is_set():
+            passed_auth.set()
+            await release.wait()
+        return user
+
+    monkeypatch.setitem(app.dependency_overrides, current_user, pause_after_auth)
+    request = asyncio.create_task(
+        user_a.request(
+            method,
+            f"/api/applications/{application}",
+            json={"expected_revision": 1, **changes},
+        )
+    )
+    async with asyncio.timeout(5):
+        try:
+            await passed_auth.wait()
+            assert (await user_a.delete("/api/account")).status_code == 204
+        finally:
+            release.set()
+            response = await request
+    assert response.status_code == 403, response.text
+    monkeypatch.delitem(app.dependency_overrides, current_user)
+    assert (await login(user_a, "a@isolation.invalid")).status_code == 204
+    assert (await user_a.post("/api/account/restore")).status_code == 204
+    assert await _database_records(user_a, user_b) == before
