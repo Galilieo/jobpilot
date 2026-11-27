@@ -1108,6 +1108,45 @@ textarea {
   font-size: 12px;
   line-height: 20px;
 }
+.tool-step.has-details {
+  display: block;
+}
+.tool-step-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.tool-step-toggle:hover .tool-step-name,
+.tool-step-toggle:focus-visible .tool-step-name {
+  color: var(--ant-color-primary);
+}
+.tool-step-toggle[aria-expanded='true'] .tool-steps-chevron {
+  transform: rotate(90deg);
+}
+.tool-step.has-details > .tool-step-tags {
+  margin-left: 8px;
+}
+.tool-step-details {
+  display: grid;
+  gap: 3px;
+  margin: 4px 0 2px 22px;
+  padding: 0;
+  list-style: none;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+}
+.tool-step-details a {
+  color: var(--ant-color-text-secondary);
+}
+.tool-step-details a:hover {
+  color: var(--ant-color-primary);
+}
 a.tool-step-tag:hover {
   border-color: var(--ant-color-primary-border);
   color: var(--ant-color-primary);

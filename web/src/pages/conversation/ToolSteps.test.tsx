@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { renderWithProviders } from '../../test/render'
-import { describeSteps, groupSteps } from './stepGroups'
+import { describeSteps, detailLines, groupSteps } from './stepGroups'
 import { ToolSteps, type StepView } from './ToolSteps'
 
 const READS: StepView[] = [
@@ -27,6 +27,7 @@ describe('工具步骤的整理', () => {
         status: 'success',
         count: 1,
         jobIds: [],
+        calls: [{ jobId: null, detail: null }],
         summary: '共 5 项',
         durationMs: 400,
       },
@@ -36,6 +37,10 @@ describe('工具步骤的整理', () => {
         status: 'success',
         count: 2,
         jobIds: [],
+        calls: [
+          { jobId: null, detail: null },
+          { jobId: null, detail: null },
+        ],
         summary: '完成',
         durationMs: 600,
       },
@@ -45,6 +50,11 @@ describe('工具步骤的整理', () => {
         status: 'success',
         count: 3,
         jobIds: ['j1', 'j2'],
+        calls: [
+          { jobId: 'j1', detail: null },
+          { jobId: 'j2', detail: null },
+          { jobId: 'j1', detail: null },
+        ],
         summary: '完成',
         durationMs: 600,
       },
@@ -54,6 +64,7 @@ describe('工具步骤的整理', () => {
         status: 'error',
         count: 1,
         jobIds: [],
+        calls: [{ jobId: null, detail: null }],
         summary: '岗位不存在',
       },
     ])
@@ -122,5 +133,92 @@ describe('ToolSteps', () => {
     )
     expect(screen.getByText('正在匹配…')).toBeInTheDocument()
     expect(screen.getByText('第 2 步')).toBeInTheDocument()
+  })
+})
+
+const DETAILED: StepView[] = [
+  {
+    key: 'd0',
+    tool: 'list_jobs',
+    status: 'success',
+    result: {
+      total: 2,
+      detail: {
+        jobs: [
+          { job_id: 'j1', title: 'Java 后端', company: '港桥', location: '上海' },
+          { job_id: 'j2', title: 'AI 应用开发', company: '星桥', location: null },
+        ],
+      },
+    },
+  },
+  {
+    key: 'd1',
+    tool: 'read_facts',
+    status: 'success',
+    result: { detail: { version: 3, facts: 24, criteria: 2, education: 0 } },
+  },
+  {
+    key: 'd2',
+    tool: 'read_job',
+    status: 'success',
+    result: { job_id: 'j1', detail: { title: 'Java 后端', company: '港桥', location: '上海' } },
+  },
+  {
+    key: 'd3',
+    tool: 'read_job',
+    status: 'success',
+    result: { job_id: 'j1', detail: { title: 'Java 后端', company: '港桥', location: '上海' } },
+  },
+  {
+    key: 'd4',
+    tool: 'read_match_report',
+    status: 'success',
+    result: { detail: { items: 12, main_gaps: ['没有 Kafka 经历'] } },
+  },
+]
+
+describe('展开看每次调用的细节', () => {
+  it('岗位去重、事实库写版本和条数、报告写要求数和主要差距', () => {
+    const [jobs, facts, read, report] = groupSteps(DETAILED)
+    expect(detailLines(jobs)).toEqual([
+      { key: 'j1', text: 'Java 后端 · 港桥 · 上海', jobId: 'j1' },
+      { key: 'j2', text: 'AI 应用开发 · 星桥', jobId: 'j2' },
+    ])
+    expect(detailLines(facts)).toEqual([
+      { key: 'facts', text: '第 3 版 · 24 条事实 · 2 条求职条件' },
+    ])
+    expect(detailLines(read)).toEqual([{ key: 'j1', text: 'Java 后端 · 港桥 · 上海', jobId: 'j1' }])
+    expect(detailLines(report)).toEqual([
+      { key: 'items', text: '12 项要求逐条对照' },
+      { key: 'gap:0', text: '主要差距：没有 Kafka 经历' },
+    ])
+  })
+
+  it('没有细节的动作不能再展开；有细节的点开逐条列出，岗位可点', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <ToolSteps
+        steps={[
+          ...DETAILED,
+          { key: 'm', tool: 'match_job', status: 'success', result: { report_id: 'r1' } },
+        ]}
+        title={title}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /查看了岗位库/ }))
+
+    expect(screen.getByText('匹配岗位')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /匹配岗位/ })).not.toBeInTheDocument()
+    const facts = screen.getByRole('button', { name: /读取经历事实/ })
+    expect(screen.queryByText(/第 3 版/)).not.toBeInTheDocument()
+    await user.click(facts)
+    expect(facts).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('第 3 版 · 24 条事实 · 2 条求职条件')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /读取岗位库/ }))
+    expect(screen.getByRole('link', { name: 'AI 应用开发 · 星桥' })).toHaveAttribute(
+      'href',
+      '/jobs/j2',
+    )
   })
 })

@@ -1,4 +1,5 @@
-// 一轮的工具步骤：运行中写出正在做什么，完成后收成一句话概括，点开按动作列出、读过的岗位做成标签。
+// 一轮的工具步骤：运行中写出正在做什么，完成后收成一句话概括，点开按动作列出、读过的岗位做成标签；
+// 有细节的动作还能再点开，逐条看读了哪些岗位、事实库第几版多少条。
 // 参考 ChatGPT「思考了 N 秒」、Codex 正文间的灰色小字：默认收起，不逐条重复「完成」，也不摆时间轴。
 import {
   CheckCircleOutlined,
@@ -16,7 +17,9 @@ import { toolLabel } from '../../labels'
 import { formatTotalDuration, toolAction } from './naming'
 import {
   describeSteps,
+  detailLines,
   groupSteps,
+  type DetailLine,
   type JobTitle,
   type StepGroup,
   type StepView,
@@ -52,7 +55,20 @@ function JobTags({ jobIds, title }: { jobIds: string[]; title: JobTitle }): Reac
   )
 }
 
+function DetailList({ lines }: { lines: DetailLine[] }): ReactElement {
+  return (
+    <ul className="tool-step-details">
+      {lines.map((line) => (
+        <li key={line.key}>
+          {line.jobId ? <Link to={`/jobs/${line.jobId}`}>{line.text}</Link> : line.text}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function GroupRow({ group, title }: { group: StepGroup; title?: JobTitle }): ReactElement {
+  const [open, setOpen] = useState(false)
   if (group.status === 'error') {
     return (
       <li className="tool-step is-error">
@@ -63,12 +79,35 @@ function GroupRow({ group, title }: { group: StepGroup; title?: JobTitle }): Rea
       </li>
     )
   }
-  return (
-    <li className="tool-step">
+  const lines = detailLines(group)
+  const head = (
+    <>
       <span className="tool-step-icon">{TOOL_ICON[group.tool] ?? <ToolOutlined />}</span>
       <span className="tool-step-name">{toolLabel(group.tool)}</span>
       {group.summary !== '完成' && <span className="tool-step-meta">{group.summary}</span>}
-      {title && group.jobIds.length > 0 && <JobTags jobIds={group.jobIds} title={title} />}
+    </>
+  )
+  if (lines.length === 0) {
+    return (
+      <li className="tool-step">
+        {head}
+        {title && group.jobIds.length > 0 && <JobTags jobIds={group.jobIds} title={title} />}
+      </li>
+    )
+  }
+  return (
+    <li className="tool-step has-details">
+      <button
+        type="button"
+        className="tool-step-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {head}
+        <RightOutlined className="tool-steps-chevron" aria-hidden />
+      </button>
+      {!open && title && group.jobIds.length > 0 && <JobTags jobIds={group.jobIds} title={title} />}
+      {open && <DetailList lines={lines} />}
     </li>
   )
 }
@@ -106,7 +145,7 @@ export function ToolSteps({ steps, title }: { steps: StepView[]; title?: JobTitl
         {totalMs !== null && (
           <span className="tool-steps-meta tabular-num">· {formatTotalDuration(totalMs)}</span>
         )}
-        <RightOutlined className="tool-steps-chevron" />
+        <RightOutlined className="tool-steps-chevron" aria-hidden />
       </button>
       {open && (
         <ul className="tool-step-list">

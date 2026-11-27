@@ -1,4 +1,5 @@
-// 工具步骤的整理：每步的简短结果、按动作分组，以及收起时的一句话概括。纯函数，不渲染。
+// 工具步骤的整理：每步的简短结果、按动作分组、收起时的一句话概括，以及展开后每次调用的细节。
+// 细节来自后端步骤记录的 detail（岗位名、事实库版本和条数），纯函数，不渲染。
 import { STOP_REASON } from '../../labels'
 import { donePhrase, readObject } from './naming'
 
@@ -12,14 +13,28 @@ export interface StepView {
   durationMs?: number
 }
 
+type Detail = Record<string, unknown>
+
+export interface StepCall {
+  jobId: string | null
+  detail: Detail | null
+}
+
 export interface StepGroup {
   key: string
   tool: string
   status: StepView['status']
   count: number
   jobIds: string[]
+  calls: StepCall[]
   summary: string
   durationMs?: number
+}
+
+export interface DetailLine {
+  key: string
+  text: string
+  jobId?: string
 }
 
 /** 一步的简短结果：出错就说原因，其他只给计数或「完成」，不把原始 JSON 摆出来。 */
@@ -39,6 +54,14 @@ function jobIdOf(step: StepView): string | null {
   return typeof jobId === 'string' ? jobId : null
 }
 
+function callOf(step: StepView): StepCall {
+  const detail = step.result?.detail
+  return {
+    jobId: jobIdOf(step),
+    detail: detail && typeof detail === 'object' ? (detail as Detail) : null,
+  }
+}
+
 function newGroup(step: StepView): StepGroup {
   const jobId = jobIdOf(step)
   return {
@@ -47,6 +70,7 @@ function newGroup(step: StepView): StepGroup {
     status: step.status,
     count: 1,
     jobIds: jobId ? [jobId] : [],
+    calls: [callOf(step)],
     summary: stepSummary(step),
     ...(step.durationMs !== undefined && { durationMs: step.durationMs }),
   }
@@ -66,6 +90,7 @@ export function groupSteps(steps: StepView[]): StepGroup[] {
     }
     const jobId = jobIdOf(step)
     same.count += 1
+    same.calls.push(callOf(step))
     if (jobId && !same.jobIds.includes(jobId)) same.jobIds.push(jobId)
     const summary = stepSummary(step)
     if (summary !== '完成') same.summary = summary
@@ -103,4 +128,69 @@ export function describeSteps(groups: StepGroup[]): string {
   if (failed > 0) parts.push(`${failed} 步没成功`)
   // 汉字和数字之间留空格：「读了 3 个岗位」「你的经历和 2 个岗位」。
   return parts.join('，').replace(/([\u4e00-\u9fff])(\d)/gu, '$1 $2')
+}
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null
+}
+
+function count(value: unknown): number {
+  return typeof value === 'number' ? value : 0
+}
+
+function jobText(detail: Detail): string {
+  const parts = [text(detail.title), text(detail.company), text(detail.location)]
+  return parts.filter(Boolean).join(' · ') || '未命名岗位'
+}
+
+function jobLines(group: StepGroup): DetailLine[] {
+  const seen = new Set<string>()
+  const lines: DetailLine[] = []
+  const listed = group.calls.flatMap((call) =>
+    Array.isArray(call.detail?.jobs) ? (call.detail.jobs as Detail[]) : [],
+  )
+  const read = group.calls.flatMap((call) =>
+    call.detail ? [{ ...call.detail, job_id: call.jobId }] : [],
+  )
+  for (const job of group.tool === 'list_jobs' ? listed : read) {
+    const jobId = text(job.job_id)
+    if (jobId && seen.has(jobId)) continue
+    if (jobId) seen.add(jobId)
+    lines.push({ key: jobId ?? String(lines.length), text: jobText(job), ...(jobId && { jobId }) })
+  }
+  return lines
+}
+
+function factsLine(detail: Detail): string {
+  const parts = [`第 ${count(detail.version)} 版`, `${count(detail.facts)} 条事实`]
+  if (count(detail.criteria) > 0) parts.push(`${count(detail.criteria)} 条求职条件`)
+  if (count(detail.education) > 0) parts.push(`${count(detail.education)} 段教育`)
+  return parts.join(' · ')
+}
+
+function reportLines(detail: Detail): DetailLine[] {
+  const gaps = Array.isArray(detail.main_gaps) ? detail.main_gaps.filter((gap) => text(gap)) : []
+  return [
+    { key: 'items', text: `${count(detail.items)} 项要求逐条对照` },
+    ...gaps.map((gap, index) => ({ key: `gap:${index}`, text: `主要差距：${gap}` })),
+  ]
+}
+
+/** 展开一组后逐条列出：读过哪些岗位、事实库第几版多少条、报告的主要差距。没有细节的工具返回空。 */
+export function detailLines(group: StepGroup): DetailLine[] {
+  if (group.status !== 'success') return []
+  const last = group.calls.at(-1)?.detail
+  switch (group.tool) {
+    case 'list_jobs':
+    case 'read_job':
+      return jobLines(group)
+    case 'read_facts':
+      return last ? [{ key: 'facts', text: factsLine(last) }] : []
+    case 'read_match_report':
+      return last ? reportLines(last) : []
+    case 'read_resume':
+      return last ? [{ key: 'resume', text: `第 ${count(last.version)} 版` }] : []
+    default:
+      return []
+  }
 }
