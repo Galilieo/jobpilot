@@ -214,6 +214,18 @@ describe('ApplicationsPage 投递页', () => {
     renderPage()
     await user.click(await screen.findByRole('button', { name: '改阶段 ▾' }))
     await user.click(screen.getByRole('combobox', { name: '目标阶段' }))
+    // 五个阶段都列出，当前阶段标「当前」且不能选
+    const current = (await screen.findAllByText('已投递（当前）')).find((node) =>
+      node.closest('.ant-select-item-option'),
+    )
+    expect(current!.closest('.ant-select-item-option')).toHaveClass(
+      'ant-select-item-option-disabled',
+    )
+    for (const label of ['笔试', '已拿 offer', '未通过']) {
+      expect(
+        (await screen.findAllByText(label)).some((node) => node.closest('.ant-select-item-option')),
+      ).toBe(true)
+    }
     const option = (await screen.findAllByText('面试中')).find((node) =>
       node.closest('.ant-select-item-option'),
     )

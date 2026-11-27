@@ -17,6 +17,15 @@ export const BOARD_STAGES: readonly ApplicationStage[] = [
   'rejected',
 ]
 
+// 改阶段时默认选流程上的下一步；Offer 和未通过没有下一步，选第一个别的阶段。
+const PIPELINE: readonly ApplicationStage[] = ['applied', 'written_test', 'interviewing', 'offer']
+
+export function suggestedNextStage(current: ApplicationStage): ApplicationStage {
+  const index = PIPELINE.indexOf(current)
+  if (index >= 0 && index < PIPELINE.length - 1) return PIPELINE[index + 1]
+  return BOARD_STAGES.find((stage) => stage !== current) ?? current
+}
+
 export type ApplicationSortField = 'stage_changed_at' | 'applied_at'
 
 const MS_PER_DAY = 86_400_000

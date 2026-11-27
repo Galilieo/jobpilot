@@ -7,6 +7,7 @@ import {
   isStaleApplication,
   sortApplicationsForList,
   sortByStageChangedDesc,
+  suggestedNextStage,
   summarizeApplications,
 } from './applicationStatus'
 
@@ -139,6 +140,14 @@ describe('applicationStatus 纯函数规则', () => {
         'applied_at',
       ).map((item) => item.application_id),
     ).toEqual(['x', 'y'])
+  })
+
+  it('改阶段默认选流程上的下一步，Offer 和未通过选第一个别的阶段', () => {
+    expect(suggestedNextStage('applied')).toBe('written_test')
+    expect(suggestedNextStage('written_test')).toBe('interviewing')
+    expect(suggestedNextStage('interviewing')).toBe('offer')
+    expect(suggestedNextStage('offer')).toBe('applied')
+    expect(suggestedNextStage('rejected')).toBe('applied')
   })
 
   it('汇总条统计总投递、等结果、超 14 天未进展与 Offer 数', () => {

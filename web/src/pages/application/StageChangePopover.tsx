@@ -6,7 +6,7 @@ import { applications } from '../../api/endpoints'
 import { ApiError } from '../../api/http'
 import type { ApplicationRecord, ApplicationStage } from '../../api/types'
 import { APPLICATION_STAGE } from '../../labels'
-import { BOARD_STAGES, todayLocalDate } from './applicationStatus'
+import { BOARD_STAGES, suggestedNextStage, todayLocalDate } from './applicationStatus'
 
 interface StageChangePopoverProps {
   record: ApplicationRecord
@@ -34,13 +34,16 @@ function StageChangeForm({
 }): ReactElement {
   const { message } = App.useApp()
   const today = todayLocalDate()
-  const stageOptions = BOARD_STAGES.filter((stage) => stage !== record.stage).map((stage) => ({
+  // 五个阶段都列出，当前阶段标出来但不能选，免得看起来像少了一项。
+  const stageOptions = BOARD_STAGES.map((stage) => ({
     value: stage,
-    label: APPLICATION_STAGE[stage],
+    label:
+      stage === record.stage ? `${APPLICATION_STAGE[stage]}（当前）` : APPLICATION_STAGE[stage],
+    disabled: stage === record.stage,
   }))
 
-  const [selectedStage, setSelectedStage] = useState<ApplicationStage>(
-    () => stageOptions[0]?.value ?? 'interviewing',
+  const [selectedStage, setSelectedStage] = useState<ApplicationStage>(() =>
+    suggestedNextStage(record.stage),
   )
   const [occurredAt, setOccurredAt] = useState(today)
   const targetStage = fixedStage ?? selectedStage
