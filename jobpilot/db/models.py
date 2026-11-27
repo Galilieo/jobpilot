@@ -1,6 +1,6 @@
 """声明账号、业务运行、模型调用和经历事实库的 ORM 映射。"""
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -24,6 +25,12 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
+from jobpilot.db.application_schema import (
+    CHANNEL_LENGTH,
+    SNAPSHOT_CHECK,
+    ApplicationStage,
+    stage_check,
+)
 from jobpilot.db.base import Base
 from jobpilot.db.memory_schema import (
     MEMORY_KEY_CHECK,
@@ -605,13 +612,14 @@ class FactDraft(Base):
 
 
 class JobStage(StrEnum):
-    """个人对一个岗位的进度。"""
+    """岗位列表和详情展示的推导阶段。"""
 
     SAVED = "saved"
-    APPLIED = "applied"
-    INTERVIEWING = "interviewing"
-    OFFER = "offer"
-    REJECTED = "rejected"
+    APPLIED = ApplicationStage.APPLIED
+    WRITTEN_TEST = ApplicationStage.WRITTEN_TEST
+    INTERVIEWING = ApplicationStage.INTERVIEWING
+    OFFER = ApplicationStage.OFFER
+    REJECTED = ApplicationStage.REJECTED
     ARCHIVED = "archived"
 
 
@@ -652,7 +660,7 @@ class JobPosting(Base):
 
 
 class UserJob(Base):
-    """一个用户和一个岗位的关系：进度、个人修改、备注。始终按用户隔离。"""
+    """一个用户和一个岗位的关系：归档、个人修改、备注。始终按用户隔离。"""
 
     __tablename__ = "user_job"
     __table_args__ = (
@@ -664,11 +672,6 @@ class UserJob(Base):
         UniqueConstraint("user_id", "posting_id"),
         # 供运行、投递等用 (user_job_id, user_id) 引用同一用户的岗位。
         UniqueConstraint("user_job_id", "user_id"),
-        CheckConstraint(
-            "stage IN ('saved', 'applied', 'interviewing', 'offer', 'rejected', "
-            "'archived')",
-            name="ck_user_job_stage",
-        ),
         Index("ix_user_job_user_id_updated_at", "user_id", "updated_at"),
     )
 
@@ -677,7 +680,7 @@ class UserJob(Base):
         ForeignKey("user_account.user_id", ondelete="CASCADE")
     )
     posting_id: Mapped[UUID] = mapped_column(Uuid)
-    stage: Mapped[str] = mapped_column(String(16), server_default="saved")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 用户对解析结果的修改，按字段整体覆盖（如 requirements 整个列表）。
     field_overrides_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, server_default=sql_text("'{}'::jsonb")
@@ -857,7 +860,8 @@ class IdempotencyKey(Base):
             ondelete="CASCADE",
         ),
         CheckConstraint(
-            "operation IN ('parse_resume', 'parse_jd', 'match', 'tailor')",
+            "operation IN ('parse_resume', 'parse_jd', 'match', 'tailor', "
+            "'record_application')",
             name="ck_idempotency_key_operation",
         ),
         CheckConstraint(
@@ -1040,6 +1044,9 @@ class ResumeVersion(Base):
         UniqueConstraint("user_id", "resume_id", "version"),
         # 供 tailored_resume 的当前版本指针用两列引用。
         UniqueConstraint("resume_version_id", "resume_id"),
+        UniqueConstraint(
+            "resume_version_id", "user_id", name="uq_resume_version_owner"
+        ),
         ForeignKeyConstraint(
             ["resume_id", "user_id"],
             ["tailored_resume.resume_id", "tailored_resume.user_id"],
@@ -1060,3 +1067,98 @@ class ResumeVersion(Base):
     version: Mapped[int]
     # services/resume_content.ResumeContent：页头、栏目、经历和条目（含检查结论）。
     content_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class Application(Base):
+    """一次投递及其岗位、履历快照，保留快照来源的版本标识。"""
+
+    __tablename__ = "application"
+    __table_args__ = (
+        UniqueConstraint("application_id", "user_id"),
+        ForeignKeyConstraint(
+            ["user_job_id", "user_id"],
+            ["user_job.user_job_id", "user_job.user_id"],
+            ondelete="SET NULL (user_job_id)",
+        ),
+        ForeignKeyConstraint(
+            ["resume_version_id", "user_id"],
+            ["resume_version.resume_version_id", "resume_version.user_id"],
+            ondelete="SET NULL (resume_version_id)",
+        ),
+        ForeignKeyConstraint(
+            ["fact_set_id", "user_id"],
+            ["fact_set.fact_set_id", "fact_set.user_id"],
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        CheckConstraint(SNAPSHOT_CHECK, name="ck_application_snapshot"),
+        CheckConstraint(stage_check("stage"), name="ck_application_stage"),
+        CheckConstraint("revision >= 1", name="ck_application_revision"),
+        Index(
+            "ix_application_owner_job_date",
+            "user_id",
+            "user_job_id",
+            "applied_at",
+            "created_at",
+        ),
+    )
+
+    application_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    user_job_id: Mapped[UUID | None] = mapped_column(Uuid)
+    job_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    resume_version_id: Mapped[UUID | None] = mapped_column(Uuid)
+    resume_id: Mapped[UUID | None] = mapped_column(Uuid)
+    resume_version: Mapped[int | None]
+    fact_set_id: Mapped[UUID | None] = mapped_column(Uuid)
+    snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)
+    )
+    snapshot_html: Mapped[str | None] = mapped_column(Text)
+    backfilled: Mapped[bool] = mapped_column(server_default=sql_text("false"))
+    applied_at: Mapped[date] = mapped_column(Date, server_default=func.current_date())
+    channel: Mapped[str | None] = mapped_column(String(CHANNEL_LENGTH))
+    stage: Mapped[str] = mapped_column(
+        String(16), server_default=ApplicationStage.APPLIED
+    )
+    revision: Mapped[int] = mapped_column(server_default="1")
+    action_id: Mapped[UUID | None] = mapped_column(Uuid, unique=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ApplicationStageEvent(Base):
+    """按记录顺序追加一次阶段变化，发生日期可早于记录日期。"""
+
+    __tablename__ = "application_stage_event"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["application_id", "user_id"],
+            ["application.application_id", "application.user_id"],
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            stage_check("from_stage"), name="ck_application_event_from_stage"
+        ),
+        CheckConstraint(stage_check("to_stage"), name="ck_application_event_to_stage"),
+        Index(
+            "ix_application_event_owner_application",
+            "user_id",
+            "application_id",
+            "created_at",
+        ),
+    )
+
+    event_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    # 等待行锁的事务可能先开始。按实际插入时间排列阶段变更。
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp()
+    )
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    application_id: Mapped[UUID] = mapped_column(Uuid)
+    from_stage: Mapped[str | None] = mapped_column(String(16))
+    to_stage: Mapped[str] = mapped_column(String(16))
+    occurred_at: Mapped[date] = mapped_column(Date, server_default=func.current_date())
