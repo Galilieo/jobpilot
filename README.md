@@ -48,6 +48,8 @@ V1 定位为个人学习项目，本人求职时在本地使用；暂不上线�
 
 求职助手的代码位于 `jobpilot/`（后端）和 `web/`（前端），依赖各自独立。前端启动与目录说明见 [web/README.md](web/README.md)，后端测试说明见 [jobpilot/tests/README.md](jobpilot/tests/README.md)。
 
+登录后可在「账号设置」导出你的业务数据。
+
 ## 本地启动
 
 以下命令从仓库根目录执行。macOS 需要 Colima、Docker CLI 与 Compose 插件、uv、Node.js 22.22 或更新版本，以及 pnpm 11.7。把仓库放在 Colima 能挂载的目录，例如用户主目录下。用 `docker compose version` 检查 Compose，用 `uv --version`、`node --version` 和 `pnpm --version` 查看其余版本。后端用 Python 3.12，缺少时 `uv sync` 会按项目约束安装。
