@@ -1904,3 +1904,45 @@ textarea {
   min-height: 320px;
   border: 0;
 }
+
+.job-stage-filter {
+  min-width: 160px;
+  margin-block-end: 12px;
+}
+
+.application-diff,
+.application-changes {
+  display: grid;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+
+.application-diff .ant-alert {
+  margin-block-end: 12px;
+}
+
+.application-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.application-comparison-frame,
+.application-resume-text {
+  height: 550px;
+  overflow: auto;
+}
+
+.application-resume-text {
+  padding: 10px;
+}
+
+.application-risk {
+  margin-block: 14px;
+}
+
+@media (max-width: 575px) {
+  .application-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

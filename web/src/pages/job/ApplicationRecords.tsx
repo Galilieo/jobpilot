@@ -14,6 +14,7 @@ import {
   applicationQuery,
   applicationsQuery,
 } from '../../queryKeys'
+import { ApplicationDiffDrawer } from './ApplicationDiffDrawer'
 import { EditApplicationModal, NewApplicationModal } from './ApplicationForm'
 
 export function ApplicationRecords({ jobId }: { jobId: string }): ReactElement {
@@ -66,6 +67,27 @@ function useRefreshApplications(): () => Promise<void> {
   }
 }
 
+export function DetachedApplicationsDrawer({ close }: { close: () => void }): ReactElement {
+  const refresh = useRefreshApplications()
+  const query = useQuery({
+    queryKey: APPLICATIONS_QUERY,
+    queryFn: ({ signal }) => applications.list(undefined, signal),
+    select: (records) => records.filter((record) => record.user_job_id === null),
+  })
+  return (
+    <Drawer title="已删除岗位的投递" size={560} open onClose={close}>
+      {query.isPending && <Skeleton active />}
+      {query.isError && <Alert type="error" title={query.error.message} />}
+      {query.data?.length === 0 && (
+        <Typography.Text type="secondary">没有来自已删除岗位的投递。</Typography.Text>
+      )}
+      {query.data?.map((record) => (
+        <ApplicationRow key={record.application_id} record={record} refresh={refresh} />
+      ))}
+    </Drawer>
+  )
+}
+
 function ApplicationRow({
   record,
   refresh,
@@ -76,7 +98,7 @@ function ApplicationRow({
   const { modal, message } = App.useApp()
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editing, setEditing] = useState<ApplicationRecord | null>(null)
-  const [panel, setPanel] = useState<'snapshot' | null>(null)
+  const [panel, setPanel] = useState<'snapshot' | 'diff' | null>(null)
 
   function confirmDelete(): void {
     modal.confirm({
@@ -105,6 +127,18 @@ function ApplicationRow({
 
   return (
     <article className="application-row">
+      {record.user_job_id === null && (
+        <>
+          <Typography.Text strong>{record.job_snapshot_json.title ?? '未命名岗位'}</Typography.Text>
+          <MetaList
+            items={[
+              record.job_snapshot_json.company,
+              record.job_snapshot_json.location,
+              record.job_snapshot_json.salary,
+            ].filter((field): field is string => Boolean(field))}
+          />
+        </>
+      )}
       <Space wrap size={8}>
         <Typography.Text strong className="tabular-num">
           {record.applied_at}
@@ -124,6 +158,9 @@ function ApplicationRow({
             <Button size="small" onClick={() => setPanel('snapshot')}>
               查看当时的简历
             </Button>
+            <Button size="small" onClick={() => setPanel('diff')}>
+              和现在对比
+            </Button>
           </>
         )}
         <Button size="small" type="text" danger onClick={confirmDelete}>
@@ -141,6 +178,9 @@ function ApplicationRow({
         <EditApplicationModal record={editing} close={() => setEditing(null)} refresh={refresh} />
       )}
       {panel === 'snapshot' && <ApplicationSnapshot record={record} close={() => setPanel(null)} />}
+      {panel === 'diff' && (
+        <ApplicationDiffDrawer id={record.application_id} close={() => setPanel(null)} />
+      )}
     </article>
   )
 }

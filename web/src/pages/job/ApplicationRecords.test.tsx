@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ApplicationRecord } from '../../api/types'
 import { jsonResponse, stubFetch } from '../../test/fetchMock'
 import { renderWithProviders } from '../../test/render'
-import { ApplicationRecords } from './ApplicationRecords'
+import { ApplicationRecords, DetachedApplicationsDrawer } from './ApplicationRecords'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -155,4 +155,13 @@ it('reloads on a revision conflict and confirms deletion before sending it', asy
   await user.click(within(confirmation).getByRole('button', { name: '删除投递' }))
   expect(await screen.findByText('这个岗位还没有投递记录。')).toBeInTheDocument()
   expect(remove).toHaveBeenCalledWith({ expected_revision: 2 })
+})
+
+it('uses the frozen title when the original job is deleted', async () => {
+  stubFetch({
+    'GET /api/applications': () => jsonResponse(200, [{ ...record, user_job_id: null }]),
+  })
+  renderWithProviders(<DetachedApplicationsDrawer close={vi.fn()} />)
+  expect(await screen.findByText('示例岗位')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '查看当时的简历' })).toBeInTheDocument()
 })

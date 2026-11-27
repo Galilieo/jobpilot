@@ -1,10 +1,11 @@
 // 岗位库：岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Modal, Skeleton, Tag, Typography, theme } from 'antd'
+import { App, Button, Card, Modal, Select, Skeleton, Space, Tag, Typography, theme } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
+import type { JobStage } from '../api/types'
 import { newIdempotencyKey } from '../api/http'
 import { EmptyHint } from '../components/EmptyHint'
 import { MetaList } from '../components/MetaList'
@@ -12,6 +13,7 @@ import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
 import { JOB_STAGE, formatMatchSummary, jobMetaParts } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
+import { DetachedApplicationsDrawer } from './job/ApplicationRecords'
 
 const JD_COPY = {
   filePrompt: '点击或拖入 JD 文件',
@@ -24,8 +26,15 @@ export function JobsPage(): ReactElement {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
+  const [detachedOpen, setDetachedOpen] = useState(false)
+  const [stage, setStage] = useState<JobStage>()
   const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
-  const hasJobs = Boolean(list.data && list.data.length > 0)
+  const hasJobs = Boolean(list.data?.length)
+  const shown = list.data?.filter((job) => !stage || job.stage === stage) ?? []
+  const stages = (Object.keys(JOB_STAGE) as JobStage[]).map((value) => ({
+    value,
+    label: `${JOB_STAGE[value]}（${list.data?.filter((job) => job.stage === value).length ?? 0}）`,
+  }))
 
   return (
     <section className="page">
@@ -33,13 +42,27 @@ export function JobsPage(): ReactElement {
         title="岗位库"
         subtitle="贴入 JD 整理岗位要求，再用确认过的经历做匹配、生成定制简历。"
         extra={
-          hasJobs && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
-              添加岗位
-            </Button>
-          )
+          <Space wrap>
+            <Button onClick={() => setDetachedOpen(true)}>已删除岗位的投递</Button>
+            {hasJobs && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+                添加岗位
+              </Button>
+            )}
+          </Space>
         }
       />
+      {hasJobs && (
+        <Select<JobStage>
+          aria-label="按岗位进度筛选"
+          placeholder="全部进度"
+          className="job-stage-filter"
+          allowClear
+          value={stage}
+          options={stages}
+          onChange={setStage}
+        />
+      )}
       {list.isPending ? (
         <Skeleton active />
       ) : list.isError ? (
@@ -60,9 +83,13 @@ export function JobsPage(): ReactElement {
             }
           />
         </Card>
+      ) : shown.length === 0 ? (
+        <Card>
+          <EmptyHint description="这个进度下没有岗位。" />
+        </Card>
       ) : (
         <div className="job-grid">
-          {list.data.map((job) => {
+          {shown.map((job) => {
             const extraKeywords = Math.max(0, job.keywords.length - 3)
             return (
               <Card
@@ -123,6 +150,7 @@ export function JobsPage(): ReactElement {
         </div>
       )}
       <AddJobModal open={adding} onClose={() => setAdding(false)} />
+      {detachedOpen && <DetachedApplicationsDrawer close={() => setDetachedOpen(false)} />}
     </section>
   )
 }
