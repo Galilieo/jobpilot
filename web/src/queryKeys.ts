@@ -14,6 +14,9 @@ export const tailorResumeQuery = (runId: string, version?: number) =>
 export const CONVERSATIONS_QUERY = ['conversations', 'list'] as const
 export const conversationQuery = (conversationId: string) =>
   ['conversations', conversationId] as const
+// 带上消息数和更新时间：一轮结束或压缩写完摘要后自动重新估算。
+export const contextUsageQuery = (conversationId: string, messages: number, updatedAt: string) =>
+  [...conversationQuery(conversationId), 'context', messages, updatedAt] as const
 export const MEMORIES_QUERY = ['memories'] as const
 
 export const APPLICATIONS_QUERY = ['applications'] as const

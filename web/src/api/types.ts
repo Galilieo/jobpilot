@@ -575,6 +575,13 @@ export type MemoryGroup = 'job' | 'writing'
 export type MemoryValueType = 'text' | 'list' | 'enum'
 export type MemoryValue = string | string[]
 
+// 下一次请求估算的输入 token；超过 compact_at_tokens 后本轮结束会自动压缩。
+export interface ContextUsage {
+  used_tokens: number
+  window_tokens: number
+  compact_at_tokens: number
+}
+
 export interface CompactResult {
   run_id: string | null
   status: string

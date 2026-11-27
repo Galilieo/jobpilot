@@ -1,9 +1,10 @@
-// 对话输入框：Enter 发送，Shift + Enter 换行，可带文字附件。
+// 对话输入框：上面是文字，下面一行工具条（左边附件，右边上下文用量和发送）。
+// Enter 发送，Shift + Enter 换行，可带文字附件。
 // 文字和附件由页面持有，消息没保存时页面把它们还回来。
 import { CloseOutlined, FileTextOutlined } from '@ant-design/icons'
 import { Sender } from '@ant-design/x'
 import { Typography } from 'antd'
-import type { ReactElement, RefObject } from 'react'
+import type { ReactElement, ReactNode, RefObject } from 'react'
 import type { AgentTextAttachment } from '../../api/types'
 import { AttachmentPicker } from './AttachmentPicker'
 
@@ -23,6 +24,8 @@ interface ComposerProps {
   minRows?: number
   hideNote?: boolean
   containerRef?: RefObject<HTMLDivElement | null>
+  // 放在发送按钮左边，例如上下文用量。
+  extra?: ReactNode
 }
 
 export function Composer({
@@ -35,6 +38,7 @@ export function Composer({
   minRows = 2,
   hideNote = false,
   containerRef,
+  extra,
 }: ComposerProps): ReactElement {
   const hasContent = draft.text.trim().length > 0 || draft.attachments.length > 0
   const canSend = blockedReason === null && hasContent
@@ -73,14 +77,18 @@ export function Composer({
             </div>
           )
         }
-        prefix={
-          <AttachmentPicker
-            count={attachments.length}
-            onAdd={(item) => onChange({ ...draft, attachments: [...attachments, item] })}
-          />
-        }
-        suffix={(_, { components: { SendButton } }) => (
-          <SendButton type="primary" disabled={!canSend} aria-label="发送" />
+        suffix={false}
+        footer={(_, { components: { SendButton } }) => (
+          <div className="composer-toolbar">
+            <AttachmentPicker
+              count={attachments.length}
+              onAdd={(item) => onChange({ ...draft, attachments: [...attachments, item] })}
+            />
+            <span className="composer-toolbar-end">
+              {extra}
+              <SendButton type="primary" shape="circle" disabled={!canSend} aria-label="发送" />
+            </span>
+          </div>
         )}
       />
       {!hideNote && (

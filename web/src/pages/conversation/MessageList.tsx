@@ -135,6 +135,7 @@ export function MessageList(props: MessageListProps): ReactElement {
           role: 'ai',
           content: (
             <ToolSteps
+              title={title}
               steps={item.steps.map((step, index): StepView => ({
                 key: `${item.key}:${index}`,
                 tool: step.tool,
@@ -159,13 +160,14 @@ export function MessageList(props: MessageListProps): ReactElement {
   const items: BubbleItemType[] = buildTimeline(detail, title).map(itemOf)
   for (const hint of props.localHints)
     items.push({ key: hint.key, role: 'system', content: hint.text })
-  if (live) items.push(...liveItems(live, detail, cardBubble))
+  if (live) items.push(...liveItems(live, detail, title, cardBubble))
   return <Bubble.List ref={listRef} className="message-list" items={items} role={ROLES} />
 }
 
 function liveItems(
   live: LiveTurn,
   detail: ConversationDetail,
+  title: JobTitle,
   cardBubble: (card: AgentActionCard, outcome: 'pending') => ReactNode,
 ): BubbleItemType[] {
   const items: BubbleItemType[] = []
@@ -177,7 +179,9 @@ function liveItems(
     items.push({
       key: 'live:steps',
       role: 'ai',
-      content: <ToolSteps steps={live.steps.map((step) => ({ ...step, key: step.id }))} />,
+      content: (
+        <ToolSteps title={title} steps={live.steps.map((step) => ({ ...step, key: step.id }))} />
+      ),
     })
   }
   if (live.card && !hasCard(detail, live.card.action_id)) {

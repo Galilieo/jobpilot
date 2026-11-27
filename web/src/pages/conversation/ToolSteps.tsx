@@ -1,28 +1,36 @@
 // 一轮里的多个工具调用合并成一行进度（「解析岗位、匹配、生成简历 3 步，用时 21 秒」），点开是时间轴。
+// 时间轴里相邻的同一工具再合成一行（「读取岗位详情 × 5」），写出读了哪些岗位，不逐条重复「完成」。
 import { ThoughtChain } from '@ant-design/x'
 import type { ThoughtChainItemType } from '@ant-design/x'
 import { useState, type ReactElement } from 'react'
-import { STOP_REASON, toolLabel } from '../../labels'
+import { toolLabel } from '../../labels'
 import { formatStepDuration, formatStepsSummary, formatTotalDuration, toolAction } from './naming'
+import { groupDetail, groupSteps, type JobTitle, type StepView } from './stepGroups'
 
-export interface StepView {
-  key: string
-  tool: string
-  status: 'loading' | 'success' | 'error'
-  result: Record<string, unknown> | null
-  durationMs?: number
-}
+export type { StepView } from './stepGroups'
 
-/** 一步的简短结果：出错就说原因，其他只给计数或「完成」，不把原始 JSON 摆出来。 */
-function stepSummary(step: StepView): string {
-  const result = step.result ?? {}
-  if (step.status === 'loading') return '进行中'
-  if (typeof result.error === 'string') return result.error
-  if (result.status === 'budget_exhausted') return '本轮额度用完'
-  if (typeof result.stop_reason === 'string') return STOP_REASON[result.stop_reason] ?? '部分完成'
-  if (typeof result.total === 'number') return `共 ${result.total} 项`
-  if (result.decision === 'rejected') return '你拒绝了'
-  return '完成'
+function StepTimeline({ steps, title }: { steps: StepView[]; title?: JobTitle }): ReactElement {
+  return (
+    <ol className="tool-step-timeline">
+      {groupSteps(steps).map((group) => {
+        const detail = groupDetail(group, title)
+        return (
+          <li key={group.key} className={group.status === 'error' ? 'is-error' : undefined}>
+            <span className="tool-step-name">{toolLabel(group.tool)}</span>
+            {group.count > 1 && (
+              <span className="tool-step-count tabular-num">× {group.count}</span>
+            )}
+            {detail && <span className="tool-step-result">{detail}</span>}
+            {group.durationMs !== undefined && (
+              <time className="tool-step-time tabular-num">
+                {formatStepDuration(group.durationMs)}
+              </time>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 function totalDurationMs(steps: StepView[]): number | null {
@@ -43,7 +51,7 @@ function headlineStatus(steps: StepView[]): ThoughtChainItemType['status'] {
   return 'success'
 }
 
-export function ToolSteps({ steps }: { steps: StepView[] }): ReactElement {
+export function ToolSteps({ steps, title }: { steps: StepView[]; title?: JobTitle }): ReactElement {
   const [open, setOpen] = useState(false)
   const status = headlineStatus(steps)
   const running = steps.find((step) => step.status === 'loading')
@@ -51,7 +59,7 @@ export function ToolSteps({ steps }: { steps: StepView[] }): ReactElement {
   const totalMs = totalDurationMs(steps)
   const actionsText = formatStepsSummary(steps.map((step) => step.tool))
 
-  const title = running ? (
+  const heading = running ? (
     <button
       type="button"
       className="tool-steps-trigger"
@@ -89,33 +97,11 @@ export function ToolSteps({ steps }: { steps: StepView[] }): ReactElement {
       items={[
         {
           key: 'steps',
-          title,
+          title: heading,
           status,
           collapsible: true,
           blink: status === 'loading',
-          content: (
-            <ol className="tool-step-timeline">
-              {steps.map((step) => {
-                const summary = stepSummary(step)
-                const showSummary =
-                  step.status === 'error' ||
-                  step.status === 'loading' ||
-                  summary !== '完成' ||
-                  step.durationMs === undefined
-                return (
-                  <li key={step.key} className={step.status === 'error' ? 'is-error' : undefined}>
-                    <span className="tool-step-name">{toolLabel(step.tool)}</span>
-                    {showSummary && <span className="tool-step-result">{summary}</span>}
-                    {step.durationMs !== undefined && (
-                      <time className="tool-step-time tabular-num">
-                        {formatStepDuration(step.durationMs)}
-                      </time>
-                    )}
-                  </li>
-                )
-              })}
-            </ol>
-          ),
+          content: <StepTimeline steps={steps} title={title} />,
         },
       ]}
     />

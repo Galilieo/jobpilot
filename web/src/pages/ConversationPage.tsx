@@ -2,13 +2,12 @@
 // 右边是当前岗位的产物面板。运行控制在 conversation/useConversationRun。
 import {
   CheckOutlined,
-  EllipsisOutlined,
   PlusOutlined,
   SolutionOutlined,
   UnorderedListOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { App, Button, Drawer, Dropdown, Grid, Skeleton, Typography, theme } from 'antd'
+import { App, Button, Drawer, Grid, Skeleton, Typography, theme } from 'antd'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import type { ConversationDetail } from '../api/types'
@@ -16,6 +15,7 @@ import { EmptyHint } from '../components/EmptyHint'
 import { ArtifactPanel } from './conversation/ArtifactPanel'
 import { CompactModal } from './conversation/CompactModal'
 import { Composer, type Draft } from './conversation/Composer'
+import { ContextMeter } from './conversation/ContextMeter'
 import { JobTag } from './conversation/JobTag'
 import { MessageList } from './conversation/MessageList'
 import { useJobTitle } from './conversation/naming'
@@ -269,17 +269,6 @@ function ConversationView({ conversationId }: { conversationId: string }): React
                 查看结果
               </Button>
             )}
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: [{ key: 'compact', label: '压缩上下文' }],
-                onClick: ({ key }) => {
-                  if (key === 'compact') setCompactOpen(true)
-                },
-              }}
-            >
-              <Button size="small" type="text" icon={<EllipsisOutlined />} aria-label="更多" />
-            </Dropdown>
           </div>
         </Heading>
         <div className="conversation-body">
@@ -305,6 +294,14 @@ function ConversationView({ conversationId }: { conversationId: string }): React
           onChange={setDraft}
           onSubmit={() => void submit(inputOf(draft))}
           blockedReason={blockedReason}
+          extra={
+            <ContextMeter
+              conversationId={conversationId}
+              messageCount={detail.data.messages.length}
+              updatedAt={detail.data.updated_at}
+              onCompact={() => setCompactOpen(true)}
+            />
+          }
         />
       </section>
       {panelVisible && !isNarrow && <aside className="artifact-panel">{panelContent}</aside>}

@@ -695,9 +695,51 @@ textarea {
 }
 .composer-note {
   display: block;
-  margin-top: 8px;
+  margin-top: 6px;
+  color: var(--ant-color-text-quaternary);
   font-size: 12px;
   text-align: center;
+}
+/* 输入框下方的工具条：左边附件，右边上下文用量和发送 */
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.composer-toolbar-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.context-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.context-meter:hover,
+.context-meter:focus-visible {
+  background: var(--ant-color-fill-tertiary);
+}
+.context-meter .ant-progress-circle-trail {
+  /* 底圈要看得见，否则少量用量的一小段弧像加载中的转圈。 */
+  stroke: var(--ant-color-border) !important;
+}
+.context-meter.is-near .ant-progress-circle-path {
+  stroke: var(--ant-color-warning) !important;
+}
+.context-meter-tip {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
 }
 
 /* 对话 + 右侧产物面板：面板为主角，对话约四成、面板约六成 */
@@ -886,10 +928,11 @@ textarea {
   max-width: min(86%, 640px);
 }
 .bubble-user .ant-bubble-content {
-  padding: 10px 14px;
-  border: 1px solid var(--ant-color-border);
-  border-radius: var(--jp-radius-lg) var(--jp-radius-lg) 4px var(--jp-radius-lg);
-  background: var(--ant-color-fill-tertiary);
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-text);
 }
 .bubble-ai {
   width: 100%;
@@ -958,10 +1001,7 @@ textarea {
   display: block;
   width: 100%;
   max-width: 640px;
-  padding: 2px 12px;
-  border: 1px solid var(--ant-color-border);
-  border-radius: var(--jp-radius-md);
-  background: var(--ant-color-bg-container);
+  padding: 0;
   font-size: 13px;
 }
 .tool-steps .ant-thought-chain-item-header {
@@ -984,15 +1024,17 @@ textarea {
   cursor: pointer;
 }
 .tool-steps-actions {
+  color: var(--ant-color-text-secondary);
+}
+.tool-steps-trigger:hover .tool-steps-actions {
   color: var(--ant-color-text);
-  font-weight: 500;
 }
 .tool-steps-meta {
   color: var(--ant-color-text-secondary);
 }
 .tool-step-timeline {
   margin: 0;
-  padding: 2px 2px 8px 22px;
+  padding: 2px 2px 2px 22px;
   list-style: none;
   color: var(--ant-color-text-secondary);
   font-size: 13px;
@@ -1029,6 +1071,16 @@ textarea {
 }
 .tool-step-name {
   color: var(--ant-color-text);
+}
+.tool-step-count {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+}
+.tool-step-result {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tool-step-time {
   margin-left: auto;

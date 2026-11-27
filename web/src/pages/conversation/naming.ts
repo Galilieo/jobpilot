@@ -1,4 +1,4 @@
-// 对话里要显示的名字：新对话的标题、岗位 ID 对应的岗位名、工具步骤的动作短语与耗时格式。
+// 对话里要显示的名字：新对话的标题、岗位 ID 对应的岗位名、工具步骤的动作短语与耗时、token 数的格式。
 import { useQuery } from '@tanstack/react-query'
 import { jobs } from '../../api/endpoints'
 import { toolLabel } from '../../labels'
@@ -39,6 +39,10 @@ export function formatStepDuration(ms: number): string {
 
 export function formatTotalDuration(ms: number): string {
   return ms >= 1000 ? `${Math.round(ms / 1000)} 秒` : `${(ms / 1000).toFixed(1)} 秒`
+}
+
+export function formatTokens(tokens: number): string {
+  return tokens >= 10_000 ? `${(tokens / 10_000).toFixed(1)} 万` : String(tokens)
 }
 
 export function titleFrom(input: LiveInput): string {

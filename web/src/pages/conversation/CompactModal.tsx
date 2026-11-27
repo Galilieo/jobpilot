@@ -1,9 +1,10 @@
 // 触发对话上下文压缩的小弹窗：可选填写重点（≤300 字），按状态分别提示 202 / not_needed / 409。
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { App, Input, Modal, Typography } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { conversations } from '../../api/endpoints'
 import { ApiError } from '../../api/http'
+import { conversationQuery } from '../../queryKeys'
 
 interface CompactModalProps {
   conversationId: string
@@ -13,12 +14,15 @@ interface CompactModalProps {
 
 export function CompactModal({ conversationId, open, onClose }: CompactModalProps): ReactElement {
   const { message } = App.useApp()
+  const queryClient = useQueryClient()
   const [focus, setFocus] = useState('')
 
   const compact = useMutation({
     mutationFn: (trimmedFocus: string | undefined) =>
       conversations.compact(conversationId, trimmedFocus),
     onSuccess: (result) => {
+      // 详情和用量都在这个前缀下，压缩开始后重新读取。
+      void queryClient.invalidateQueries({ queryKey: conversationQuery(conversationId) })
       if (result.status === 'not_needed') {
         void message.info('对话还不长，不需要压缩')
       } else if (result.focus_applied) {

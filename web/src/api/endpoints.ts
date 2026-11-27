@@ -10,6 +10,7 @@ import type {
   ApplicationInput,
   ApplicationRecord,
   CompactResult,
+  ContextUsage,
   Conversation,
   ConversationDetail,
   CriterionField,
@@ -240,6 +241,8 @@ export const conversations = {
   ) => postForStream(`/api/conversations/${conversationId}/actions/${actionId}`, decision, signal),
   undo: (actionId: string) =>
     request<AgentUndoResult>(`/api/actions/${actionId}/undo`, { method: 'POST' }),
+  context: (conversationId: string, signal?: AbortSignal) =>
+    request<ContextUsage>(`/api/conversations/${conversationId}/context`, { signal }),
   compact: (conversationId: string, focus?: string) =>
     request<CompactResult>(`/api/conversations/${conversationId}/compact`, {
       json: focus ? { focus } : {},

@@ -190,14 +190,15 @@ describe('新对话页', () => {
   })
 })
 
-describe('压缩上下文按钮与弹窗', () => {
+const USAGE = { used_tokens: 25_600, window_tokens: 128_000, compact_at_tokens: 94_000 }
+
+describe('输入框右下角的上下文用量与压缩弹窗', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
   async function openCompactModal(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(await screen.findByRole('button', { name: '更多' }))
-    await user.click(await screen.findByRole('menuitem', { name: /压缩上下文/ }))
+    await user.click(await screen.findByRole('button', { name: /上下文已用 20%/ }))
   }
 
   it('空重点时省略 focus 提交，202 focus_applied=true 只提示正在压缩较早的对话', async () => {
@@ -205,6 +206,7 @@ describe('压缩上下文按钮与弹窗', () => {
     const calls = stubFetch({
       'GET /api/conversations/c1': () => jsonResponse(200, DETAIL),
       'GET /api/jobs': () => jsonResponse(200, []),
+      'GET /api/conversations/c1/context': () => jsonResponse(200, USAGE),
       'POST /api/conversations/c1/compact': () =>
         jsonResponse(202, { run_id: 'cr1', status: 'running', focus_applied: true }),
     })
@@ -229,6 +231,7 @@ describe('压缩上下文按钮与弹窗', () => {
     const calls = stubFetch({
       'GET /api/conversations/c1': () => jsonResponse(200, DETAIL),
       'GET /api/jobs': () => jsonResponse(200, []),
+      'GET /api/conversations/c1/context': () => jsonResponse(200, USAGE),
       'POST /api/conversations/c1/compact': () => {
         if (mode === 'busy_compact') {
           return jsonResponse(202, { run_id: 'cr1', status: 'running', focus_applied: false })
