@@ -4,6 +4,7 @@ import { Button, Drawer, Grid, Layout, Result, Spin, theme } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { isUnauthorized, useCurrentUser } from '../auth'
+import { PageErrorBoundary } from '../components/PageErrorBoundary'
 import { AccountRecoveryPage } from '../pages/AccountPage'
 import { SideNavigation } from './SideNavigation'
 
@@ -61,7 +62,10 @@ export function AppShell(): ReactElement {
           </header>
         )}
         <Layout.Content className="app-content">
-          <Outlet />
+          {/* 按路径重置：一页出错不影响侧栏，换到别的页面后错误提示自动消失。 */}
+          <PageErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </PageErrorBoundary>
         </Layout.Content>
       </Layout>
       <Drawer

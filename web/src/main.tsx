@@ -8,6 +8,7 @@ import { BrowserRouter } from 'react-router'
 import 'antd/dist/reset.css'
 import './index.css'
 import App from './App.tsx'
+import { PageErrorBoundary } from './components/PageErrorBoundary.tsx'
 import { jobpilotTheme } from './theme.ts'
 
 const queryClient = new QueryClient()
@@ -19,7 +20,10 @@ createRoot(document.getElementById('root')!).render(
       <AntApp>
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
-            <App />
+            {/* 兜底：侧栏或登录页本身出错时，也不留下一整页空白。 */}
+            <PageErrorBoundary>
+              <App />
+            </PageErrorBoundary>
           </BrowserRouter>
         </QueryClientProvider>
       </AntApp>
