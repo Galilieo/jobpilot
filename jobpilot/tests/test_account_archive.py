@@ -175,7 +175,18 @@ async def test_export_has_all_versions_and_only_the_signed_in_owners_data(
 
     assert (await login(async_client, EMAIL)).status_code == 204
     archive = await _download(async_client)
-    assert set(archive["account"]) == {"user_id", "email", "deletion_requested_at"}
+    assert set(archive["account"]) == {
+        "user_id",
+        "email",
+        "created_at",
+        "deletion_requested_at",
+    }
+    async with session_factory() as session:
+        owner = await session.get_one(User, portfolio.user_id)
+        assert (
+            archive["account"]["created_at"].replace("Z", "+00:00")
+            == owner.created_at.isoformat()
+        )
     assert archive["account"]["email"] == EMAIL
     assert {"user_sessions", "model_calls", "idempotency_keys"}.isdisjoint(archive)
     empty = {"conversations", "messages", "agent_actions", "memories"}

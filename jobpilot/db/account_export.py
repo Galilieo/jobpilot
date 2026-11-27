@@ -71,9 +71,12 @@ async def export_identity(
     identity = (
         (
             await session.execute(
-                select(User.user_id, User.email, User.deletion_requested_at).where(
-                    User.user_id == user_id
-                )
+                select(
+                    User.user_id,
+                    User.email,
+                    User.created_at,
+                    User.deletion_requested_at,
+                ).where(User.user_id == user_id)
             )
         )
         .mappings()

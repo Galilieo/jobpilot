@@ -53,5 +53,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # 写作偏好快照和记忆会丢失，记忆确认卡及等待这些卡片的运行在旧版失效。
     op.drop_column("ai_run", "writing_preferences_json")
     op.drop_table("memory")

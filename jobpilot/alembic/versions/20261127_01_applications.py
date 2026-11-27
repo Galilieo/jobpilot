@@ -190,6 +190,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # 旧结构只能表示最近一次投递的进度，多次投递、快照及阶段历史会丢失。
+    # 单独填写的投递日期和渠道也会丢失，投递确认卡及等待这些卡片的运行在旧版失效。
     op.add_column(
         "user_job",
         sa.Column("stage", sa.String(16), server_default="saved", nullable=False),
