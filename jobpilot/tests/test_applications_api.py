@@ -1,5 +1,6 @@
 """用真实 HTTP 接口验证投递、阶段和快照的事务行为。"""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -8,6 +9,7 @@ import pytest
 from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from jobpilot.db.conversations import find_conversation
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
     AiRun,
@@ -120,6 +122,31 @@ async def test_deleted_application_cannot_be_recreated_by_old_request(
             await db.scalar(select(func.count()).select_from(ApplicationStageEvent))
             == 0
         )
+
+
+async def test_delete_job_returns_conflict_with_bound_conversation_lock(
+    async_client: httpx.AsyncClient,
+    presented_resume: tuple[UUID, str, dict],
+    session_factory: Factory,
+) -> None:
+    user_id, job_id, _ = presented_resume
+    created = await async_client.post(
+        "/api/conversations", json={"current_job_id": job_id}
+    )
+    assert created.status_code == 201, created.text
+    conversation_id = UUID(created.json()["conversation_id"])
+    async with session_factory.begin() as confirmation:
+        assert await find_conversation(
+            user_id, confirmation, conversation_id, lock=True
+        )
+        async with asyncio.timeout(2):
+            conflicting = await async_client.delete(f"/api/jobs/{job_id}")
+        assert conflicting.status_code == 409
+    assert (await async_client.delete(f"/api/jobs/{job_id}")).status_code == 204
+    conversation = (
+        await async_client.get(f"/api/conversations/{conversation_id}")
+    ).json()
+    assert conversation["current_job_id"] is None
 
 
 async def test_second_application_and_stage_events_determine_job_stage(

@@ -242,6 +242,84 @@ async def test_resume_commit_before_checkpoint_replays_once_and_undo_appends_ver
     assert restored["content"] == resume.current["content"]
 
 
+async def test_recovery_reuses_saved_edit_card_before_paying_again(
+    async_client: httpx.AsyncClient,
+    session_factory: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resume = await _resume(
+        async_client, session_factory, "recover-candidate@example.invalid"
+    )
+    path = await conversation(async_client)
+    original = graph._propose
+    saved_card = None
+    saved = asyncio.Event()
+    checks = []
+
+    async def stop_after_saved_card(agent, state):
+        nonlocal saved_card
+        result = await original(agent, state)
+        if state["calls"][0]["name"] == "edit_resume_item" and saved_card is None:
+            saved_card = result["action_id"]
+            saved.set()
+            await asyncio.Future()
+        return result
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        payload = loads(request.content)
+        if not payload.get("stream"):
+            checks.append(payload)
+            return _edit_response(resume, request)
+        last = payload["messages"][-1]
+        if last["role"] == "user":
+            return batch(("ask_user", {"questions": ["确认目标？"]}))
+        if last["role"] == "tool" and '"q1"' in last["content"]:
+            return batch(
+                (
+                    "edit_resume_item",
+                    {
+                        "run_id": str(resume.run_id),
+                        "bullet_id": resume.bullet_id,
+                        "mode": "replace",
+                        "quote": "参与接口开发",
+                    },
+                )
+            )
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        requested = await async_client.post(
+            f"{path}/messages", json=message_body("第一条改成：参与接口开发")
+        )
+        card = card_of(requested)
+        run_id = UUID(done_of(requested)["run_id"])
+        monkeypatch.setattr(graph, "_propose", stop_after_saved_card)
+        confirming = asyncio.create_task(
+            async_client.post(
+                f"{path}/actions/{card['action_id']}",
+                json={"decision": "confirm", "answers": {"q1": "原目标"}},
+            )
+        )
+        async with asyncio.timeout(5):
+            try:
+                await saved.wait()
+            finally:
+                app.state.run_launcher.cancel_runs([run_id])
+                confirmed = await confirming
+        assert confirmed.is_success and saved_card is not None
+        assert len(checks) == 1
+        await _restart_runtime(session_factory, monkeypatch)
+        await app.state.agent_runtime.recover_decided_runs(
+            session_factory, fake, app.state.run_launcher.launch
+        )
+        await app.state.run_launcher.wait_all()
+
+    recovered = (await async_client.get(path)).json()["pending_action"]
+    assert recovered["action_id"] == saved_card
+    assert len(checks) == 1
+
+
 async def test_tool_ids_and_decisions_cannot_access_other_users(
     user_a: httpx.AsyncClient,
     user_b: httpx.AsyncClient,

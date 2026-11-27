@@ -18,11 +18,11 @@ from jobpilot.db.conversations import (
     agent_input,
     find_action,
     find_conversation,
+    find_tool_action,
     owned_agent_run,
     propose_action,
     set_job_binding,
 )
-from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
     ActionStatus,
     AgentAction,
@@ -31,7 +31,7 @@ from jobpilot.db.models import (
     MessageRole,
     RunStatus,
 )
-from jobpilot.services.agent.actions import apply_write, bind_job
+from jobpilot.services.agent.actions import apply_write, bind_job, lock_agent_job
 from jobpilot.services.agent.arguments import JobArgs, ParseJobArgs
 from jobpilot.services.agent.context import (
     agent_system_message,
@@ -371,10 +371,12 @@ async def _bind_parsed_job(agent: AgentDeps, job_id: UUID) -> bool:
         conversation = await find_conversation(
             agent.user_id, session, agent.conversation_id, lock=True
         )
-        if (
-            conversation is None
-            or await get_user_job(session, agent.user_id, job_id) is None
-        ):
+        if conversation is None:
+            return False
+        try:
+            if not await lock_agent_job(session, agent.user_id, job_id):
+                return False
+        except ToolError:
             return False
         if conversation.current_job_id is None:
             set_job_binding(conversation, job_id)
@@ -472,6 +474,12 @@ async def _ask_arguments(agent: AgentDeps, state: AgentState) -> Payload:
 
 async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
     call = state["calls"][0]
+    async with agent.sessions() as session:
+        saved = await find_tool_action(
+            session, agent.user_id, agent.run_id, call["key"]
+        )
+    if saved is not None:
+        return _wait_for_card(agent, saved)
     _tool_start(agent, call)
     ask = call["name"] == "ask_user"
     try:
@@ -501,6 +509,10 @@ async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
     async with agent.sessions.begin() as session:
         run = await _owned_run(agent, session, lock=True)
         action = await propose_action(session, run, call["name"], call["key"], args)
+    return _wait_for_card(agent, action)
+
+
+def _wait_for_card(agent: AgentDeps, action: AgentAction) -> AgentState:
     return {
         "seconds_left": agent.seconds_left,
         "next_tool": "await_confirmation",
@@ -526,8 +538,11 @@ async def _accept_answer(
     job_id = card.job_id
     if choice == JobChoice.KEEP:
         return {"decision": choice, "job_id": str(job_id)}
-    if await get_user_job(session, action.user_id, job_id) is None:
-        return {"error": "新岗位已删除", "status": 404}
+    try:
+        if not await lock_agent_job(session, action.user_id, job_id):
+            return {"error": "新岗位已删除", "status": 404}
+    except ToolError as error:
+        return {"error": str(error), "status": error.status}
     if choice == JobChoice.SWITCH:
         action.undo_json = bind_job(conversation, job_id).model_dump(mode="json")
     else:

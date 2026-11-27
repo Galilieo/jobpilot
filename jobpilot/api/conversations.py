@@ -22,7 +22,7 @@ from jobpilot.db.conversations import (
 from jobpilot.db.conversations import (
     list_conversations as list_owned_conversations,
 )
-from jobpilot.db.jobs import get_user_job
+from jobpilot.db.jobs import JobLockConflict, lock_job_for_binding
 from jobpilot.db.models import Conversation, MessageRole, RunStatus
 from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.runtime import (
@@ -100,8 +100,11 @@ async def require_conversation(
 
 
 async def _require_job(db: DbSession, user_id: UUID, job_id: UUID | None) -> None:
-    if job_id is not None and await get_user_job(db, user_id, job_id) is None:
-        raise HTTPException(404, "岗位不存在")
+    try:
+        if job_id is not None and not await lock_job_for_binding(db, user_id, job_id):
+            raise HTTPException(404, "岗位不存在")
+    except JobLockConflict as error:
+        raise HTTPException(409, str(error)) from None
 
 
 @router.get("")

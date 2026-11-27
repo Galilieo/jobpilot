@@ -235,19 +235,22 @@ async def add_message(
     )
 
 
-async def propose_action(
-    session: AsyncSession,
-    run: AiRun,
-    tool: str,
-    key: str,
-    args: dict[str, Any],
-) -> AgentAction:
-    query = select(AgentAction).where(
-        AgentAction.user_id == run.user_id,
-        AgentAction.run_id == run.run_id,
-        AgentAction.tool_call_id == key,
+async def find_tool_action(
+    session: AsyncSession, user_id: UUID, run_id: UUID, tool_key: str
+) -> AgentAction | None:
+    return await session.scalar(
+        select(AgentAction).where(
+            AgentAction.user_id == user_id,
+            AgentAction.run_id == run_id,
+            AgentAction.tool_call_id == tool_key,
+        )
     )
-    action = await session.scalar(query)
+
+
+async def propose_action(
+    session: AsyncSession, run: AiRun, tool: str, key: str, args: dict[str, Any]
+) -> AgentAction:
+    action = await find_tool_action(session, run.user_id, run.run_id, key)
     if action is None:
         action = AgentAction(
             user_id=run.user_id,

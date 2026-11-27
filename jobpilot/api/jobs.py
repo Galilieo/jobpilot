@@ -28,6 +28,7 @@ from jobpilot.api.tailoring import Launcher
 from jobpilot.db.applications import latest_application_stages
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import (
+    JobLockConflict,
     delete_user_job,
     find_existing_job,
     get_user_job,
@@ -388,7 +389,10 @@ async def delete_job(
     job_id: UUID, user: CurrentUser, db: DbSession, launcher: Launcher
 ) -> None:
     """删除当前用户的岗位记录及其匹配报告、改写运行和定制简历；公共或共用岗位原文不动。"""
-    deleted_runs = await delete_user_job(db, user.user_id, job_id)
+    try:
+        deleted_runs = await delete_user_job(db, user.user_id, job_id)
+    except JobLockConflict as error:
+        raise HTTPException(409, str(error)) from None
     if deleted_runs is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
     await db.commit()

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.conversations import agent_input, find_conversation, set_job_binding
-from jobpilot.db.jobs import get_user_job
+from jobpilot.db.jobs import JobLockConflict, get_user_job, lock_job_for_binding
 from jobpilot.db.models import ActionStatus, AgentAction, AiRun, Conversation
 from jobpilot.services import drafts
 from jobpilot.services.agent.application_actions import undo_application
@@ -193,9 +193,8 @@ async def _apply_job(session: AsyncSession, action: AgentAction) -> AppliedActio
     )
     if conversation is None:
         raise ToolError("对话不存在", 404)
-    if (
-        args.job_id is not None
-        and await get_user_job(session, action.user_id, args.job_id) is None
+    if args.job_id is not None and not await lock_agent_job(
+        session, action.user_id, args.job_id
     ):
         raise ToolError("岗位不存在", 404)
     change = bind_job(conversation, args.job_id)
@@ -203,6 +202,13 @@ async def _apply_job(session: AsyncSession, action: AgentAction) -> AppliedActio
         {"job_id": str(args.job_id) if args.job_id else None},
         change.model_dump(mode="json"),
     )
+
+
+async def lock_agent_job(session: AsyncSession, user_id: UUID, job_id: UUID) -> bool:
+    try:
+        return await lock_job_for_binding(session, user_id, job_id)
+    except JobLockConflict as error:
+        raise ToolError(str(error), 409) from None
 
 
 async def _apply_resume(session: AsyncSession, action: AgentAction) -> AppliedAction:
@@ -290,9 +296,8 @@ async def _undo_job(
         or conversation.job_binding_revision != change.applied_revision
     ):
         raise ToolError("当前岗位已变更，无法撤销", 409)
-    if (
-        change.previous_job_id
-        and await get_user_job(session, action.user_id, change.previous_job_id) is None
+    if change.previous_job_id and not await lock_agent_job(
+        session, action.user_id, change.previous_job_id
     ):
         raise ToolError("原岗位已删除，无法撤销", 409)
     set_job_binding(conversation, change.previous_job_id)
