@@ -838,6 +838,37 @@ textarea {
 .message-text li + li {
   margin-top: 2px;
 }
+.message-table-wrap {
+  margin: 0 0 10px;
+  overflow-x: auto;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--jp-radius-md);
+}
+.message-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.message-table th,
+.message-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.message-table td {
+  white-space: normal;
+  min-width: 72px;
+}
+.message-table th {
+  background: var(--ant-color-fill-quaternary);
+  font-weight: 600;
+}
+.message-table tbody tr:last-child td {
+  border-bottom: none;
+}
 .message-text h4 {
   margin: 14px 0 6px;
   font-size: 14px;
