@@ -31,6 +31,7 @@ from jobpilot.db.models import (
 )
 from jobpilot.db.runs import RunAlreadyFinishedError
 from jobpilot.main import app
+from jobpilot.services.auth import hash_password
 from jobpilot.services.llm_gateway import ModelBudget
 from jobpilot.services.prompts import load_prompt
 from jobpilot.services.resume_export import RenderMode, render_html, to_markdown
@@ -92,11 +93,20 @@ def _resume_fact(user_id, fact_set_id, doc_id, experience, section, text):
     )
 
 
-async def seed(session_factory: Factory) -> tuple[UUID, UUID, UUID]:
+async def seed(
+    session_factory: Factory,
+    *,
+    fact_text: str = CORRECTED,
+    fact_set_version: int = 1,
+    password: str | None = None,
+) -> tuple[UUID, UUID, UUID]:
     """返回 (user_id, run_id, 被纠正的事实 ID)。"""
     intern_start, school_start = RAW.index(INTERN_HEADING), RAW.index(SCHOOL_HEADING)
     async with session_factory.begin() as session:
-        user = User(email="accept@tailor.invalid", hashed_password="test")
+        user = User(
+            email="accept@tailor.invalid",
+            hashed_password=hash_password(password) if password else "test",
+        )
         session.add(user)
         await session.flush()
         doc = ResumeDocument(
@@ -117,7 +127,7 @@ async def seed(session_factory: Factory) -> tuple[UUID, UUID, UUID]:
                 },
             ],  # fmt: skip
         )
-        fact_set = FactSet(user_id=user.user_id, version=1)
+        fact_set = FactSet(user_id=user.user_id, version=fact_set_version)
         posting = JobPosting(
             owner_id=user.user_id,
             raw_text="岗位原文",
@@ -134,7 +144,7 @@ async def seed(session_factory: Factory) -> tuple[UUID, UUID, UUID]:
             section="internship",
             kind="result",
             responsibility="own",
-            text=CORRECTED,
+            text=fact_text,
             has_number=True,
             source="user",  # 用户把 30% 纠正为 20%：改了文字就转为用户补充
         )
@@ -178,8 +188,9 @@ async def seed(session_factory: Factory) -> tuple[UUID, UUID, UUID]:
 class StubbornModel:
     """改写和两次修订都坚持写底稿里的 30%。"""
 
-    def __init__(self, corrected_id: UUID) -> None:
+    def __init__(self, corrected_id: UUID, requirement_id: str = REQUIREMENT) -> None:
         self.corrected_id = corrected_id
+        self.requirement_id = requirement_id
         self.calls: dict[str, int] = {}
         self._kinds = {
             load_prompt(name).text: name
@@ -203,7 +214,7 @@ class StubbornModel:
             "match_job": {
                 "items": [
                     {
-                        "requirement_id": REQUIREMENT,
+                        "requirement_id": self.requirement_id,
                         "verdict": "covered",
                         "fact_ids": [str(self.corrected_id)],
                         "reason": "做过耗时优化",

@@ -139,3 +139,14 @@ async def latest_job_resume(
         )
     ).one_or_none()
     return tuple(row) if row else None
+
+
+async def current_resume_version(
+    user_id: UUID, session: AsyncSession, resume_id: UUID
+) -> ResumeVersion | None:
+    return await session.scalar(
+        _resume_versions(user_id).where(
+            TailoredResume.resume_id == resume_id,
+            ResumeVersion.resume_version_id == TailoredResume.current_version_id,
+        )
+    )

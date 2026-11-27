@@ -12,6 +12,7 @@ from jobpilot.api.deps import CurrentUser, DbSession, SessionFactory
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
 from jobpilot.api.tailored_resume import preview_csp
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
+from jobpilot.services.application_diff import ApplicationDiff, compare_application
 from jobpilot.services.applications import (
     ApplicationChanges,
     ApplicationDetail,
@@ -116,3 +117,10 @@ async def remove_application(
     await delete_application(user.user_id, db, application_id, body.expected_revision)
     await db.commit()
     return Response(status_code=204)
+
+
+@router.get("/{application_id}/diff")
+async def get_diff(
+    application_id: UUID, user: CurrentUser, db: DbSession
+) -> ApplicationDiff:
+    return await compare_application(user.user_id, db, application_id)

@@ -378,6 +378,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
         attempts=(
             Attempt("GET", "/api/applications/{id}"),
             Attempt("GET", "/api/applications/{id}/snapshot.html"),
+            Attempt("GET", "/api/applications/{id}/diff"),
             Attempt("PUT", "/api/applications/{id}", {"expected_revision": 1}),
             Attempt("DELETE", "/api/applications/{id}", {"expected_revision": 1}),
         ),
@@ -389,6 +390,7 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("PUT", "/api/applications/{application_id}"),
                 ("DELETE", "/api/applications/{application_id}"),
                 ("GET", "/api/applications/{application_id}/snapshot.html"),
+                ("GET", "/api/applications/{application_id}/diff"),
             }
         ),
     ),
