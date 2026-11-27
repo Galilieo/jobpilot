@@ -1961,19 +1961,11 @@ a.tool-step-tag:hover {
     margin-inline-start: 0;
   }
   .workspace-board,
-  .applications-board,
   .job-detail {
     grid-template-columns: minmax(0, 1fr);
   }
-  .board-column,
-  .app-column {
+  .board-column {
     min-height: 0;
-  }
-  .applications-search {
-    width: 100%;
-  }
-  .applications-toolbar-hint {
-    margin-inline-start: 0;
   }
   .board-column-empty {
     justify-content: flex-start;
@@ -2420,4 +2412,19 @@ a.tool-step-tag:hover {
 }
 .job-pick-title {
   font-weight: 600;
+}
+
+@media (max-width: 991px) {
+  .applications-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-column {
+    min-height: 0;
+  }
+  .applications-search {
+    width: 100%;
+  }
+  .applications-toolbar-hint {
+    margin-inline-start: 0;
+  }
 }
