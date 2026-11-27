@@ -655,7 +655,7 @@ async def test_delete_job_cascades_runs_reports_and_resumes_and_allows_reimport(
     model_outputs: list[str],
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """删除岗位级联清理运行、报告和简历，保留匿名模型用量且允许再次导入。"""
+    """删除岗位级联清理运行、报告和简历，保留该账号用量且允许再次导入。"""
     created = await add_job(signed_in, model_outputs)
     assert created.status_code == 201
     job_id = UUID(created.json()["job_id"])
@@ -787,7 +787,7 @@ async def test_delete_job_cascades_runs_reports_and_resumes_and_allows_reimport(
         ):
             assert (await db.scalars(select(table))).all() == [], table.__name__
         calls = (await db.scalars(select(ModelCall))).all()
-        assert calls and all(c.run_id is None and c.user_id is None for c in calls)
+        assert calls and all(c.run_id is None and c.user_id == me for c in calls)
 
     # 同一用户再次导入同一份 JD 仍应成功
     reimported = await add_job(signed_in, model_outputs)

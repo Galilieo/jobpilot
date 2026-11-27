@@ -263,17 +263,17 @@ class AiRun(Base):
 
 
 class ModelCall(Base):
-    """记录一次实际模型请求的结果和用量，运行删除后匿名保留。"""
+    """记录模型用量，删运行只解除运行引用，删账号后匿名保留。"""
 
     __tablename__ = "model_call"
     __table_args__ = (
         ForeignKeyConstraint(
             ["run_id", "user_id"],
             ["ai_run.run_id", "ai_run.user_id"],
-            ondelete="SET NULL",
+            ondelete="SET NULL (run_id)",
         ),
         CheckConstraint(
-            "(run_id IS NULL) = (user_id IS NULL)", name="ck_model_call_run_ownership"
+            "run_id IS NULL OR user_id IS NOT NULL", name="ck_model_call_run_ownership"
         ),
         CheckConstraint(
             "outcome <> 'unknown' OR "
@@ -293,7 +293,7 @@ class ModelCall(Base):
 
     call_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     run_id: Mapped[UUID | None] = mapped_column(Uuid)
-    user_id: Mapped[UUID | None] = mapped_column(Uuid)
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("user_account.user_id"))
     # 子运行删除后仍要计入对话预算。对话运行删除时才解除这个关联。
     budget_run_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("ai_run.run_id", ondelete="SET NULL")

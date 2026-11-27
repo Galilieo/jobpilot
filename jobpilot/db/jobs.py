@@ -58,7 +58,7 @@ async def delete_user_job(
 
     ai_run.(user_job_id, user_id) -> user_job 是延迟检查的 NO ACTION 外键，
     必须先删 ai_run；删它会级联清理 match_report、tailored_bullet、bullet_fact、
-    tailored_resume、resume_version、未退役的 idempotency_key，并将关联的模型用量匿名保留。
+    tailored_resume、resume_version、未退役的 idempotency_key，并解除用量的运行引用。
     """
     user_job = await db.scalar(
         select(UserJob)

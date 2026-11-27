@@ -335,7 +335,9 @@ async def test_account_foreign_keys_in_migrated_database(
     assert foreign_keys.pop("fact")["fact_set"] == "CASCADE"
     assert foreign_keys.pop("fact_set_criterion")["fact_set"] == "CASCADE"
     assert foreign_keys.pop("fact_set_education")["fact_set"] == "CASCADE"
-    assert foreign_keys.pop("model_call")["ai_run"] == "SET NULL"
+    model_call_keys = foreign_keys.pop("model_call")
+    assert model_call_keys["ai_run"] == "SET NULL (run_id)"
+    assert model_call_keys["user_account"] == "NO ACTION"
     assert foreign_keys.pop("message")["ai_run"] == "CASCADE"
     assert foreign_keys.pop("agent_action")["ai_run"] == "CASCADE"
     assert foreign_keys.pop("application_stage_event")["application"] == "CASCADE"
