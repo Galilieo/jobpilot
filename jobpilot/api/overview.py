@@ -17,10 +17,8 @@ from jobpilot.db.applications import latest_application_stages
 from jobpilot.db.jobs import list_user_jobs
 from jobpilot.db.models import (
     AiRun,
-    CheckStatus,
     Fact,
     JobStage,
-    TailoredBullet,
     TailoredResume,
 )
 from jobpilot.db.reports import latest_match_reports_by_job
@@ -29,6 +27,7 @@ from jobpilot.services.applications import derive_job_stage
 from jobpilot.services.drafts import ItemStatus
 from jobpilot.services.jobs import effective_parsed_job
 from jobpilot.services.matching import JobMatchSummary, summarize_stored_match
+from jobpilot.services.usage_stats import grounding_counts
 
 router = APIRouter(prefix="/api", tags=["overview"])
 
@@ -121,31 +120,13 @@ async def _facts_overview(
 
 
 async def _grounding_overview(db: AsyncSession, user_id: UUID) -> GroundingOverview:
-    rows = (
-        await db.execute(
-            select(TailoredBullet.check_status, func.count())
-            .where(TailoredBullet.user_id == user_id)
-            .group_by(TailoredBullet.check_status)
-        )
-    ).all()
-    counts = {status: count for status, count in rows}
-    passed = counts.get(CheckStatus.PASSED, 0)
-    fallback = counts.get(CheckStatus.FALLBACK, 0)
-    pending = counts.get(CheckStatus.PENDING, 0)
-    resume_count = (
-        await db.scalar(
-            select(func.count(TailoredResume.resume_id)).where(
-                TailoredResume.user_id == user_id
-            )
-        )
-        or 0
-    )
+    counts = await grounding_counts(db, user_id)
     return GroundingOverview(
-        total=passed + fallback + pending,
-        passed=passed,
-        fallback=fallback,
-        pending=pending,
-        resume_count=resume_count,
+        total=counts.total,
+        passed=counts.passed,
+        fallback=counts.fallback,
+        pending=counts.pending,
+        resume_count=counts.resume_count,
     )
 
 
