@@ -1,5 +1,6 @@
 // 后端枚举值对应的界面文字，集中放一处，各页面共用。
 import type {
+  ApplicationStage,
   CriterionField,
   DegreeLevel,
   EducationStatus,
@@ -14,12 +15,17 @@ import type {
   TailoredResumeStatus,
 } from './api/types'
 
-export const JOB_STAGE: Record<JobStage, string> = {
-  saved: '已收藏',
+export const APPLICATION_STAGE: Record<ApplicationStage, string> = {
   applied: '已投递',
+  written_test: '笔试',
   interviewing: '面试中',
   offer: '已拿 offer',
   rejected: '未通过',
+}
+
+export const JOB_STAGE: Record<JobStage, string> = {
+  saved: '已收藏',
+  ...APPLICATION_STAGE,
   archived: '已归档',
 }
 

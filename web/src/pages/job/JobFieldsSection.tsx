@@ -14,6 +14,7 @@ const FIELDS: [keyof BasicFields, string][] = [
   ['education', '学历'],
   ['graduation_window', '毕业时间'],
   ['application_deadline', '截止日期'],
+  ['job_url', '岗位链接'],
 ]
 
 export function JobFieldsSection({
@@ -34,7 +35,7 @@ export function JobFieldsSection({
           <BasicFieldCell
             key={key}
             label={label}
-            value={fields[key]}
+            value={fields[key] ?? null}
             overridden={overriddenFields.includes(key)}
             saving={saving}
             onSave={(next) => onSave({ [key]: next })}

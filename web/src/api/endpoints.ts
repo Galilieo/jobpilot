@@ -4,6 +4,11 @@ import type {
   AgentDecision,
   AgentMessageInput,
   AgentUndoResult,
+  ApplicationChanges,
+  ApplicationDetail,
+  ApplicationDiff,
+  ApplicationInput,
+  ApplicationRecord,
   CompactResult,
   Conversation,
   ConversationDetail,
@@ -249,4 +254,25 @@ export const memories = {
     request<MemoryItem>(`/api/memories/${key}`, { method: 'PUT', json: body }),
   remove: (key: MemoryKey, body: { expected_revision: number }) =>
     request<MemoryItem>(`/api/memories/${key}`, { method: 'DELETE', json: body }),
+}
+
+export const applications = {
+  list: (jobId?: string, signal?: AbortSignal) => {
+    const filter = jobId ? `?job_id=${encodeURIComponent(jobId)}` : ''
+    return request<ApplicationRecord[]>(`/api/applications${filter}`, { signal })
+  },
+  detail: (id: string, signal?: AbortSignal) =>
+    request<ApplicationDetail>(`/api/applications/${id}`, { signal }),
+  create: (body: ApplicationInput, idempotencyKey: string) =>
+    request<ApplicationRecord>('/api/applications', { json: body, idempotencyKey }),
+  update: (id: string, body: ApplicationChanges) =>
+    request<ApplicationRecord>(`/api/applications/${id}`, { method: 'PUT', json: body }),
+  remove: (id: string, revision: number) =>
+    request<void>(`/api/applications/${id}`, {
+      method: 'DELETE',
+      json: { expected_revision: revision },
+    }),
+  snapshotUrl: (id: string) => `/api/applications/${id}/snapshot.html`,
+  diff: (id: string, signal?: AbortSignal) =>
+    request<ApplicationDiff>(`/api/applications/${id}/diff`, { signal }),
 }

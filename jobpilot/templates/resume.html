@@ -64,6 +64,18 @@
     content: ""; position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%);
     border: 5px solid transparent; border-top-color: #26313c; border-bottom: 0;
   }
+  {% if responsive_screen %}
+  @media screen {
+    .page { max-width: 100%; overflow-wrap: anywhere; }
+  }
+  @media screen and (max-width: 210mm) {
+    .page {
+      width: 100%; min-height: 100vh; margin: 0; padding: clamp(14px, 5vw, 40px);
+    }
+    .entry-head { flex-wrap: wrap; gap: 0 12px; }
+    .entry-time { white-space: normal; }
+  }
+  {% endif %}
   @page { size: A4; margin: 0; }
   @media print {
     body { background: #fff; }
@@ -111,6 +123,7 @@
   </section>
   {% endfor %}
 </main>
+{% if not responsive_screen %}
 <script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>
   // 窗口比 A4 窄时（例如应用里的预览面板）按比例缩小显示整页；
   // 只是缩放显示，排版、「自动一页」的测量和打印都不受影响。
@@ -131,6 +144,7 @@
     fit();
   })();
 </script>
+{% endif %}
 {% if editor_json %}
 <script type="application/json" id="jobpilot-resume">{{ editor_json }}</script>
 <script{% if csp_nonce %} nonce="{{ csp_nonce }}"{% endif %}>{{ editor_script }}</script>

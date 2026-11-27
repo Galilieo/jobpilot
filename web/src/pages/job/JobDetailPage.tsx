@@ -8,37 +8,33 @@ import {
   Drawer,
   Dropdown,
   Grid,
-  Select,
   Skeleton,
   Space,
   Tabs,
+  Tag,
   Typography,
 } from 'antd'
 import { useState, type ReactElement } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { jobs } from '../../api/endpoints'
-import type { JobStage } from '../../api/types'
 import { EmptyHint } from '../../components/EmptyHint'
 import { MetaList } from '../../components/MetaList'
 import { PageHeader } from '../../components/PageHeader'
 import { JOB_STAGE, jobMetaParts } from '../../labels'
 import {
+  APPLICATIONS_QUERY,
   JOBS_QUERY,
   OVERVIEW_QUERY,
   TAILORED_RESUMES_QUERY,
   jobQuery,
   matchesQuery,
 } from '../../queryKeys'
+import { ApplicationRecords } from './ApplicationRecords'
 import { InjectionAlert, JobInfo } from './JobInfo'
 import { MatchPanel } from './MatchPanel'
 import { ResumePanel } from './ResumePanel'
 
 type DetailTab = 'match' | 'info' | 'raw'
-
-const STAGE_OPTIONS = (Object.keys(JOB_STAGE) as JobStage[]).map((value) => ({
-  value,
-  label: JOB_STAGE[value],
-}))
 
 export function JobDetailPage(): ReactElement {
   const { message, modal } = App.useApp()
@@ -59,15 +55,15 @@ export function JobDetailPage(): ReactElement {
     queryFn: ({ signal }) => jobs.matches(jobId, signal),
   })
 
-  const updateStage = useMutation({
-    mutationFn: (stage: JobStage) => jobs.update(jobId, { stage }),
-    onSuccess: async () => {
+  const updateArchive = useMutation({
+    mutationFn: (archived: boolean) => jobs.update(jobId, { archived }),
+    onSuccess: async (_, archived) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: jobQuery(jobId) }),
         queryClient.invalidateQueries({ queryKey: JOBS_QUERY }),
         queryClient.invalidateQueries({ queryKey: OVERVIEW_QUERY }),
       ])
-      message.success('已更新岗位进度')
+      message.success(archived ? '已归档岗位' : '已取消归档')
     },
     onError: (error) => {
       void message.error(error.message)
@@ -82,6 +78,7 @@ export function JobDetailPage(): ReactElement {
         queryClient.invalidateQueries({ queryKey: JOBS_QUERY }),
         queryClient.invalidateQueries({ queryKey: OVERVIEW_QUERY }),
         queryClient.invalidateQueries({ queryKey: TAILORED_RESUMES_QUERY }),
+        queryClient.invalidateQueries({ queryKey: APPLICATIONS_QUERY }),
       ])
       message.success('已删除岗位')
       void navigate('/jobs', { replace: true })
@@ -94,7 +91,7 @@ export function JobDetailPage(): ReactElement {
   function confirmDelete(): void {
     modal.confirm({
       title: '删除这个岗位？',
-      content: '会一起删除这个岗位的全部匹配报告、改写记录和定制简历，删除后无法恢复。',
+      content: '会一起删除这个岗位的匹配报告、改写记录和定制简历。已记录的投递及简历快照会保留。',
       okText: '删除岗位',
       okButtonProps: { danger: true },
       cancelText: '取消',
@@ -141,22 +138,16 @@ export function JobDetailPage(): ReactElement {
             subtitle={subtitle}
             extra={
               <Space size={8} wrap>
-                <Select<JobStage>
-                  aria-label="岗位进度"
-                  value={job.data.stage}
-                  loading={updateStage.isPending}
-                  options={STAGE_OPTIONS}
-                  onChange={(stage) => updateStage.mutate(stage)}
-                />
+                <Tag>{JOB_STAGE[job.data.stage]}</Tag>
                 <Dropdown
                   trigger={['click']}
                   menu={{
                     items: [
                       {
                         key: 'archive',
-                        label: '归档岗位',
-                        disabled: job.data.stage === 'archived',
-                        onClick: () => updateStage.mutate('archived'),
+                        label: job.data.stage === 'archived' ? '取消归档' : '归档岗位',
+                        disabled: updateArchive.isPending,
+                        onClick: () => updateArchive.mutate(job.data.stage !== 'archived'),
                       },
                       { type: 'divider' },
                       {
@@ -205,6 +196,7 @@ export function JobDetailPage(): ReactElement {
                   ]}
                 />
               </Card>
+              <ApplicationRecords key={jobId} jobId={jobId} />
             </div>
             {!isNarrow && (
               <div className="job-detail-panel">

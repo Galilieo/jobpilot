@@ -192,7 +192,10 @@ def _freeze(
         fact_set_id=source.fact_set_id,
         snapshot_json=version.content_json,
         snapshot_html=render_html(
-            content, mode=RenderMode.EXPORT, version=version.version
+            content,
+            mode=RenderMode.EXPORT,
+            version=version.version,
+            responsive_screen=True,
         ),
         applied_at=body.applied_at or date.today(),
         channel=body.channel,

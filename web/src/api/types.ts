@@ -304,7 +304,8 @@ export interface UploadedResume {
 
 // ---------- 岗位 ----------
 
-export type JobStage = 'saved' | 'applied' | 'interviewing' | 'offer' | 'rejected' | 'archived'
+export type ApplicationStage = 'applied' | 'written_test' | 'interviewing' | 'offer' | 'rejected'
+export type JobStage = 'saved' | ApplicationStage | 'archived'
 export type RequirementType = 'hard' | 'preferred'
 
 export interface Requirement {
@@ -331,6 +332,7 @@ export interface BasicFields {
   education: string | null
   graduation_window: string | null
   application_deadline: string | null
+  job_url?: string | null
 }
 
 export interface InjectionFlag {
@@ -360,7 +362,7 @@ export interface Job {
 }
 
 export interface JobChanges {
-  stage?: JobStage
+  archived?: boolean
   note?: string | null
   basic_fields?: Partial<BasicFields>
   requirements?: RequirementChange[]
@@ -590,4 +592,68 @@ export interface MemoryItem {
   options?: string[]
   max_length?: number | null
   max_items?: number | null
+}
+
+export interface ApplicationInput {
+  job_id: string
+  resume_version_id: string
+  applied_at: string
+  channel: string | null
+}
+
+export interface ApplicationChanges {
+  expected_revision: number
+  stage?: ApplicationStage
+  occurred_at?: string
+  channel?: string | null
+  applied_at?: string
+}
+
+export interface ApplicationRecord {
+  application_id: string
+  user_job_id: string | null
+  job_snapshot_json: Pick<BasicFields, 'title' | 'company' | 'location' | 'salary' | 'job_url'>
+  resume_version_id: string | null
+  resume_id: string | null
+  resume_version: number | null
+  fact_set_id: string | null
+  backfilled: boolean
+  applied_at: string
+  channel: string | null
+  stage: ApplicationStage
+  revision: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ApplicationDetail extends ApplicationRecord {
+  snapshot_json: TailoredResumeData['content'] | null
+  stage_events: {
+    event_id: string
+    from_stage: ApplicationStage | null
+    to_stage: ApplicationStage
+    occurred_at: string
+    created_at: string
+  }[]
+}
+
+export interface TextChange {
+  item_id: string
+  before: string | null
+  after: string | null
+}
+
+export interface ApplicationDiff {
+  source_deleted: boolean
+  regenerated: boolean
+  regenerated_resume_id: string | null
+  regenerated_content: TailoredResumeData['content'] | null
+  resume_changes: TextChange[]
+  fact_changes: TextChange[]
+  risks: {
+    bullet_id: string
+    bullet_text: string
+    reason: 'fact_changed' | 'fact_removed' | 'bullet_removed' | 'uses_facts'
+    facts: TextChange[]
+  }[]
 }

@@ -85,7 +85,9 @@ async def test_application_freezes_selected_resume_and_survives_job_deletion(
     assert snapshot.is_success
     assert "frame-ancestors 'self'" in snapshot.headers["Content-Security-Policy"]
     assert "测试同学" in snapshot.text
-    assert "editor-data" not in snapshot.text
+    assert "<script" not in snapshot.text
+    assert "@media screen and (max-width: 210mm)" in snapshot.text
+    assert "@page { size: A4; margin: 0; }" in snapshot.text
     assert (await async_client.delete(job_path)).status_code == 204
     detail = (await async_client.get(path)).json()
     assert detail["user_job_id"] is detail["resume_version_id"] is None

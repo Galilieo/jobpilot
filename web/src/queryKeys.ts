@@ -15,3 +15,8 @@ export const CONVERSATIONS_QUERY = ['conversations', 'list'] as const
 export const conversationQuery = (conversationId: string) =>
   ['conversations', conversationId] as const
 export const MEMORIES_QUERY = ['memories'] as const
+
+export const APPLICATIONS_QUERY = ['applications'] as const
+export const applicationsQuery = (jobId: string) => [...APPLICATIONS_QUERY, 'job', jobId] as const
+export const applicationQuery = (id: string) => [...APPLICATIONS_QUERY, 'record', id] as const
+export const applicationDiffQuery = (id: string) => [...applicationQuery(id), 'diff'] as const

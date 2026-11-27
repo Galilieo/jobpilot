@@ -63,6 +63,7 @@ describe('JobDetailPage 删除岗位二次确认', () => {
         if (
           url === '/api/jobs/job-1/matches' ||
           url === '/api/jobs/job-1/tailor-runs' ||
+          url === '/api/applications?job_id=job-1' ||
           url === '/api/facts'
         ) {
           return jsonResponse(
@@ -105,7 +106,7 @@ describe('JobDetailPage 删除岗位二次确认', () => {
 
     expect(
       await screen.findByText(
-        '会一起删除这个岗位的全部匹配报告、改写记录和定制简历，删除后无法恢复。',
+        '会一起删除这个岗位的匹配报告、改写记录和定制简历。已记录的投递及简历快照会保留。',
       ),
     ).toBeInTheDocument()
 
