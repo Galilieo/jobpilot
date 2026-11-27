@@ -996,99 +996,121 @@ textarea {
   margin-inline-start: 6px;
 }
 
-/* 工具步骤 */
+/* 工具步骤：一行灰色概括，点开按动作列出 */
 .tool-steps {
-  display: block;
-  width: 100%;
   max-width: 640px;
-  padding: 0;
   font-size: 13px;
+  color: var(--ant-color-text-tertiary);
 }
-.tool-steps .ant-thought-chain-item-header {
-  color: var(--ant-color-text-secondary);
-}
-.tool-steps .ant-thought-chain-node-title {
-  width: 100%;
+.tool-steps.is-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .tool-steps-trigger {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 0;
   border: 0;
   background: transparent;
-  color: var(--ant-color-text-secondary);
+  color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.tool-steps-actions {
+.tool-steps-trigger:hover,
+.tool-steps-trigger:focus-visible {
   color: var(--ant-color-text-secondary);
 }
-.tool-steps-trigger:hover .tool-steps-actions {
-  color: var(--ant-color-text);
+.tool-steps-icon {
+  color: var(--ant-color-success);
 }
-.tool-steps-meta {
+.tool-steps-icon.is-error {
+  color: var(--ant-color-warning);
+}
+.tool-steps-summary {
   color: var(--ant-color-text-secondary);
 }
-.tool-step-timeline {
-  margin: 0;
-  padding: 2px 2px 2px 22px;
+.tool-steps-chevron {
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+.tool-steps-trigger[aria-expanded='true'] .tool-steps-chevron {
+  transform: rotate(90deg);
+}
+/* 运行中的文字像 Claude、ChatGPT 那样微微流光，表示还在进行 */
+.tool-steps-shimmer {
+  background: linear-gradient(
+      90deg,
+      var(--ant-color-text-tertiary) 30%,
+      var(--ant-color-text) 50%,
+      var(--ant-color-text-tertiary) 70%
+    )
+    0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: tool-steps-shimmer 1.8s linear infinite;
+}
+@keyframes tool-steps-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-steps-shimmer {
+    animation: none;
+    color: var(--ant-color-text-secondary);
+  }
+}
+.tool-step-list {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 2px 6px;
+  padding: 2px 0 2px 14px;
+  border-left: 1px solid var(--ant-color-border-secondary);
   list-style: none;
-  color: var(--ant-color-text-secondary);
-  font-size: 13px;
 }
-.tool-step-timeline li {
-  position: relative;
+.tool-step {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 3px 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: var(--ant-color-text-secondary);
 }
-.tool-step-timeline li::before {
-  content: '';
-  position: absolute;
-  left: -17px;
-  top: 10px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ant-color-bg-container);
-  border: 1.5px solid var(--ant-color-success);
-}
-.tool-step-timeline li.is-error::before {
-  border-color: var(--ant-color-error);
-}
-.tool-step-timeline li:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: -14px;
-  top: 18px;
-  bottom: -9px;
-  width: 1px;
-  background: var(--ant-color-border);
+.tool-step .tool-step-icon {
+  color: var(--ant-color-text-tertiary);
 }
 .tool-step-name {
   color: var(--ant-color-text);
 }
-.tool-step-count {
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-}
-.tool-step-result {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tool-step-time {
-  margin-left: auto;
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-}
-.tool-step-timeline .is-error .tool-step-result {
+.tool-step.is-error,
+.tool-step.is-error .tool-step-icon {
   color: var(--ant-color-error-text);
+}
+.tool-step-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tool-step-tag {
+  padding: 0 8px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 999px;
+  background: var(--ant-color-bg-container);
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+a.tool-step-tag:hover {
+  border-color: var(--ant-color-primary-border);
+  color: var(--ant-color-primary);
 }
 
 /* 确认卡与提问卡 */

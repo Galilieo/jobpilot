@@ -25,16 +25,37 @@ const TOOL_ACTION: Record<string, string> = {
   read_conversation_history: '查阅对话',
 }
 
+// 收起时概括用。读取类只写读了什么（read_job 按岗位个数另算），其余写完成后的短语。
+const READ_OBJECT: Record<string, string> = {
+  read_facts: '你的经历',
+  read_match_report: '匹配报告',
+  read_resume: '定制简历',
+  read_conversation_history: '更早的对话',
+}
+
+const DONE_PHRASE: Record<string, string> = {
+  list_jobs: '查看了岗位库',
+  parse_jd: '解析了 JD',
+  match_job: '做了匹配',
+  tailor_resume: '生成了定制简历',
+  set_current_job: '切换了当前岗位',
+  edit_resume_item: '改了简历条目',
+  ask_user: '向你提了问题',
+  record_application: '记了投递',
+  remember: '记下了偏好',
+  forget: '删掉了偏好',
+}
+
+export function readObject(tool: string): string | null {
+  return READ_OBJECT[tool] ?? null
+}
+
+export function donePhrase(tool: string): string {
+  return DONE_PHRASE[tool] ?? toolLabel(tool)
+}
+
 export function toolAction(tool: string): string {
   return TOOL_ACTION[tool] ?? toolLabel(tool)
-}
-
-export function formatStepsSummary(tools: string[]): string {
-  return [...new Set(tools.map(toolAction))].join('、')
-}
-
-export function formatStepDuration(ms: number): string {
-  return `${(ms / 1000).toFixed(1)} 秒`
 }
 
 export function formatTotalDuration(ms: number): string {

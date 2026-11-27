@@ -1,5 +1,6 @@
-// 工具步骤的整理：每步的简短结果，以及时间轴里相邻同一工具的合并。纯函数，不渲染。
+// 工具步骤的整理：每步的简短结果、按动作分组，以及收起时的一句话概括。纯函数，不渲染。
 import { STOP_REASON } from '../../labels'
+import { donePhrase, readObject } from './naming'
 
 export type JobTitle = (jobId: string) => string
 
@@ -8,6 +9,16 @@ export interface StepView {
   tool: string
   status: 'loading' | 'success' | 'error'
   result: Record<string, unknown> | null
+  durationMs?: number
+}
+
+export interface StepGroup {
+  key: string
+  tool: string
+  status: StepView['status']
+  count: number
+  jobIds: string[]
+  summary: string
   durationMs?: number
 }
 
@@ -23,51 +34,73 @@ function stepSummary(step: StepView): string {
   return '完成'
 }
 
-export interface StepGroup {
-  key: string
-  tool: string
-  status: StepView['status']
-  count: number
-  jobIds: string[]
-  summary: string
-  durationMs?: number
-}
-
 function jobIdOf(step: StepView): string | null {
   const jobId = step.result?.job_id
   return typeof jobId === 'string' ? jobId : null
 }
 
-/** 相邻、同一工具、都成功的步骤合成一组；出错和进行中的单独成行，原因才不会被盖住。 */
+function newGroup(step: StepView): StepGroup {
+  const jobId = jobIdOf(step)
+  return {
+    key: step.key,
+    tool: step.tool,
+    status: step.status,
+    count: 1,
+    jobIds: jobId ? [jobId] : [],
+    summary: stepSummary(step),
+    ...(step.durationMs !== undefined && { durationMs: step.durationMs }),
+  }
+}
+
+/** 成功的步骤按动作合成一组（不必相邻），岗位去重；出错和进行中的各自成组，原因才不会被盖住。 */
 export function groupSteps(steps: StepView[]): StepGroup[] {
   const groups: StepGroup[] = []
   for (const step of steps) {
-    const last = groups.at(-1)
-    const jobId = jobIdOf(step)
-    const summary = stepSummary(step)
-    const mergeable =
-      last?.tool === step.tool && step.status === 'success' && last.summary === summary
-    if (last && mergeable) {
-      last.count += 1
-      if (jobId && !last.jobIds.includes(jobId)) last.jobIds.push(jobId)
-      if (step.durationMs !== undefined) last.durationMs = (last.durationMs ?? 0) + step.durationMs
+    const same =
+      step.status === 'success'
+        ? groups.find((group) => group.tool === step.tool && group.status === 'success')
+        : undefined
+    if (!same) {
+      groups.push(newGroup(step))
       continue
     }
-    groups.push({
-      key: step.key,
-      tool: step.tool,
-      status: step.status,
-      count: 1,
-      jobIds: jobId ? [jobId] : [],
-      summary,
-      ...(step.durationMs !== undefined && { durationMs: step.durationMs }),
-    })
+    const jobId = jobIdOf(step)
+    same.count += 1
+    if (jobId && !same.jobIds.includes(jobId)) same.jobIds.push(jobId)
+    const summary = stepSummary(step)
+    if (summary !== '完成') same.summary = summary
+    if (step.durationMs !== undefined) same.durationMs = (same.durationMs ?? 0) + step.durationMs
   }
   return groups
 }
 
-export function groupDetail(group: StepGroup, title?: JobTitle): string | null {
-  if (group.status !== 'success') return group.summary
-  if (group.jobIds.length > 0 && title) return group.jobIds.map(title).join('、')
-  return group.summary === '完成' ? null : group.summary
+function joinObjects(objects: string[]): string {
+  if (objects.length <= 1) return objects.join('')
+  return `${objects.slice(0, -1).join('、')}和${objects.at(-1)}`
+}
+
+function objectOf(group: StepGroup): string | null {
+  if (group.tool === 'read_job') return `${group.jobIds.length || group.count} 个岗位`
+  return readObject(group.tool)
+}
+
+/** 收起时的概括：读取类合成「读了 A、B 和 C」放在第一次读取的位置，其余各用完成短语。 */
+export function describeSteps(groups: StepGroup[]): string {
+  const parts: string[] = []
+  const reads: string[] = []
+  let readAt = -1
+  for (const group of groups.filter((item) => item.status === 'success')) {
+    const object = objectOf(group)
+    if (object === null) {
+      parts.push(donePhrase(group.tool))
+      continue
+    }
+    if (readAt < 0) readAt = parts.push('') - 1
+    reads.push(object)
+  }
+  if (readAt >= 0) parts[readAt] = `读了${joinObjects(reads)}`
+  const failed = groups.filter((group) => group.status === 'error').length
+  if (failed > 0) parts.push(`${failed} 步没成功`)
+  // 汉字和数字之间留空格：「读了 3 个岗位」「你的经历和 2 个岗位」。
+  return parts.join('，').replace(/([\u4e00-\u9fff])(\d)/gu, '$1 $2')
 }

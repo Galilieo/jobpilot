@@ -1,109 +1,120 @@
-// 一轮里的多个工具调用合并成一行进度（「解析岗位、匹配、生成简历 3 步，用时 21 秒」），点开是时间轴。
-// 时间轴里相邻的同一工具再合成一行（「读取岗位详情 × 5」），写出读了哪些岗位，不逐条重复「完成」。
-import { ThoughtChain } from '@ant-design/x'
-import type { ThoughtChainItemType } from '@ant-design/x'
-import { useState, type ReactElement } from 'react'
+// 一轮的工具步骤：运行中写出正在做什么，完成后收成一句话概括，点开按动作列出、读过的岗位做成标签。
+// 参考 ChatGPT「思考了 N 秒」、Codex 正文间的灰色小字：默认收起，不逐条重复「完成」，也不摆时间轴。
+import {
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  FileTextOutlined,
+  LoadingOutlined,
+  RightOutlined,
+  ToolOutlined,
+  UnorderedListOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
+import { useState, type ReactElement, type ReactNode } from 'react'
+import { Link } from 'react-router'
 import { toolLabel } from '../../labels'
-import { formatStepDuration, formatStepsSummary, formatTotalDuration, toolAction } from './naming'
-import { groupDetail, groupSteps, type JobTitle, type StepView } from './stepGroups'
+import { formatTotalDuration, toolAction } from './naming'
+import {
+  describeSteps,
+  groupSteps,
+  type JobTitle,
+  type StepGroup,
+  type StepView,
+} from './stepGroups'
 
 export type { StepView } from './stepGroups'
 
-function StepTimeline({ steps, title }: { steps: StepView[]; title?: JobTitle }): ReactElement {
-  return (
-    <ol className="tool-step-timeline">
-      {groupSteps(steps).map((group) => {
-        const detail = groupDetail(group, title)
-        return (
-          <li key={group.key} className={group.status === 'error' ? 'is-error' : undefined}>
-            <span className="tool-step-name">{toolLabel(group.tool)}</span>
-            {group.count > 1 && (
-              <span className="tool-step-count tabular-num">× {group.count}</span>
-            )}
-            {detail && <span className="tool-step-result">{detail}</span>}
-            {group.durationMs !== undefined && (
-              <time className="tool-step-time tabular-num">
-                {formatStepDuration(group.durationMs)}
-              </time>
-            )}
-          </li>
-        )
-      })}
-    </ol>
-  )
+// 展开后每行最多列两个岗位，其余写个数，一行放得下。
+const MAX_JOB_TAGS = 2
+
+const TOOL_ICON: Record<string, ReactNode> = {
+  list_jobs: <UnorderedListOutlined />,
+  read_facts: <UserOutlined />,
+  read_job: <FileTextOutlined />,
 }
 
 function totalDurationMs(steps: StepView[]): number | null {
-  let total = 0
-  let hasAny = false
-  for (const step of steps) {
-    if (typeof step.durationMs === 'number') {
-      total += step.durationMs
-      hasAny = true
-    }
-  }
-  return hasAny ? total : null
+  const timed = steps.filter((step) => typeof step.durationMs === 'number')
+  return timed.length > 0 ? timed.reduce((sum, step) => sum + (step.durationMs ?? 0), 0) : null
 }
 
-function headlineStatus(steps: StepView[]): ThoughtChainItemType['status'] {
-  if (steps.some((step) => step.status === 'loading')) return 'loading'
-  if (steps.some((step) => step.status === 'error')) return 'error'
-  return 'success'
+function JobTags({ jobIds, title }: { jobIds: string[]; title: JobTitle }): ReactElement {
+  const rest = jobIds.length - MAX_JOB_TAGS
+  return (
+    <span className="tool-step-tags">
+      {jobIds.slice(0, MAX_JOB_TAGS).map((jobId) => (
+        <Link key={jobId} to={`/jobs/${jobId}`} className="tool-step-tag">
+          {title(jobId)}
+        </Link>
+      ))}
+      {rest > 0 && <span className="tool-step-tag is-more">+{rest}</span>}
+    </span>
+  )
+}
+
+function GroupRow({ group, title }: { group: StepGroup; title?: JobTitle }): ReactElement {
+  if (group.status === 'error') {
+    return (
+      <li className="tool-step is-error">
+        <ExclamationCircleOutlined className="tool-step-icon" />
+        <span>
+          {toolLabel(group.tool)}没成功：{group.summary}
+        </span>
+      </li>
+    )
+  }
+  return (
+    <li className="tool-step">
+      <span className="tool-step-icon">{TOOL_ICON[group.tool] ?? <ToolOutlined />}</span>
+      <span className="tool-step-name">{toolLabel(group.tool)}</span>
+      {group.summary !== '完成' && <span className="tool-step-meta">{group.summary}</span>}
+      {title && group.jobIds.length > 0 && <JobTags jobIds={group.jobIds} title={title} />}
+    </li>
+  )
 }
 
 export function ToolSteps({ steps, title }: { steps: StepView[]; title?: JobTitle }): ReactElement {
   const [open, setOpen] = useState(false)
-  const status = headlineStatus(steps)
   const running = steps.find((step) => step.status === 'loading')
-  const failed = steps.filter((step) => step.status === 'error').length
+  if (running) {
+    return (
+      <div className="tool-steps is-running" role="status">
+        <LoadingOutlined className="tool-steps-icon" />
+        <span className="tool-steps-shimmer">正在{toolAction(running.tool)}…</span>
+        <span className="tool-steps-meta tabular-num">第 {steps.indexOf(running) + 1} 步</span>
+      </div>
+    )
+  }
+
+  const groups = groupSteps(steps)
   const totalMs = totalDurationMs(steps)
-  const actionsText = formatStepsSummary(steps.map((step) => step.tool))
-
-  const heading = running ? (
-    <button
-      type="button"
-      className="tool-steps-trigger"
-      aria-expanded={open}
-      onClick={(event) => {
-        event.stopPropagation()
-        setOpen((current) => !current)
-      }}
-    >
-      <span className="tool-steps-actions">正在{toolAction(running.tool)}…</span>
-    </button>
-  ) : (
-    <button
-      type="button"
-      className="tool-steps-trigger"
-      aria-expanded={open}
-      onClick={(event) => {
-        event.stopPropagation()
-        setOpen((current) => !current)
-      }}
-    >
-      <span className="tool-steps-actions">{actionsText}</span>
-      <span className="tool-steps-meta tabular-num">
-        {steps.length} 步{totalMs !== null ? `，用时 ${formatTotalDuration(totalMs)}` : ''}
-        {failed > 0 ? `，${failed} 步没成功` : ''}
-      </span>
-    </button>
-  )
-
+  const failed = groups.some((group) => group.status === 'error')
   return (
-    <ThoughtChain
-      className="tool-steps"
-      expandedKeys={open ? ['steps'] : []}
-      onExpand={(keys) => setOpen(keys.includes('steps'))}
-      items={[
-        {
-          key: 'steps',
-          title: heading,
-          status,
-          collapsible: true,
-          blink: status === 'loading',
-          content: <StepTimeline steps={steps} title={title} />,
-        },
-      ]}
-    />
+    <div className="tool-steps">
+      <button
+        type="button"
+        className="tool-steps-trigger"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {failed ? (
+          <ExclamationCircleOutlined className="tool-steps-icon is-error" />
+        ) : (
+          <CheckCircleOutlined className="tool-steps-icon" />
+        )}
+        <span className="tool-steps-summary">{describeSteps(groups)}</span>
+        {totalMs !== null && (
+          <span className="tool-steps-meta tabular-num">· {formatTotalDuration(totalMs)}</span>
+        )}
+        <RightOutlined className="tool-steps-chevron" />
+      </button>
+      {open && (
+        <ul className="tool-step-list">
+          {groups.map((group) => (
+            <GroupRow key={group.key} group={group} title={title} />
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
