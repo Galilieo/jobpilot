@@ -82,6 +82,10 @@ class ApplicationOut(BaseModel):
     updated_at: datetime
 
 
+class ApplicationListItem(ApplicationOut):
+    stage_changed_at: date
+
+
 class StageEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -237,10 +241,17 @@ async def require_application(
 
 async def applications_for_job(
     user_id: UUID, session: AsyncSession, job_id: UUID | None
-) -> list[Application]:
+) -> list[ApplicationListItem]:
     if job_id is not None and await get_user_job(session, user_id, job_id) is None:
         raise ApplicationError(404, "岗位不存在")
-    return await records.list_applications(user_id, session, job_id)
+    rows = await records.list_applications(user_id, session, job_id)
+    return [
+        ApplicationListItem(
+            **ApplicationOut.model_validate(application).model_dump(),
+            stage_changed_at=stage_changed_at,
+        )
+        for application, stage_changed_at in rows
+    ]
 
 
 async def application_detail(

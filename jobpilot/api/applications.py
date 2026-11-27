@@ -18,6 +18,7 @@ from jobpilot.services.applications import (
     ApplicationDetail,
     ApplicationError,
     ApplicationInput,
+    ApplicationListItem,
     ApplicationOut,
     RevisionInput,
     application_detail,
@@ -69,11 +70,8 @@ async def create_application(submission: Submission, db: DbSession) -> Applicati
 @router.get("")
 async def list_applications(
     user: CurrentUser, db: DbSession, job_id: UUID | None = None
-) -> list[ApplicationOut]:
-    return [
-        ApplicationOut.model_validate(row)
-        for row in await applications_for_job(user.user_id, db, job_id)
-    ]
+) -> list[ApplicationListItem]:
+    return await applications_for_job(user.user_id, db, job_id)
 
 
 @router.get("/{application_id}")

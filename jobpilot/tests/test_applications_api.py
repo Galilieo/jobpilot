@@ -5,7 +5,8 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
@@ -212,3 +213,104 @@ async def test_record_conflict_with_job_lock_allows_retry_with_same_key(
     )
     assert retried.status_code == 201, retried.text
     assert len((await async_client.get("/api/applications")).json()) == 1
+
+
+async def test_application_list_stage_changed_at_follows_last_appended_event(
+    async_client: httpx.AsyncClient,
+    presented_resume: tuple[UUID, str, dict],
+) -> None:
+    _, job_id, version = presented_resume
+    created = await save_application(
+        async_client, job_id, version["version_id"], "2026-11-25"
+    )
+    assert "stage_changed_at" not in created
+    app_id = created["application_id"]
+
+    for url in ("/api/applications", f"/api/applications?job_id={job_id}"):
+        items = (await async_client.get(url)).json()
+        assert len(items) == 1
+        assert items[0]["stage_changed_at"] == "2026-11-25"
+
+    updated = await async_client.put(
+        f"/api/applications/{app_id}",
+        json={
+            "expected_revision": 1,
+            "stage": "written_test",
+            "occurred_at": "2026-11-26",
+        },
+    )
+    assert updated.is_success, updated.text
+    assert "stage_changed_at" not in updated.json()
+    for url in ("/api/applications", f"/api/applications?job_id={job_id}"):
+        assert (await async_client.get(url)).json()[0][
+            "stage_changed_at"
+        ] == "2026-11-26"
+
+    # 补填一个更早的发生日期后，stage_changed_at 仍取最后追加的阶段记录日期。
+    backfilled = await async_client.put(
+        f"/api/applications/{app_id}",
+        json={
+            "expected_revision": 2,
+            "stage": "interviewing",
+            "occurred_at": "2026-11-20",
+        },
+    )
+    assert backfilled.is_success, backfilled.text
+    for url in ("/api/applications", f"/api/applications?job_id={job_id}"):
+        assert (await async_client.get(url)).json()[0][
+            "stage_changed_at"
+        ] == "2026-11-20"
+
+
+async def test_application_list_query_count_stays_constant(
+    async_client: httpx.AsyncClient,
+    presented_resume: tuple[UUID, str, dict],
+    db_engine: AsyncEngine,
+) -> None:
+    _, job_id, version = presented_resume
+
+    async def seed(count: int) -> None:
+        for index in range(count):
+            created = await save_application(
+                async_client,
+                job_id,
+                version["version_id"],
+                f"2026-11-{10 + index:02d}",
+            )
+            updated = await async_client.put(
+                f"/api/applications/{created['application_id']}",
+                json={
+                    "expected_revision": 1,
+                    "stage": "written_test",
+                    "occurred_at": f"2026-11-{20 + index:02d}",
+                },
+            )
+            assert updated.is_success, updated.text
+
+    def capture_queries() -> tuple[list[str], object]:
+        statements: list[str] = []
+
+        def capture(_conn, _cursor, statement, _params, _ctx, _many) -> None:
+            statements.append(statement)
+
+        event.listen(db_engine.sync_engine, "before_cursor_execute", capture)
+        return statements, capture
+
+    await seed(1)
+    q1, cap1 = capture_queries()
+    try:
+        assert (await async_client.get("/api/applications")).status_code == 200
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", cap1)
+
+    await seed(4)
+    q5, cap5 = capture_queries()
+    try:
+        resp = await async_client.get("/api/applications")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 5
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", cap5)
+
+    assert len(q5) == len(q1)
+    assert sum("FROM application" in stmt for stmt in q5) == 1

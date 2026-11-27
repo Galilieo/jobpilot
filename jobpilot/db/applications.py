@@ -1,8 +1,9 @@
 """按账号读取投递、阶段事件以及岗位定制简历的具体版本。"""
 
+from datetime import date
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
@@ -50,15 +51,39 @@ async def find_by_action(
 
 async def list_applications(
     user_id: UUID, session: AsyncSession, job_id: UUID | None
-) -> list[Application]:
+) -> list[tuple[Application, date]]:
+    latest_event = (
+        select(
+            ApplicationStageEvent.application_id,
+            ApplicationStageEvent.occurred_at.label("stage_changed_at"),
+        )
+        .where(ApplicationStageEvent.user_id == user_id)
+        .ext(distinct_on(ApplicationStageEvent.application_id))
+        .order_by(
+            ApplicationStageEvent.application_id,
+            ApplicationStageEvent.created_at.desc(),
+            ApplicationStageEvent.event_id.desc(),
+        )
+        .subquery()
+    )
     query = (
-        select(Application)
+        select(
+            Application,
+            func.coalesce(
+                latest_event.c.stage_changed_at, Application.applied_at
+            ).label("stage_changed_at"),
+        )
+        .outerjoin(
+            latest_event,
+            latest_event.c.application_id == Application.application_id,
+        )
         .where(Application.user_id == user_id)
         .options(defer(Application.snapshot_html), defer(Application.snapshot_json))
     )
     if job_id is not None:
         query = query.where(Application.user_job_id == job_id)
-    return list(await session.scalars(query.order_by(*APPLICATION_ORDER)))
+    rows = (await session.execute(query.order_by(*APPLICATION_ORDER))).all()
+    return [(application, stage_changed_at) for application, stage_changed_at in rows]
 
 
 async def list_events(
