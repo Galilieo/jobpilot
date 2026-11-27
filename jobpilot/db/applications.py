@@ -1,12 +1,12 @@
 """按账号读取投递、阶段事件以及岗位定制简历的具体版本。"""
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import defer, load_only
 
 from jobpilot.db.models import (
     AiRun,
@@ -21,6 +21,20 @@ APPLICATION_ORDER = (
     Application.created_at.desc(),
     Application.application_id.desc(),
 )
+
+
+def job_resume_order():
+    """成功改写按完成时间排，未完成的运行仍可用开始时间定位。"""
+    return (
+        func.coalesce(
+            AiRun.finished_at, TailoredResume.created_at, AiRun.started_at
+        ).desc(),
+        AiRun.run_id.desc(),
+    )
+
+
+def resume_generated_at(run: AiRun, resume: TailoredResume) -> datetime:
+    return run.finished_at or resume.created_at
 
 
 async def find_application(
@@ -101,6 +115,20 @@ async def list_events(
     )
 
 
+async def correct_initial_date(
+    user_id: UUID, session: AsyncSession, application_id: UUID, applied_at: date
+) -> None:
+    await session.execute(
+        update(ApplicationStageEvent)
+        .where(
+            ApplicationStageEvent.user_id == user_id,
+            ApplicationStageEvent.application_id == application_id,
+            ApplicationStageEvent.from_stage.is_(None),
+        )
+        .values(occurred_at=applied_at)
+    )
+
+
 async def latest_application_stages(
     user_id: UUID, session: AsyncSession, job_id: UUID | None = None
 ) -> dict[UUID, str]:
@@ -150,19 +178,24 @@ async def find_resume_version(
 
 
 async def latest_job_resume(
-    user_id: UUID, session: AsyncSession, job_id: UUID
+    user_id: UUID, session: AsyncSession, job_id: UUID, *, include_content: bool = True
 ) -> tuple[ResumeVersion, TailoredResume, AiRun] | None:
-    row = (
-        await session.execute(
-            _resume_versions(user_id)
-            .where(
-                AiRun.user_job_id == job_id,
-                ResumeVersion.resume_version_id == TailoredResume.current_version_id,
-            )
-            .order_by(TailoredResume.created_at.desc(), TailoredResume.resume_id.desc())
-            .limit(1)
+    query = (
+        _resume_versions(user_id)
+        .where(
+            AiRun.user_job_id == job_id,
+            ResumeVersion.resume_version_id == TailoredResume.current_version_id,
         )
-    ).one_or_none()
+        .order_by(*job_resume_order())
+        .limit(1)
+    )
+    if not include_content:
+        query = query.options(
+            load_only(ResumeVersion.version),
+            load_only(TailoredResume.resume_id),
+            load_only(AiRun.run_id),
+        )
+    row = (await session.execute(query)).one_or_none()
     return tuple(row) if row else None
 
 

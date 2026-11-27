@@ -7,16 +7,22 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db import applications as records
-from jobpilot.db.models import Application, Fact
+from jobpilot.db.models import Application, Fact, Responsibility
 from jobpilot.services import drafts
 from jobpilot.services.applications import ApplicationError, require_application
 from jobpilot.services.resume_content import Bullet, ResumeContent, UserBulletChoice
+from jobpilot.services.resume_export import exported_bullets
 
 
 class TextChange(BaseModel):
     item_id: UUID
     before: str | None
     after: str | None
+
+
+class FactChange(TextChange):
+    before_responsibility: Responsibility | None
+    after_responsibility: Responsibility | None
 
 
 class RiskReason(StrEnum):
@@ -30,7 +36,7 @@ class ApplicationRisk(BaseModel):
     bullet_id: UUID
     bullet_text: str
     reason: RiskReason
-    facts: list[TextChange]
+    facts: list[FactChange]
 
 
 class ApplicationDiff(BaseModel):
@@ -39,7 +45,7 @@ class ApplicationDiff(BaseModel):
     regenerated_resume_id: UUID | None = None
     regenerated_content: ResumeContent | None = None
     resume_changes: list[TextChange] = Field(default_factory=list)
-    fact_changes: list[TextChange] = Field(default_factory=list)
+    fact_changes: list[FactChange] = Field(default_factory=list)
     risks: list[ApplicationRisk] = Field(default_factory=list)
 
 
@@ -48,7 +54,7 @@ def _bullet_index(content: ResumeContent) -> dict[UUID, Bullet]:
         bullet.bullet_id: bullet
         for section in content.sections
         for entry in section.entries
-        for bullet in entry.bullets
+        for bullet in exported_bullets(entry.bullets)
     }
 
 
@@ -60,12 +66,29 @@ def _text_changes(before: dict[UUID, str], after: dict[UUID, str]) -> list[TextC
     ]
 
 
-def _fact_changes(previous: list[Fact], current: list[Fact]) -> list[TextChange]:
-    """以 lineage_id 对齐已发布事实，逐条比较用于求职的事实文本。"""
-    return _text_changes(
-        {fact.lineage_id: fact.text for fact in previous},
-        {fact.lineage_id: fact.text for fact in current},
+def _fact_change(key: UUID, before: Fact | None, after: Fact | None) -> FactChange:
+    return FactChange(
+        item_id=key,
+        before=before.text if before else None,
+        after=after.text if after else None,
+        before_responsibility=before.responsibility if before else None,
+        after_responsibility=after.responsibility if after else None,
     )
+
+
+def _changed_facts(
+    before: dict[UUID, Fact], after: dict[UUID, Fact]
+) -> list[FactChange]:
+    changes = [
+        _fact_change(key, before.get(key), after.get(key))
+        for key in dict.fromkeys([*before, *after])
+    ]
+    return [
+        change
+        for change in changes
+        if (change.before, change.before_responsibility)
+        != (change.after, change.after_responsibility)
+    ]
 
 
 def _bullet_risks(
@@ -73,10 +96,10 @@ def _bullet_risks(
     after: Bullet | None,
     *,
     same_resume: bool,
-    citations: list[TextChange],
-    changed_facts: dict[UUID, TextChange],
+    citations: list[FactChange],
+    changed_facts: dict[UUID, FactChange],
 ) -> list[ApplicationRisk]:
-    affected: dict[RiskReason, list[TextChange]] = {}
+    affected: dict[RiskReason, list[FactChange]] = {}
     for fact in citations:
         changed = changed_facts.get(fact.item_id)
         if changed is not None:
@@ -127,18 +150,11 @@ async def _compare_resume(
     if row.user_job_id is not None:
         latest = await records.latest_job_resume(user_id, session, row.user_job_id)
         if latest is not None and latest[1].resume_id != row.resume_id:
-            selected = await records.find_resume_version(
-                user_id, session, row.resume_version_id
+            result.regenerated = True
+            result.regenerated_resume_id = latest[1].resume_id
+            result.regenerated_content = ResumeContent.from_stored(
+                latest[0].content_json
             )
-            if selected is not None and (latest[1].created_at, latest[1].resume_id) > (
-                selected[1].created_at,
-                selected[1].resume_id,
-            ):
-                result.regenerated = True
-                result.regenerated_resume_id = latest[1].resume_id
-                result.regenerated_content = ResumeContent.from_stored(
-                    latest[0].content_json
-                )
     return result, after
 
 
@@ -154,14 +170,13 @@ async def compare_application(
     latest_facts = await drafts.facts_of(
         session, await drafts.latest_fact_set(session, user_id)
     )
-    result.fact_changes = _fact_changes(original_facts, latest_facts)
+    before_by_lineage = {fact.lineage_id: fact for fact in original_facts}
+    latest_by_lineage = {fact.lineage_id: fact for fact in latest_facts}
+    result.fact_changes = _changed_facts(before_by_lineage, latest_by_lineage)
     changed = {change.item_id: change for change in result.fact_changes}
-    latest_by_lineage = {fact.lineage_id: fact.text for fact in latest_facts}
     citations = {
-        fact.fact_id: TextChange(
-            item_id=fact.lineage_id,
-            before=fact.text,
-            after=latest_by_lineage.get(fact.lineage_id),
+        fact.fact_id: _fact_change(
+            fact.lineage_id, fact, latest_by_lineage.get(fact.lineage_id)
         )
         for fact in original_facts
     }

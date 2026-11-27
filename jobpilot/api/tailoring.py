@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.deps import CurrentUser, DbSession, ModelClient, SessionFactory
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
+from jobpilot.db.applications import job_resume_order
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import get_user_job
 from jobpilot.db.models import (
@@ -330,7 +331,7 @@ async def list_tailor_runs(
             AiRun.user_job_id == job_id,
             AiRun.kind == "tailor",
         )
-        .order_by(AiRun.started_at.desc())
+        .order_by(*job_resume_order())
     )
     return [
         TailorRunSummary(

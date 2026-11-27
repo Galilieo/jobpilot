@@ -4,6 +4,7 @@ import { Alert, Drawer, Skeleton, Typography } from 'antd'
 import type { ReactElement } from 'react'
 import { applications } from '../../api/endpoints'
 import type { ApplicationDiff, TailoredResumeData, TextChange } from '../../api/types'
+import { RESPONSIBILITY } from '../../labels'
 import { applicationDiffQuery } from '../../queryKeys'
 
 const RISK_LABEL = {
@@ -66,7 +67,7 @@ function DiffBody({ diff, id }: { diff: ApplicationDiff; id: string }): ReactEle
       </section>
       <section>
         <Typography.Title level={4}>事实库差异</Typography.Title>
-        <ChangeList changes={diff.fact_changes} empty="事实文字没有变化。" />
+        <ChangeList changes={diff.fact_changes} empty="事实没有变化。" />
       </section>
       <section>
         <Typography.Title level={4}>风险提醒</Typography.Title>
@@ -116,10 +117,16 @@ function ChangeList({
             <div>
               <small>投递时</small>
               <p>{change.before ?? '—'}</p>
+              {change.before_responsibility && (
+                <small>{RESPONSIBILITY[change.before_responsibility]}</small>
+              )}
             </div>
             <div className="is-after">
               <small>现在</small>
               <p>{change.after ?? '—'}</p>
+              {change.after_responsibility && (
+                <small>{RESPONSIBILITY[change.after_responsibility]}</small>
+              )}
             </div>
           </div>
         </div>

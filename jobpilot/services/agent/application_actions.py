@@ -1,6 +1,6 @@
 """投递确认卡绑定具体简历版本，确认与撤销共用投递服务。"""
 
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ from jobpilot.services.applications import (
     application_source,
     delete_application,
     record_application,
+    require_not_future,
 )
 
 
@@ -33,6 +34,7 @@ class ApplicationCard(ApplicationInput):
     title: str | None
     company: str | None
     resume_version: int
+    resume_generated_at: datetime | None = None
 
     def submission(self) -> ApplicationInput:
         return ApplicationInput(
@@ -60,6 +62,7 @@ async def prepare_application(
         if job_id is None:
             raise ToolError("请先选定已投递的岗位")
         try:
+            require_not_future(args.applied_at, "投递日期")
             source = await application_source(
                 agent.user_id, session, job_id, args.resume_version_id
             )
@@ -73,6 +76,7 @@ async def prepare_application(
         title=source.job.title,
         company=source.job.company,
         resume_version=source.version.version,
+        resume_generated_at=source.resume_generated_at,
     ).model_dump(mode="json")
 
 

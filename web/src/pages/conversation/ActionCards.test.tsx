@@ -350,6 +350,7 @@ it('shows the application details and offers undo after the confirmed write', as
       title: '平台实习',
       company: '示例公司',
       resume_version: 3,
+      resume_generated_at: '2026-11-26T12:30:00',
       applied_at: '2026-11-27',
       channel: '官网',
     },
@@ -376,6 +377,7 @@ it('shows the application details and offers undo after the confirmed write', as
   for (const detail of ['第 3 版简历', '示例公司', '2026-11-27', '官网']) {
     expect(screen.getByText(detail)).toBeInTheDocument()
   }
+  expect(screen.getByText(/生成于.*11.*26.*12:30/)).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: '确认记录' }))
   expect(decide).toHaveBeenCalledWith({ decision: 'confirm' })
   expect(screen.getByRole('link', { name: '查看岗位' })).toHaveAttribute('href', '/jobs/j1')

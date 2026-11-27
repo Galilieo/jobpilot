@@ -33,6 +33,11 @@ class ApplicationError(Exception):
         self.status = status
 
 
+def require_not_future(value: date | None, field: str) -> None:
+    if value is not None and value > date.today():
+        raise ApplicationError(422, f"{field}不能晚于今天")
+
+
 class ApplicationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -106,6 +111,7 @@ class ApplicationSource:
     job: JobSnapshot
     version: ResumeVersion
     fact_set_id: UUID
+    resume_generated_at: datetime
 
 
 def derive_job_stage(job: UserJob, latest: str | None) -> JobStage:
@@ -123,8 +129,7 @@ async def application_source(
     lock_job: bool = False,
 ) -> ApplicationSource:
     try:
-        # 对话决定先锁对话，而删除岗位会先锁岗位再解绑对话。遇到并发删除时
-        # 直接返回冲突，避免确认流程持有对话锁等待岗位或简历版本。
+        # 岗位和简历都可能正在变更，确认仍可在其他事务结束后重试。
         job = await get_user_job(
             session, user_id, job_id, for_update=lock_job, nowait=lock_job
         )
@@ -145,7 +150,7 @@ async def application_source(
         if version_id is not None:
             raise ApplicationError(404, "简历版本不存在")
         raise ApplicationError(422, "这个岗位还没有定制简历，请先生成")
-    version, _, run = selected
+    version, resume, run = selected
     if run.user_job_id != job_id or run.fact_set_id is None:
         raise ApplicationError(422, "请选择这个岗位的定制简历版本")
     fields = effective_parsed_job(*job).basic_fields
@@ -153,6 +158,7 @@ async def application_source(
         JobSnapshot.model_validate(fields, from_attributes=True),
         version,
         run.fact_set_id,
+        records.resume_generated_at(run, resume),
     )
 
 
@@ -168,6 +174,7 @@ async def record_application(
         existing = await records.find_by_action(user_id, session, action_id)
         if existing is not None:
             return existing
+    require_not_future(body.applied_at, "投递日期")
     source = await application_source(
         user_id, session, body.job_id, body.resume_version_id, lock_job=True
     )
@@ -282,6 +289,8 @@ async def update_application(
     row = await require_application(
         user_id, session, application_id, revision=changes.expected_revision
     )
+    require_not_future(changes.applied_at, "投递日期")
+    require_not_future(changes.occurred_at, "阶段日期")
     values = changes.model_dump(
         exclude_unset=True, include={"stage", "channel", "applied_at"}
     )
@@ -293,6 +302,10 @@ async def update_application(
     previous = row.stage
     for key, value in modified.items():
         setattr(row, key, value)
+    if "applied_at" in modified:
+        await records.correct_initial_date(
+            user_id, session, application_id, row.applied_at
+        )
     if row.stage != previous:
         _append_stage(session, row, previous, changes.occurred_at or date.today())
     if modified:

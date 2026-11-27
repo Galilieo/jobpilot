@@ -652,6 +652,8 @@ export interface TextChange {
   item_id: string
   before: string | null
   after: string | null
+  before_responsibility?: Responsibility | null
+  after_responsibility?: Responsibility | null
 }
 
 export interface ApplicationDiff {

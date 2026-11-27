@@ -1,7 +1,7 @@
 """用真实 HTTP 接口验证投递、阶段和快照的事务行为。"""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import httpx
@@ -147,6 +147,61 @@ async def test_delete_job_returns_conflict_with_bound_conversation_lock(
         await async_client.get(f"/api/conversations/{conversation_id}")
     ).json()
     assert conversation["current_job_id"] is None
+
+
+async def test_application_rejects_future_dates_and_updates_initial_event(
+    async_client: httpx.AsyncClient, presented_resume: tuple[UUID, str, dict]
+) -> None:
+    _, job_id, version = presented_resume
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    too_late = await async_client.post(
+        "/api/applications",
+        json={
+            "job_id": job_id,
+            "resume_version_id": version["version_id"],
+            "applied_at": tomorrow,
+        },
+        headers=new_idempotency_headers(),
+    )
+    assert too_late.status_code == 422
+    first = await save_application(
+        async_client, job_id, version["version_id"], "2026-11-20"
+    )
+    path = f"/api/applications/{first['application_id']}"
+    for patch in (
+        {"stage": "offer", "occurred_at": tomorrow},
+        {"applied_at": tomorrow},
+    ):
+        assert (
+            await async_client.put(path, json={"expected_revision": 1, **patch})
+        ).status_code == 422
+    assert (
+        await async_client.put(
+            path, json={"expected_revision": 1, "applied_at": "2026-11-21"}
+        )
+    ).is_success
+    [listed] = (await async_client.get("/api/applications")).json()
+    assert listed["stage_changed_at"] == "2026-11-21"
+    assert (
+        await async_client.put(
+            path,
+            json={
+                "expected_revision": 2,
+                "stage": "offer",
+                "occurred_at": "2026-11-24",
+            },
+        )
+    ).is_success
+    assert (
+        await async_client.put(
+            path, json={"expected_revision": 3, "applied_at": "2026-11-22"}
+        )
+    ).is_success
+    events = (await async_client.get(path)).json()["stage_events"]
+    assert [(event["from_stage"], event["occurred_at"]) for event in events] == [
+        (None, "2026-11-22"),
+        ("applied", "2026-11-24"),
+    ]
 
 
 async def test_second_application_and_stage_events_determine_job_stage(

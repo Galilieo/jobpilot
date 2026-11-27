@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from jobpilot.db.applications import latest_job_resume
 from jobpilot.db.conversations import (
     find_conversation,
     latest_agent_run,
@@ -21,8 +22,6 @@ from jobpilot.db.models import (
     FactSet,
     JobPosting,
     MatchReport,
-    ResumeVersion,
-    TailoredResume,
     UserJob,
 )
 from jobpilot.services import drafts
@@ -173,20 +172,11 @@ async def _latest_report(
 async def _latest_resume(
     session: AsyncSession, user_id: UUID, job_id: UUID
 ) -> Payload | None:
-    row = (
-        await session.execute(
-            select(TailoredResume.run_id, ResumeVersion.version)
-            .join(AiRun, AiRun.run_id == TailoredResume.run_id)
-            .join(
-                ResumeVersion,
-                ResumeVersion.resume_version_id == TailoredResume.current_version_id,
-            )
-            .where(TailoredResume.user_id == user_id, AiRun.user_job_id == job_id)
-            .order_by(AiRun.started_at.desc(), AiRun.run_id.desc())
-            .limit(1)
-        )
-    ).first()
-    return {"run_id": str(row.run_id), "version": row.version} if row else None
+    latest = await latest_job_resume(user_id, session, job_id, include_content=False)
+    if latest is None:
+        return None
+    version, _, run = latest
+    return {"run_id": str(run.run_id), "version": version.version}
 
 
 async def current_job_summary(

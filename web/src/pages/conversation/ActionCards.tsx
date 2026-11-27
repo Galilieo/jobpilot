@@ -17,7 +17,7 @@ import type {
 import { MetaList } from '../../components/MetaList'
 import { FactBadge } from '../../components/FactBadge'
 import { indexResumeFacts, type IndexedFact } from '../../factIndex'
-import { toolLabel } from '../../labels'
+import { formatDateTime, toolLabel } from '../../labels'
 import { MEMORIES_QUERY, tailorResumeQuery } from '../../queryKeys'
 import type { ToolResultStep } from './timeline'
 
@@ -257,6 +257,10 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
     const jobTitle = typeof args.title === 'string' ? args.title : jobId && title(jobId)
     const company = typeof args.company === 'string' ? args.company : ''
     const channel = typeof args.channel === 'string' ? args.channel : '渠道未填写'
+    const generated =
+      typeof args.resume_generated_at === 'string'
+        ? `生成于 ${formatDateTime(args.resume_generated_at)}`
+        : ''
     return {
       kind: '记录投递',
       body: (
@@ -266,6 +270,7 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
             items={[
               company,
               `第 ${String(args.resume_version)} 版简历`,
+              generated,
               String(args.applied_at),
               channel,
             ].filter(Boolean)}
