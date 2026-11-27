@@ -1,12 +1,12 @@
 """岗位库接口：提交 JD 并解析、列表、详情、修改。
 
-job_posting 存原文和解析结果，不随个人修改而变；个人的进度、备注和对解析结果的修改
+job_posting 存原文和解析结果，不随个人修改而变；个人的归档状态、备注和对解析结果的修改
 写在 user_job。路径里的 job_id 指 user_job，不是本人的一律 404。
 本周 MVP 不做薪资换算、筛选、统计和自定义字段（见 06 执行进度）。
 """
 
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Annotated, Any
 from uuid import UUID
@@ -25,6 +25,7 @@ from jobpilot.api.deps import (
 )
 from jobpilot.api.idempotency import RequiredKey, idempotent_request, save_snapshot
 from jobpilot.api.tailoring import Launcher
+from jobpilot.db.applications import latest_application_stages
 from jobpilot.db.idempotency import Attempt, KeyScope, Operation
 from jobpilot.db.jobs import (
     delete_user_job,
@@ -35,6 +36,7 @@ from jobpilot.db.jobs import (
 from jobpilot.db.models import AiRun, JobPosting, JobStage, RunStatus, UserJob
 from jobpilot.db.reports import latest_match_reports_by_job
 from jobpilot.db.runs import set_run_status
+from jobpilot.services.applications import derive_job_stage
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.injection import detect_injection
 from jobpilot.services.jobs import (
@@ -92,7 +94,7 @@ class JobChangesIn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    stage: JobStage | None = None
+    archived: bool | None = None
     note: str | None = Field(default=None, max_length=2000)
     basic_fields: BasicFields | None = None
     requirements: list[RequirementIn] | None = Field(default=None, max_length=80)
@@ -151,11 +153,13 @@ def _overridden_basic_fields(posting: JobPosting, effective: ParsedJob) -> list[
     )
 
 
-def _job_out(posting: JobPosting, user_job: UserJob) -> JobOut:
+def _job_out(
+    posting: JobPosting, user_job: UserJob, latest_stage: str | None = None
+) -> JobOut:
     parsed = effective_parsed_job(posting, user_job)
     return JobOut(
         job_id=user_job.user_job_id,
-        stage=JobStage(user_job.stage),
+        stage=derive_job_stage(user_job, latest_stage),
         note=user_job.note,
         raw_text=posting.raw_text,
         parsed=parsed,
@@ -174,6 +178,11 @@ async def _load(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="岗位不存在")
     return row
+
+
+async def _current_job_out(db: DbSession, posting: JobPosting, job: UserJob) -> JobOut:
+    stages = await latest_application_stages(job.user_id, db, job.user_job_id)
+    return _job_out(posting, job, stages.get(job.user_job_id))
 
 
 async def reserve_job(
@@ -289,7 +298,9 @@ async def _reuse_job(
     db: DbSession, response: Response, attempt: Attempt, job_id: UUID
 ) -> JobOut:
     # 与删除岗位共用行锁，避免删除事务提交后才补写旧快照。
-    output = _job_out(*await _load(db, attempt.scope.user_id, job_id, for_update=True))
+    output = await _current_job_out(
+        db, *await _load(db, attempt.scope.user_id, job_id, for_update=True)
+    )
     await save_snapshot(db, attempt, job_id, output, status.HTTP_200_OK)
     await db.commit()
     response.status_code = status.HTTP_200_OK
@@ -300,6 +311,7 @@ async def _reuse_job(
 async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
     rows = await list_user_jobs(db, user.user_id)
     latest_reports = await latest_match_reports_by_job(db, user.user_id)
+    stages = await latest_application_stages(user.user_id, db)
     summaries = []
     for posting, user_job in rows:
         parsed = effective_parsed_job(posting, user_job)
@@ -314,7 +326,7 @@ async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
                 location=fields.location,
                 onsite_days_per_week=fields.onsite_days_per_week,
                 education=fields.education,
-                stage=JobStage(user_job.stage),
+                stage=derive_job_stage(user_job, stages.get(user_job.user_job_id)),
                 keywords=parsed.keywords,
                 injection_count=len(posting.injection_flags),
                 match_summary=summarize_stored_match(*report) if report else None,
@@ -326,17 +338,19 @@ async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
 
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: UUID, user: CurrentUser, db: DbSession) -> JobOut:
-    return _job_out(*await _load(db, user.user_id, job_id))
+    return await _current_job_out(db, *await _load(db, user.user_id, job_id))
 
 
 @router.put("/jobs/{job_id}")
 async def update_job(
     job_id: UUID, body: JobChangesIn, user: CurrentUser, db: DbSession
 ) -> JobOut:
-    """修改进度、备注或解析结果。解析结果的修改写进 user_job，job_posting 不变。"""
+    """修改归档状态、备注或解析结果。解析结果的修改写进 user_job，job_posting 不变。"""
     posting, user_job = await _load(db, user.user_id, job_id, for_update=True)
-    if body.stage is not None:
-        user_job.stage = body.stage
+    if body.archived is True and user_job.archived_at is None:
+        user_job.archived_at = datetime.now(UTC)
+    elif body.archived is False:
+        user_job.archived_at = None
     if body.note is not None:
         user_job.note = body.note
 
@@ -366,7 +380,7 @@ async def update_job(
 
     await db.commit()
     await db.refresh(user_job)
-    return _job_out(posting, user_job)
+    return await _current_job_out(db, posting, user_job)
 
 
 @router.delete("/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)

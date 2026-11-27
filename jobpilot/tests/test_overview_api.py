@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from jobpilot.db.models import (
     AiRun,
+    Application,
     CheckStatus,
     Fact,
     FactDraft,
@@ -77,11 +78,21 @@ async def _add_job(
     user_job = UserJob(
         user_id=user_id,
         posting_id=posting.posting_id,
-        stage=stage,
+        archived_at=datetime.now(UTC) if stage == JobStage.ARCHIVED else None,
         field_overrides_json=overrides,
     )
     db.add(user_job)
     await db.flush()
+    if stage == JobStage.INTERVIEWING:
+        db.add(
+            Application(
+                user_id=user_id,
+                user_job_id=user_job.user_job_id,
+                job_snapshot_json={},
+                stage=stage,
+                backfilled=True,
+            )
+        )
     return user_job
 
 

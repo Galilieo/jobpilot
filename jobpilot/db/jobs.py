@@ -22,11 +22,16 @@ def _owned_jobs(user_id: UUID):
 
 
 async def get_user_job(
-    db: AsyncSession, user_id: UUID, job_id: UUID, *, for_update: bool = False
+    db: AsyncSession,
+    user_id: UUID,
+    job_id: UUID,
+    *,
+    for_update: bool = False,
+    nowait: bool = False,
 ) -> tuple[JobPosting, UserJob] | None:
     query = _owned_jobs(user_id).where(UserJob.user_job_id == job_id)
     if for_update:
-        query = query.with_for_update(of=UserJob)
+        query = query.with_for_update(of=UserJob, nowait=nowait)
     result = await db.execute(query)
     row = result.one_or_none()
     return (row.JobPosting, row.UserJob) if row else None

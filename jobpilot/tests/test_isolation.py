@@ -10,15 +10,19 @@
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 
+from jobpilot.api.deps import get_session_factory
+from jobpilot.db.models import FactSet, ResumeDocument
 from jobpilot.main import app
 from jobpilot.tests.test_auth import login, register
 from jobpilot.tests.test_facts_api import new_idempotency_headers
+from jobpilot.tests.test_tailored_resumes_api import _seed_tailored_resume
 
 Route = tuple[str, str]  # (HTTP 方法, 路径模板)
 
@@ -199,6 +203,42 @@ async def _create_tailor_run(
     return started.json()["run_id"]
 
 
+async def _application_source(client: httpx.AsyncClient) -> tuple[str, str]:
+    user_id = UUID((await client.get("/api/me")).json()["user_id"])
+    factory = app.dependency_overrides[get_session_factory]()
+    async with factory.begin() as db:
+        doc = ResumeDocument(user_id=user_id, raw_text="合成简历")
+        fact_set = FactSet(user_id=user_id, version=1)
+        db.add_all([doc, fact_set])
+        await db.flush()
+        job_id, run_id = await _seed_tailored_resume(
+            db,
+            user_id,
+            doc_id=doc.doc_id,
+            fact_set_id=fact_set.fact_set_id,
+            job_title="示例岗位",
+            job_company="示例公司",
+            version_number=1,
+            created_at=datetime.now(UTC),
+        )
+    resume = await client.get(f"/api/tailor-runs/{run_id}/resume")
+    assert resume.status_code == 200, resume.text
+    return str(job_id), resume.json()["version_id"]
+
+
+async def _create_application(
+    client: httpx.AsyncClient, model_outputs: list[str]
+) -> str:
+    job_id, version_id = await _application_source(client)
+    response = await client.post(
+        "/api/applications",
+        json={"job_id": job_id, "resume_version_id": version_id},
+        headers=new_idempotency_headers(),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["application_id"]
+
+
 # T1.4 起每加一类业务资源，就在这里登记一项。
 async def _create_conversation(client: httpx.AsyncClient, _outputs: list[str]) -> str:
     response = await client.post("/api/conversations", json={"title": "B 的对话"})
@@ -306,8 +346,9 @@ OWNED_RESOURCES: list[OwnedResource] = [
         read=("GET", "/api/jobs/{id}"),
         attempts=(
             Attempt("GET", "/api/jobs/{id}"),
+            Attempt("GET", "/api/applications?job_id={id}"),
             Attempt("POST", "/api/conversations", {"current_job_id": "{id}"}),
-            Attempt("PUT", "/api/jobs/{id}", {"stage": "applied", "note": "A 写的"}),
+            Attempt("PUT", "/api/jobs/{id}", {"archived": True, "note": "A 写的"}),
             Attempt("DELETE", "/api/jobs/{id}"),
             Attempt("POST", "/api/jobs/{id}/match", headers=new_idempotency_headers()),
             Attempt("GET", "/api/jobs/{id}/matches"),
@@ -327,6 +368,27 @@ OWNED_RESOURCES: list[OwnedResource] = [
                 ("GET", "/api/jobs/{job_id}/matches"),
                 ("GET", "/api/jobs/{job_id}/tailor-runs"),
                 ("POST", "/api/jobs/{job_id}/tailor"),
+            }
+        ),
+    ),
+    OwnedResource(
+        name="application",
+        create=_create_application,
+        read=("GET", "/api/applications/{id}"),
+        attempts=(
+            Attempt("GET", "/api/applications/{id}"),
+            Attempt("GET", "/api/applications/{id}/snapshot.html"),
+            Attempt("PUT", "/api/applications/{id}", {"expected_revision": 1}),
+            Attempt("DELETE", "/api/applications/{id}", {"expected_revision": 1}),
+        ),
+        routes=frozenset(
+            {
+                ("GET", "/api/applications"),
+                ("POST", "/api/applications"),
+                ("GET", "/api/applications/{application_id}"),
+                ("PUT", "/api/applications/{application_id}"),
+                ("DELETE", "/api/applications/{application_id}"),
+                ("GET", "/api/applications/{application_id}/snapshot.html"),
             }
         ),
     ),
@@ -543,3 +605,19 @@ async def test_routes_for_pending_account(
     )
 
     assert response.status_code == PENDING_ACCOUNT_ROUTES.get(route, 403), response.text
+
+
+async def test_application_cannot_reference_another_users_resume_version(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    _, other_version = await _application_source(user_b)
+    own_job = await _create_job(user_a, model_outputs)
+    response = await user_a.post(
+        "/api/applications",
+        json={"job_id": own_job, "resume_version_id": other_version},
+        headers=new_idempotency_headers(),
+    )
+    assert response.status_code == 404, response.text
+    assert (await user_a.get("/api/applications")).json() == []

@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.api.account import router as account_router
 from jobpilot.api.agent import router as agent_router
+from jobpilot.api.applications import application_error
+from jobpilot.api.applications import router as application_router
 from jobpilot.api.auth import router as auth_router
 from jobpilot.api.compaction import router as compaction_router
 from jobpilot.api.conversations import router as conversation_router
@@ -36,6 +38,7 @@ from jobpilot.db.session import check_database, create_database_engine, get_sess
 from jobpilot.diagnostics import describe_error, error_locations
 from jobpilot.services.accounts import purge_daily, purge_with_logging
 from jobpilot.services.agent.runtime import AgentRuntime
+from jobpilot.services.applications import ApplicationError
 
 logger = logging.getLogger("uvicorn.error").getChild("jobpilot")
 
@@ -101,6 +104,8 @@ app.include_router(conversation_router)
 app.include_router(agent_router)
 app.include_router(compaction_router)
 app.include_router(account_router)
+app.include_router(application_router)
+app.add_exception_handler(ApplicationError, application_error)
 app.include_router(memories_router)
 app.include_router(ocr_router)
 app.include_router(resumes_router)

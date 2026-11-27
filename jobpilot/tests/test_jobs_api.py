@@ -201,7 +201,7 @@ async def test_personal_changes_do_not_touch_the_posting(
     response = await signed_in.put(
         f"/api/jobs/{job['job_id']}",
         json={
-            "stage": "applied",
+            "archived": True,
             "note": "周五投",
             "requirements": [
                 {
@@ -222,7 +222,7 @@ async def test_personal_changes_do_not_touch_the_posting(
 
     assert response.status_code == 200, response.text
     updated = response.json()
-    assert (updated["stage"], updated["note"]) == ("applied", "周五投")
+    assert (updated["stage"], updated["note"]) == ("archived", "周五投")
     assert updated["overridden"] == ["keywords", "requirements"]
     first, second, third = updated["parsed"]["requirements"]
     # 文字没改：保留原文片段，只改类型

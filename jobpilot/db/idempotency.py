@@ -20,6 +20,7 @@ class Operation(StrEnum):
     PARSE_JD = "parse_jd"
     MATCH = "match"
     TAILOR = "tailor"  # 成功指运行已创建；后台运行之后失败，同一键仍返回这个运行
+    RECORD_APPLICATION = "record_application"
 
 
 class ClaimConflict(StrEnum):

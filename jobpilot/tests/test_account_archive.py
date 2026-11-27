@@ -21,6 +21,7 @@ from jobpilot.db.models import (
 from jobpilot.services.accounts import PurgeResult, purge_accounts
 from jobpilot.tests.test_account_lifecycle import EMAIL, _sign_in
 from jobpilot.tests.test_auth import login
+from jobpilot.tests.test_facts_api import new_idempotency_headers
 from jobpilot.tests.test_tailoring_api import launcher as launcher
 from jobpilot.tests.test_tailoring_api import model as model
 from jobpilot.tests.test_tailoring_api import start
@@ -57,6 +58,7 @@ async def portfolio(
     run_id = run.json()["run_id"]
     await launcher.wait_all()
     await _save_new_resume_version(async_client, run_id)
+    await _record_application(async_client, job_id, run_id)
     await _create_fact_history(async_client, inputs.fact_set_id)
     await _seed_criteria_and_education(session_factory, user_id, inputs.fact_set_id)
     return Portfolio(user_id, inputs, run_id)
@@ -100,6 +102,22 @@ async def _save_new_resume_version(client: httpx.AsyncClient, run_id: str) -> No
         path, json={"base_version_id": version["version_id"], "content": content}
     )
     assert saved.status_code == 200, saved.text
+
+
+async def _record_application(
+    client: httpx.AsyncClient, job_id: UUID, run_id: str
+) -> None:
+    selected = await client.get(f"/api/tailor-runs/{run_id}/resume?version=1")
+    assert selected.is_success
+    response = await client.post(
+        "/api/applications",
+        json={
+            "job_id": str(job_id),
+            "resume_version_id": selected.json()["version_id"],
+        },
+        headers=new_idempotency_headers(),
+    )
+    assert response.status_code == 201, response.text
 
 
 async def _create_fact_history(client: httpx.AsyncClient, fact_set_id: UUID) -> None:
@@ -148,6 +166,9 @@ async def test_export_has_all_versions_and_only_the_signed_in_owners_data(
     ).json()
     assert other_archive["account"]["email"] == other_email
     assert other_archive["resume_versions"] == []
+    assert (
+        other_archive["applications"] == other_archive["application_stage_events"] == []
+    )
     assert other_archive["fact_sets"][0]["fact_set_id"] == str(other_inputs.fact_set_id)
 
     assert (await login(async_client, EMAIL)).status_code == 204
@@ -284,6 +305,7 @@ async def test_account_foreign_keys_in_migrated_database(
     assert foreign_keys.pop("model_call")["ai_run"] == "SET NULL"
     assert foreign_keys.pop("message")["ai_run"] == "CASCADE"
     assert foreign_keys.pop("agent_action")["ai_run"] == "CASCADE"
+    assert foreign_keys.pop("application_stage_event")["application"] == "CASCADE"
     foreign_keys.pop("user_account")
     assert {
         table: rules.get("user_account") for table, rules in foreign_keys.items()

@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jobpilot.db.models import (
     AgentAction,
     AiRun,
+    Application,
+    ApplicationStageEvent,
     BulletFact,
     Conversation,
     Fact,
@@ -48,9 +50,15 @@ _EXPORT_TABLES = {
     "bullet_facts": BulletFact.__table__,
     "tailored_resumes": TailoredResume.__table__,
     "resume_versions": ResumeVersion.__table__,
+    "applications": Application.__table__,
+    "application_stage_events": ApplicationStageEvent.__table__,
 }
 _VERSION_ORDER = {
     Message.__table__: (Message.seq,),
+    ApplicationStageEvent.__table__: (
+        ApplicationStageEvent.created_at,
+        ApplicationStageEvent.event_id,
+    ),
     FactSet.__table__: (FactSet.version,),
     ResumeVersion.__table__: (ResumeVersion.resume_id, ResumeVersion.version),
 }
@@ -88,7 +96,9 @@ async def _owned_rows(
 ) -> list[dict[str, Any]]:
     owner = table.c.owner_id if table is JobPosting.__table__ else table.c.user_id
     columns = [
-        column for column in table.c if column.key not in {"thread_id", "content_hash"}
+        column
+        for column in table.c
+        if column.key not in {"thread_id", "content_hash", "snapshot_html"}
     ]
     ordering = _VERSION_ORDER.get(table, tuple(table.primary_key))
     rows = await session.execute(

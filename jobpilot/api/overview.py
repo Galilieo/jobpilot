@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.api.deps import CurrentUser, DbSession
+from jobpilot.db.applications import latest_application_stages
 from jobpilot.db.jobs import list_user_jobs
 from jobpilot.db.models import (
     AiRun,
@@ -24,6 +25,7 @@ from jobpilot.db.models import (
 )
 from jobpilot.db.reports import latest_match_reports_by_job
 from jobpilot.services import drafts
+from jobpilot.services.applications import derive_job_stage
 from jobpilot.services.drafts import ItemStatus
 from jobpilot.services.jobs import effective_parsed_job
 from jobpilot.services.matching import JobMatchSummary, summarize_stored_match
@@ -31,7 +33,13 @@ from jobpilot.services.matching import JobMatchSummary, summarize_stored_match
 router = APIRouter(prefix="/api", tags=["overview"])
 
 _APPLIED_STAGES = frozenset(
-    {JobStage.APPLIED, JobStage.INTERVIEWING, JobStage.OFFER, JobStage.REJECTED}
+    {
+        JobStage.APPLIED,
+        JobStage.WRITTEN_TEST,
+        JobStage.INTERVIEWING,
+        JobStage.OFFER,
+        JobStage.REJECTED,
+    }
 )
 
 
@@ -172,6 +180,7 @@ async def _job_board(
     jobs = await list_user_jobs(db, user_id)
     latest_reports = await latest_match_reports_by_job(db, user_id)
     tailored_sets = await _tailored_fact_sets(db, user_id)
+    stages = await latest_application_stages(user_id, db)
 
     unmatched: list[BoardJobCard] = []
     matched: list[BoardJobCard] = []
@@ -179,7 +188,7 @@ async def _job_board(
     applied: list[BoardJobCard] = []
 
     for posting, user_job in jobs:
-        stage = JobStage(user_job.stage)
+        stage = derive_job_stage(user_job, stages.get(user_job.user_job_id))
         if stage is JobStage.ARCHIVED:
             continue
         fields = effective_parsed_job(posting, user_job).basic_fields

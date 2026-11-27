@@ -43,6 +43,7 @@ class BasicFields(_ModelOutput):
     education: str | None = Field(default=None, max_length=100)
     graduation_window: str | None = Field(default=None, max_length=100)
     application_deadline: str | None = Field(default=None, max_length=100)
+    job_url: str | None = Field(default=None, max_length=2048)
 
 
 class RequirementType(StrEnum):
