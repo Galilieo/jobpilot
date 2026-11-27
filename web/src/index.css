@@ -70,6 +70,15 @@ textarea {
   background: var(--ant-color-bg-container);
   box-shadow: inset 0 0 0 1px var(--ant-color-success-border);
 }
+/* Ant Design TextArea 开启 showCount 时把计数绝对定位在框外底部，本身不占高度，
+ * 放在弹窗或按钮组上方会遮挡下方按钮；统一预留一行底部空间。 */
+.ant-input-textarea-show-count {
+  display: flex;
+  margin-bottom: 24px;
+}
+.ant-input-textarea-show-count .ant-input-data-count {
+  font-variant-numeric: tabular-nums;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * {
