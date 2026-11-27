@@ -70,10 +70,12 @@ export function ArtifactPanel(props: ArtifactPanelProps): ReactElement {
   })
   const active = props.activeTab && tabs.includes(props.activeTab) ? props.activeTab : tabs[0]
 
+  // 按钮贴着窗口右边缘，提示框居中会伸出窗口、撑出滚动条，布局一挪鼠标就离开按钮，
+  // 提示框于是反复出现消失；改为和按钮右对齐。
   const actions = (
     <span className="artifact-panel-actions">
       {props.onToggleExpand && (
-        <Tooltip title={props.expanded ? '还原' : '放大'}>
+        <Tooltip title={props.expanded ? '还原' : '放大'} placement="bottomRight">
           <Button
             type="text"
             size="small"
@@ -84,7 +86,7 @@ export function ArtifactPanel(props: ArtifactPanelProps): ReactElement {
         </Tooltip>
       )}
       {props.onClose && (
-        <Tooltip title="关闭面板">
+        <Tooltip title="关闭面板" placement="bottomRight">
           <Button
             type="text"
             size="small"

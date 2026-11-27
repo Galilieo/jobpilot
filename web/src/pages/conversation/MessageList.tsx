@@ -80,8 +80,11 @@ export function MessageList(props: MessageListProps): ReactElement {
   const liveStarted = live !== null
 
   // 自己刚发出消息或提交决定时滚到底部；只在已经贴底时自动跟随是 Bubble.List 的默认行为。
+  // 滚动容器在 Bubble.List 首次渲染之后才就绪，挂载时这一轮已开始（新对话发出第一条后跳转过来）
+  // 不能滚动，否则会抛错；刚挂载的列表本来就停在底部。
   useEffect(() => {
-    if (liveStarted) listRef.current?.scrollTo({ top: 'bottom' })
+    const list = listRef.current
+    if (liveStarted && list?.scrollBoxNativeElement) list.scrollTo({ top: 'bottom' })
   }, [liveStarted])
 
   const undo = useMutation({
