@@ -1,5 +1,6 @@
 """校验和渲染有来源的滚动工作摘要。"""
 
+import re
 from collections.abc import Mapping
 from json import dumps
 from typing import Annotated
@@ -8,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from jobpilot.services.llm_gateway import wrap_untrusted_text
+from jobpilot.services.text_clauses import CLAUSE_PUNCTUATION
 
 MAX_ITEMS = 12
 MAX_REQUIREMENTS = 24
@@ -15,6 +17,7 @@ MAX_ITEM_CHARACTERS = 240
 MAX_QUOTE_CHARACTERS = 100
 MAX_QUESTION_CHARACTERS = 2000
 _LOOKUP_HINT = "可以用 read_conversation_history 按消息序号或关键词查原文。"
+_BOUNDARY = frozenset(CLAUSE_PUNCTUATION + ".")
 
 SummaryText = Annotated[
     str,
@@ -80,6 +83,36 @@ class WorkSummary(SummaryModel):
     unverified: list[SummaryText] = Field(default_factory=list, max_length=MAX_ITEMS)
 
 
+class ExecutedAction(SummaryModel):
+    action_id: UUID
+    tool: str
+    status: str
+    result: dict[str, str | int | None]
+
+
+class StoredWorkSummary(WorkSummary):
+    # 旧摘要只做过子串校验，重新核对前不能把旧引文当成完整原话。
+    quotes_verified: bool = False
+    executed_actions: list[ExecutedAction] = Field(
+        default_factory=list, max_length=MAX_ITEMS
+    )
+
+
+def contains_complete_quote(body: str, quote: str) -> bool:
+    """逐字核对一条或相邻几条短句，允许省略末尾的分句标点。"""
+    quote = quote.strip()
+    if not quote or not set(quote) - _BOUNDARY:
+        return False
+    for match in re.finditer(re.escape(quote), body):
+        before = body[: match.start()].rstrip(" \t\r")
+        after = body[match.end() :].lstrip(" \t\r")
+        if (not before or before[-1] in _BOUNDARY) and (
+            not after or after[0] in _BOUNDARY or quote[-1] in _BOUNDARY
+        ):
+            return True
+    return False
+
+
 def _has_quote(
     requirement: Requirement,
     bodies: Mapping[int, str],
@@ -87,10 +120,14 @@ def _has_quote(
 ) -> bool:
     source = requirement.source
     if source.message_seq is not None:
-        return requirement.quote in bodies.get(source.message_seq, "")
+        return contains_complete_quote(
+            bodies.get(source.message_seq, ""), requirement.quote
+        )
     if source.action_id is not None and source.question_id:
         question = answers.get((source.action_id, source.question_id))
-        return question is not None and requirement.quote in question.answer
+        return question is not None and contains_complete_quote(
+            question.answer, requirement.quote
+        )
     return False
 
 
@@ -104,7 +141,8 @@ def checked_summary(
     answers: Mapping[tuple[UUID, str], AnsweredQuestion],
     *,
     through_seq: int,
-) -> WorkSummary:
+    executed_actions: list[ExecutedAction] | None = None,
+) -> StoredWorkSummary:
     verified = []
     unverified = list(summary.unverified)
     for requirement in summary.requirements:
@@ -123,26 +161,30 @@ def checked_summary(
         or len(verified) > MAX_REQUIREMENTS
     ):
         unverified = [*unverified[: MAX_ITEMS - 1], _range_hint(through_seq)]
-    return summary.model_copy(
-        update={
-            "requirements": verified[-MAX_REQUIREMENTS:],
-            "answered_questions": confirmed[-MAX_ITEMS:],
-            "unverified": unverified,
-        }
+    return StoredWorkSummary(
+        goal=summary.goal,
+        requirements=verified[-MAX_REQUIREMENTS:],
+        done_and_decided=summary.done_and_decided,
+        open_items=summary.open_items,
+        answered_questions=confirmed[-MAX_ITEMS:],
+        unverified=unverified,
+        quotes_verified=True,
+        executed_actions=(executed_actions or [])[-MAX_ITEMS:],
     )
 
 
-def render_summary(summary: WorkSummary) -> str:
+def render_summary(summary: StoredWorkSummary) -> str:
     headings: list[tuple[str, list[str]]] = [
-        ("目标", [summary.goal] if summary.goal else []),
+        ("目标（模型概括，未核实）", [summary.goal] if summary.goal else []),
         (
-            "要求",
-            [
-                requirement.model_dump_json(exclude_none=True)
-                for requirement in summary.requirements
-            ],
+            "要求" if summary.quotes_verified else "旧摘要引文（未核实）",
+            [item.quote.strip() for item in summary.requirements],
         ),
-        ("已完成和已决定", summary.done_and_decided),
+        ("已完成和已决定（模型概括，未核实）", summary.done_and_decided),
+        (
+            "已确认的动作结果",
+            [action.model_dump_json() for action in summary.executed_actions],
+        ),
         ("待处理", summary.open_items),
         (
             "已回答的问题",
@@ -158,14 +200,14 @@ def render_summary(summary: WorkSummary) -> str:
     return "\n".join([*blocks, _LOOKUP_HINT])
 
 
-def _summary_bytes(summary: WorkSummary) -> int:
+def _summary_bytes(summary: StoredWorkSummary) -> int:
     wrapped = wrap_untrusted_text("work_summary", render_summary(summary))
     return len(dumps(wrapped, ensure_ascii=False).encode())
 
 
 def fit_summary(
-    summary: WorkSummary, maximum_bytes: int, through_seq: int
-) -> WorkSummary:
+    summary: StoredWorkSummary, maximum_bytes: int, through_seq: int
+) -> StoredWorkSummary:
     """空间不足时保留范围提示，优先保留已经验证的要求。"""
     if _summary_bytes(summary) <= maximum_bytes:
         return summary
@@ -174,6 +216,7 @@ def fit_summary(
         reduced.unverified,
         reduced.done_and_decided,
         reduced.open_items,
+        reduced.executed_actions,
         reduced.answered_questions,
         reduced.requirements,
     )
@@ -186,4 +229,4 @@ def fit_summary(
             reduced.unverified.append(_range_hint(through_seq))
         if _summary_bytes(reduced) <= maximum_bytes:
             return reduced
-    return WorkSummary(unverified=[_range_hint(through_seq)])
+    return StoredWorkSummary(unverified=[_range_hint(through_seq)])

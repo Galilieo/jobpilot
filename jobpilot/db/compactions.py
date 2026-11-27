@@ -183,3 +183,30 @@ async def cited_question_cards(
         .order_by(Message.seq)
     )
     return list(await session.scalars(query))
+
+
+async def executed_cards(
+    user_id: UUID,
+    session: AsyncSession,
+    conversation_id: UUID,
+    *,
+    through_seq: int,
+    limit: int,
+) -> list[AgentAction]:
+    query = (
+        select(AgentAction)
+        .join(
+            Message,
+            (Message.run_id == AgentAction.run_id)
+            & (Message.event_key == func.concat("confirm:", AgentAction.action_id)),
+        )
+        .where(
+            AgentAction.user_id == user_id,
+            AgentAction.conversation_id == conversation_id,
+            AgentAction.status.in_((ActionStatus.EXECUTED, ActionStatus.UNDONE)),
+            Message.seq <= through_seq,
+        )
+        .order_by(Message.seq.desc())
+        .limit(limit)
+    )
+    return list(reversed(list(await session.scalars(query))))

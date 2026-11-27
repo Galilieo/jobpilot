@@ -20,7 +20,7 @@ from jobpilot.services.agent.types import (
     HistoryBoundary,
     Payload,
 )
-from jobpilot.services.agent.work_summary import WorkSummary, render_summary
+from jobpilot.services.agent.work_summary import StoredWorkSummary, render_summary
 from jobpilot.services.llm_gateway import redact_pii, wrap_untrusted_text
 from jobpilot.services.memories import memory_views
 from jobpilot.services.prompts import load_prompt
@@ -119,7 +119,7 @@ async def system_message(
             + wrap_untrusted_text("long_term_memory", serialize(active_memories))
         )
     if summary:
-        work = WorkSummary.model_validate(summary)
+        work = StoredWorkSummary.model_validate(summary)
         blocks.append(
             "工作摘要\n" + wrap_untrusted_text("work_summary", render_summary(work))
         )

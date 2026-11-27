@@ -31,12 +31,17 @@ from jobpilot.services.agent.compact_input import (
     group_turns,
     select_batch,
 )
-from jobpilot.services.agent.compact_sources import batch_answers, verified_sources
+from jobpilot.services.agent.compact_sources import (
+    batch_answers,
+    verified_actions,
+    verified_sources,
+)
 from jobpilot.services.agent.context import render_turn, system_message
 from jobpilot.services.agent.tools import TOOL_DEFINITIONS
 from jobpilot.services.agent.types import Payload
 from jobpilot.services.agent.work_summary import (
     AnsweredQuestion,
+    StoredWorkSummary,
     WorkSummary,
     checked_summary,
     fit_summary,
@@ -169,7 +174,7 @@ async def _create_work(
         )
         return None
     previous = fit_summary(
-        WorkSummary.model_validate(conversation.summary_json or {}),
+        StoredWorkSummary.model_validate(conversation.summary_json or {}),
         input_tokens // 2,
         previous_seq,
     )
@@ -429,7 +434,7 @@ async def _write_summary(
     conversation: Conversation,
     summary: WorkSummary,
 ) -> bool:
-    previous = WorkSummary.model_validate(conversation.summary_json or {})
+    previous = StoredWorkSummary.model_validate(conversation.summary_json or {})
     # 连续压缩保留已有且有证据的要求，重点说明不能自行挤掉它们。
     remembered_ids = {item.id for item in previous.requirements}
     requirements = [
@@ -458,7 +463,12 @@ async def _write_summary(
         work.answers,
         work.through_seq,
     )
-    checked = checked_summary(summary, bodies, answers, through_seq=work.through_seq)
+    actions = await verified_actions(
+        work.user_id, session, work.conversation_id, work.through_seq
+    )
+    checked = checked_summary(
+        summary, bodies, answers, through_seq=work.through_seq, executed_actions=actions
+    )
     fitted = fit_summary(checked, work.summary_bytes, work.through_seq)
     return await advance_summary(
         work.user_id,

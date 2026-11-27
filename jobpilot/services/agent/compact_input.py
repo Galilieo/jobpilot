@@ -76,7 +76,10 @@ def _request(
 ) -> list[ChatCompletionMessageParam]:
     content = [
         wrap_untrusted_text(
-            "previous_summary", previous.model_dump_json(exclude_none=True)
+            "previous_summary",
+            previous.model_dump_json(
+                exclude_none=True, exclude={"quotes_verified", "executed_actions"}
+            ),
         ),
         wrap_untrusted_text("completed_turns", serialize(rows)),
     ]

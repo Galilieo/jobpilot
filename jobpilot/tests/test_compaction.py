@@ -11,9 +11,63 @@ from jobpilot.api.deps import get_model_client
 from jobpilot.db.conversations import conversation_messages
 from jobpilot.db.models import Conversation, ModelCall
 from jobpilot.main import app
+from jobpilot.services.agent.work_summary import (
+    WorkSummary,
+    checked_summary,
+    render_summary,
+)
 from jobpilot.tests.test_agent_api import conversation, message_body, reply, sign_in
 from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
 from jobpilot.tests.test_tailoring_graph import Factory
+
+
+def test_summary_requirements_use_complete_source_clauses() -> None:
+    summary = WorkSummary.model_validate(
+        {
+            "goal": "模型写的目标",
+            "done_and_decided": ["模型写的决定"],
+            "requirements": [
+                {
+                    "id": "r1",
+                    "quote": "接受外包",
+                    "statement": "用户接受外包",
+                    "source": {"message_seq": 1},
+                },
+                {
+                    "id": "r2",
+                    "quote": "北京或上海都可以，但不去深圳",
+                    "statement": "三个城市都接受",
+                    "source": {"message_seq": 2},
+                },
+                {
+                    "id": "r3",
+                    "quote": "去深圳",
+                    "statement": "用户要去深圳",
+                    "source": {"message_seq": 2},
+                },
+                {
+                    "id": "r4",
+                    "quote": "我不接受外包。",
+                    "statement": "颠倒了原话",
+                    "source": {"message_seq": 1},
+                },
+            ],
+        }
+    )
+    checked = checked_summary(
+        summary,
+        {1: "  我不接受外包。下次再说", 2: "北京或上海都可以，但不去深圳！"},
+        {},
+        through_seq=2,
+    )
+    assert [requirement.id for requirement in checked.requirements] == ["r2", "r4"]
+    assert checked.unverified == ["用户接受外包", "用户要去深圳"]
+    rendered = render_summary(checked)
+    assert "- 北京或上海都可以，但不去深圳" in rendered
+    assert "- 我不接受外包。" in rendered
+    assert "三个城市都接受" not in rendered
+    assert "颠倒了原话" not in rendered
+    assert rendered.count("模型概括，未核实") == 2
 
 
 async def test_compaction_is_deduplicated_and_does_not_cover_later_messages(

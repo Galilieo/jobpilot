@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jobpilot.db.compactions import (
     cited_question_cards,
     cited_user_bodies,
+    executed_cards,
     submitted_questions,
 )
 from jobpilot.db.models import AgentAction
@@ -15,9 +16,48 @@ from jobpilot.services.agent.questions import (
     load_question_card,
     question_results,
 )
-from jobpilot.services.agent.work_summary import AnsweredQuestion, WorkSummary
+from jobpilot.services.agent.work_summary import (
+    MAX_ITEMS,
+    AnsweredQuestion,
+    ExecutedAction,
+    WorkSummary,
+)
 
 type QuestionIndex = dict[tuple[UUID, str], AnsweredQuestion]
+
+_ACTION_RESULT_FIELDS = (
+    "application_id",
+    "conversation_id",
+    "decision",
+    "job_id",
+    "key",
+    "op",
+    "revision",
+    "run_id",
+    "version_id",
+)
+
+
+async def verified_actions(
+    user_id: UUID, session: AsyncSession, conversation_id: UUID, through_seq: int
+) -> list[ExecutedAction]:
+    cards = await executed_cards(
+        user_id, session, conversation_id, through_seq=through_seq, limit=MAX_ITEMS
+    )
+    return [
+        ExecutedAction(
+            action_id=card.action_id,
+            tool=card.tool,
+            status=card.status,
+            result={
+                key: card.result_json[key]
+                for key in _ACTION_RESULT_FIELDS
+                if key in card.result_json
+            },
+        )
+        for card in cards
+        if card.result_json is not None
+    ]
 
 
 def _answers(action: AgentAction) -> list[AnsweredQuestion]:

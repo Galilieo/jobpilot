@@ -1,6 +1,5 @@
 """识别记忆原话中的栏目和操作，避免把正文里的任意词当成授权。"""
 
-import re
 from enum import StrEnum
 from functools import cache
 from typing import Literal
@@ -11,8 +10,8 @@ from pydantic import BaseModel, Field
 from jobpilot.config import REPO_ROOT
 from jobpilot.db.memories import MemoryValue
 from jobpilot.db.memory_schema import MEMORY_LIMITS, MemoryKey
+from jobpilot.services.text_clauses import CLAUSE_BOUNDARY
 
-_CLAUSE_BOUNDARY = re.compile(r"[。！？；，,;!?\n]")
 MemoryGroup = Literal["job", "writing"]
 
 
@@ -69,7 +68,7 @@ def _clause(body: str, quote: str) -> str | None:
     if body.count(quote) != 1:
         return None
     before, _, after = body.partition(quote)
-    return _CLAUSE_BOUNDARY.split(before)[-1] + quote + _CLAUSE_BOUNDARY.split(after)[0]
+    return CLAUSE_BOUNDARY.split(before)[-1] + quote + CLAUSE_BOUNDARY.split(after)[0]
 
 
 def _value_evidence(
