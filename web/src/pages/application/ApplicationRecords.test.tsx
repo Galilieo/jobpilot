@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ApplicationRecord } from '../../api/types'
 import { jsonResponse, stubFetch } from '../../test/fetchMock'
 import { renderWithProviders } from '../../test/render'
-import { ApplicationRecords, DetachedApplicationsDrawer } from './ApplicationRecords'
+import { ApplicationRecords, ApplicationRow } from './ApplicationRecords'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -33,6 +33,10 @@ it('shows migrated progress without offering a resume snapshot or comparison', a
     [listPath]: () => jsonResponse(200, [{ ...record, backfilled: true, resume_version: null }]),
   })
   renderWithProviders(<ApplicationRecords jobId={jobId} />)
+  expect(screen.getByRole('link', { name: '在投递页查看' })).toHaveAttribute(
+    'href',
+    '/applications',
+  )
   expect(await screen.findByText('迁移前记录的进度，没有当时的简历')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '查看当时的简历' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '和现在对比' })).not.toBeInTheDocument()
@@ -157,11 +161,15 @@ it('reloads on a revision conflict and confirms deletion before sending it', asy
   expect(remove).toHaveBeenCalledWith({ expected_revision: 2 })
 })
 
-it('uses the frozen title when the original job is deleted', async () => {
-  stubFetch({
-    'GET /api/applications': () => jsonResponse(200, [{ ...record, user_job_id: null }]),
-  })
-  renderWithProviders(<DetachedApplicationsDrawer close={vi.fn()} />)
+it('uses the frozen title when the original job is deleted and can hide job info', async () => {
+  const deletedRecord = { ...record, user_job_id: null }
+  const shown = renderWithProviders(<ApplicationRow record={deletedRecord} refresh={vi.fn()} />)
   expect(await screen.findByText('示例岗位')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '查看当时的简历' })).toBeInTheDocument()
+  shown.unmount()
+
+  renderWithProviders(
+    <ApplicationRow record={deletedRecord} refresh={vi.fn()} showJobInfo={false} />,
+  )
+  expect(screen.queryByText('示例岗位')).not.toBeInTheDocument()
 })

@@ -238,6 +238,11 @@ function BoardSection({
                   <span className="board-dot" style={{ background: dotColors[dot] }} />
                   <Typography.Text strong>{title}</Typography.Text>
                 </span>
+                {key === 'applied' && (
+                  <Link to="/applications" className="board-column-link">
+                    查看全部投递
+                  </Link>
+                )}
                 <Typography.Text type="secondary" className="board-count tabular-num">
                   {items.length}
                 </Typography.Text>

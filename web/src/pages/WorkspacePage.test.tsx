@@ -100,6 +100,10 @@ describe('WorkspacePage 工作台布局、顶部输入、记忆分栏与看板',
     expect(container.querySelectorAll('.board-column.is-empty')).toHaveLength(2)
     expect(screen.getByText('生成定制简历后会出现在这里。')).toBeInTheDocument()
     expect(screen.getByText('记录投递后会出现在这里。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看全部投递' })).toHaveAttribute(
+      'href',
+      '/applications',
+    )
   })
 
   it('顶部输入框发出后新建对话并跳过去', async () => {

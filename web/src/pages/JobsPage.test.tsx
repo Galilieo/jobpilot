@@ -230,6 +230,7 @@ describe('JobsPage 添加岗位多种输入方式与幂等重试', () => {
 
     renderWithProviders(<JobsPage />)
 
+    expect(screen.queryByRole('button', { name: '已删除岗位的投递' })).not.toBeInTheDocument()
     expect(await screen.findByText('250-300 元/天')).toBeInTheDocument()
     expect(screen.queryByText('青梧数智 · 上海 · 每周 4 天 · 本科')).not.toBeInTheDocument()
     expect(screen.getByText('青梧数智')).toBeInTheDocument()

@@ -458,14 +458,22 @@ function executedText(tool: string, result: Record<string, unknown>, title: JobT
   if (tool === 'set_current_job')
     return jobId ? `已把当前岗位设为「${title(jobId)}」` : '已解除当前岗位'
   if (tool === 'edit_resume_item') return '已修改这条简历条目'
-  if (tool === 'record_application')
+  if (tool === 'record_application') {
+    const applicationId = typeof result.application_id === 'string' ? result.application_id : null
+    const appHref = applicationId
+      ? `/applications?id=${encodeURIComponent(applicationId)}`
+      : '/applications'
     return jobId ? (
       <>
-        已记录投递，<Link to={`/jobs/${jobId}`}>查看岗位</Link>
+        已记录投递，<Link to={`/jobs/${jobId}`}>查看岗位</Link> ·{' '}
+        <Link to={appHref}>在投递页查看</Link>
       </>
     ) : (
-      '已记录投递'
+      <>
+        已记录投递，<Link to={appHref}>在投递页查看</Link>
+      </>
     )
+  }
   if (tool === 'remember' || tool === 'forget') {
     const key = typeof result.key === 'string' ? result.key : ''
     const label = MEMORY_LABEL_FALLBACK[key]

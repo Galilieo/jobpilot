@@ -378,6 +378,23 @@ it('shows the application details and offers undo after the confirmed write', as
   }
   await user.click(screen.getByRole('button', { name: '确认记录' }))
   expect(decide).toHaveBeenCalledWith({ decision: 'confirm' })
+  expect(screen.getByRole('link', { name: '查看岗位' })).toHaveAttribute('href', '/jobs/j1')
+  expect(screen.getByRole('link', { name: '在投递页查看' })).toHaveAttribute(
+    'href',
+    '/applications?id=submission',
+  )
   await user.click(screen.getByRole('button', { name: /撤\s?销/ }))
   expect(undo).toHaveBeenCalledOnce()
+
+  renderWithProviders(
+    <CardResult
+      tool={card.tool}
+      title={title}
+      outcome={{ state: 'past', step: { tool: card.tool, job_id: 'j1' } }}
+    />,
+  )
+  expect(screen.getAllByRole('link', { name: '在投递页查看' })[1]).toHaveAttribute(
+    'href',
+    '/applications',
+  )
 })

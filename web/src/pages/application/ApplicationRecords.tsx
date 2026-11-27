@@ -2,12 +2,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Button, Card, Drawer, Skeleton, Space, Tag, Timeline, Typography } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
+import { Link } from 'react-router'
 import { applications } from '../../api/endpoints'
 import { ApiError } from '../../api/http'
 import type { ApplicationRecord } from '../../api/types'
 import { MetaList } from '../../components/MetaList'
 import { APPLICATION_STAGE } from '../../labels'
-import { APPLICATIONS_QUERY, applicationQuery, applicationsQuery } from '../../queryKeys'
+import { applicationQuery, applicationsQuery } from '../../queryKeys'
 import { ApplicationDiffDrawer } from './ApplicationDiffDrawer'
 import { EditApplicationModal, NewApplicationModal } from './ApplicationForm'
 import { useRefreshApplications } from './useRefreshApplications'
@@ -25,9 +26,12 @@ export function ApplicationRecords({ jobId }: { jobId: string }): ReactElement {
       title="投递记录"
       className="application-records"
       extra={
-        <Button type="primary" onClick={() => setAdding(true)}>
-          记录投递
-        </Button>
+        <Space size={12}>
+          <Link to="/applications">在投递页查看</Link>
+          <Button type="primary" onClick={() => setAdding(true)}>
+            记录投递
+          </Button>
+        </Space>
       }
     >
       {query.isPending && <Skeleton active paragraph={{ rows: 2 }} />}
@@ -48,27 +52,6 @@ export function ApplicationRecords({ jobId }: { jobId: string }): ReactElement {
         <NewApplicationModal jobId={jobId} close={() => setAdding(false)} refresh={refresh} />
       )}
     </Card>
-  )
-}
-
-export function DetachedApplicationsDrawer({ close }: { close: () => void }): ReactElement {
-  const refresh = useRefreshApplications()
-  const query = useQuery({
-    queryKey: APPLICATIONS_QUERY,
-    queryFn: ({ signal }) => applications.list(undefined, signal),
-    select: (records) => records.filter((record) => record.user_job_id === null),
-  })
-  return (
-    <Drawer title="已删除岗位的投递" size={560} open onClose={close}>
-      {query.isPending && <Skeleton active />}
-      {query.isError && <Alert type="error" title={query.error.message} />}
-      {query.data?.length === 0 && (
-        <Typography.Text type="secondary">没有来自已删除岗位的投递。</Typography.Text>
-      )}
-      {query.data?.map((record) => (
-        <ApplicationRow key={record.application_id} record={record} refresh={refresh} />
-      ))}
-    </Drawer>
   )
 }
 

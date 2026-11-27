@@ -1,7 +1,7 @@
 // 岗位库：岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Modal, Select, Skeleton, Space, Tag, Typography, theme } from 'antd'
+import { App, Button, Card, Modal, Select, Skeleton, Tag, Typography, theme } from 'antd'
 import { useRef, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 import { jobs } from '../api/endpoints'
@@ -13,7 +13,6 @@ import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
 import { JOB_STAGE, formatMatchSummary, jobMetaParts } from '../labels'
 import { JOBS_QUERY } from '../queryKeys'
-import { DetachedApplicationsDrawer } from './application/ApplicationRecords'
 
 const JD_COPY = {
   filePrompt: '点击或拖入 JD 文件',
@@ -26,7 +25,6 @@ export function JobsPage(): ReactElement {
   const { token } = theme.useToken()
   const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
-  const [detachedOpen, setDetachedOpen] = useState(false)
   const [stage, setStage] = useState<JobStage>()
   const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
   const hasJobs = Boolean(list.data?.length)
@@ -42,14 +40,11 @@ export function JobsPage(): ReactElement {
         title="岗位库"
         subtitle="贴入 JD 整理岗位要求，再用确认过的经历做匹配、生成定制简历。"
         extra={
-          <Space wrap>
-            <Button onClick={() => setDetachedOpen(true)}>已删除岗位的投递</Button>
-            {hasJobs && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
-                添加岗位
-              </Button>
-            )}
-          </Space>
+          hasJobs ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
+              添加岗位
+            </Button>
+          ) : undefined
         }
       />
       {hasJobs && (
@@ -150,7 +145,6 @@ export function JobsPage(): ReactElement {
         </div>
       )}
       <AddJobModal open={adding} onClose={() => setAdding(false)} />
-      {detachedOpen && <DetachedApplicationsDrawer close={() => setDetachedOpen(false)} />}
     </section>
   )
 }
