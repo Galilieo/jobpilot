@@ -14,6 +14,7 @@ import type {
   AgentQuestionCardArgs,
   BulletCheck,
 } from '../../api/types'
+import { MetaList } from '../../components/MetaList'
 import { FactBadge } from '../../components/FactBadge'
 import { indexResumeFacts, type IndexedFact } from '../../factIndex'
 import { toolLabel } from '../../labels'
@@ -251,6 +252,30 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
       reject: '不改了',
     }
   }
+  if (card.tool === 'record_application') {
+    const jobId = typeof args.job_id === 'string' ? args.job_id : null
+    const jobTitle = typeof args.title === 'string' ? args.title : jobId && title(jobId)
+    const company = typeof args.company === 'string' ? args.company : ''
+    const channel = typeof args.channel === 'string' ? args.channel : '渠道未填写'
+    return {
+      kind: '记录投递',
+      body: (
+        <div className="action-card-content">
+          <p>{jobTitle || '未命名岗位'}</p>
+          <MetaList
+            items={[
+              company,
+              `第 ${String(args.resume_version)} 版简历`,
+              String(args.applied_at),
+              channel,
+            ].filter(Boolean)}
+          />
+        </div>
+      ),
+      confirm: '确认记录',
+      reject: '不记录',
+    }
+  }
   if (card.tool === 'remember' || card.tool === 'forget') {
     const isRemember = card.tool === 'remember'
     return {
@@ -413,7 +438,13 @@ export function PendingCard(props: {
 
 // ---------- 决定之后 ----------
 
-const UNDOABLE_TOOLS = new Set(['set_current_job', 'edit_resume_item', 'remember', 'forget'])
+const UNDOABLE_TOOLS = new Set([
+  'set_current_job',
+  'edit_resume_item',
+  'remember',
+  'forget',
+  'record_application',
+])
 
 function canUndo(action: AgentDecidedAction): boolean {
   if (action.status !== 'executed') return false
@@ -427,6 +458,14 @@ function executedText(tool: string, result: Record<string, unknown>, title: JobT
   if (tool === 'set_current_job')
     return jobId ? `已把当前岗位设为「${title(jobId)}」` : '已解除当前岗位'
   if (tool === 'edit_resume_item') return '已修改这条简历条目'
+  if (tool === 'record_application')
+    return jobId ? (
+      <>
+        已记录投递，<Link to={`/jobs/${jobId}`}>查看岗位</Link>
+      </>
+    ) : (
+      '已记录投递'
+    )
   if (tool === 'remember' || tool === 'forget') {
     const key = typeof result.key === 'string' ? result.key : ''
     const label = MEMORY_LABEL_FALLBACK[key]

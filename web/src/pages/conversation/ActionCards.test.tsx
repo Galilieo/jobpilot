@@ -336,3 +336,48 @@ describe('记忆确认卡 remember / forget', () => {
     expect(onUndo).toHaveBeenCalledTimes(1)
   })
 })
+
+it('shows the application details and offers undo after the confirmed write', async () => {
+  const user = userEvent.setup()
+  const decide = vi.fn(async () => null)
+  const undo = vi.fn()
+  const card: AgentActionCard = {
+    ...base,
+    kind: 'confirmation',
+    tool: 'record_application',
+    args: {
+      job_id: 'j1',
+      title: '平台实习',
+      company: '示例公司',
+      resume_version: 3,
+      applied_at: '2026-11-27',
+      channel: '官网',
+    },
+  }
+  renderWithProviders(
+    <>
+      <PendingCard card={card} title={title} decide={decide} />
+      <CardResult
+        tool={card.tool}
+        title={title}
+        outcome={{
+          state: 'decided',
+          action: {
+            ...card,
+            status: 'executed',
+            result: { application_id: 'submission', job_id: 'j1' },
+          },
+        }}
+        onUndo={undo}
+      />
+    </>,
+  )
+  expect(screen.getByText('平台实习')).toBeInTheDocument()
+  for (const detail of ['第 3 版简历', '示例公司', '2026-11-27', '官网']) {
+    expect(screen.getByText(detail)).toBeInTheDocument()
+  }
+  await user.click(screen.getByRole('button', { name: '确认记录' }))
+  expect(decide).toHaveBeenCalledWith({ decision: 'confirm' })
+  await user.click(screen.getByRole('button', { name: /撤\s?销/ }))
+  expect(undo).toHaveBeenCalledOnce()
+})

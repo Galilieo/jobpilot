@@ -7,6 +7,7 @@ import { ApiError } from '../../api/http'
 import { readAgentStream } from '../../api/sse'
 import type { AgentDecision, ConversationDetail } from '../../api/types'
 import {
+  APPLICATIONS_QUERY,
   CONVERSATIONS_QUERY,
   JOBS_QUERY,
   MEMORIES_QUERY,
@@ -25,6 +26,7 @@ import {
 
 // 一轮可能新建岗位、匹配报告和定制简历，侧栏、面板和工作台都要跟着更新（前缀匹配）。
 const AFFECTED_QUERIES = [
+  APPLICATIONS_QUERY,
   CONVERSATIONS_QUERY,
   JOBS_QUERY,
   MEMORIES_QUERY,

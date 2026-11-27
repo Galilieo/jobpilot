@@ -183,6 +183,7 @@ export const AGENT_TOOL: Record<string, string> = {
   set_current_job: '设置当前岗位',
   edit_resume_item: '修改简历条目',
   ask_user: '向你提问',
+  record_application: '记录投递',
   remember: '记住偏好',
   forget: '忘掉偏好',
   read_conversation_history: '查阅更早的对话',
