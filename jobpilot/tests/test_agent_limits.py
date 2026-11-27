@@ -4,8 +4,10 @@ from json import loads
 from uuid import UUID, uuid4
 
 import httpx
+import pytest
 
 from jobpilot.api.deps import get_model_client
+from jobpilot.config import settings
 from jobpilot.db.models import JobPosting, UserJob
 from jobpilot.main import app
 from jobpilot.tests.test_agent_api import (
@@ -78,8 +80,10 @@ async def test_identical_generation_reuses_result_and_distinct_calls_have_limit(
 
 
 async def test_combined_input_limit_rejects_before_starting(
-    async_client: httpx.AsyncClient,
+    async_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # 默认窗口很大，调小上限才能用短输入触发入口检查。
+    monkeypatch.setattr(settings.agent_limits, "context_window_cap_tokens", 8_000)
     await sign_in(async_client)
     path = await conversation(async_client)
     requests = []

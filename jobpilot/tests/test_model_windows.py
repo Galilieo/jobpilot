@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from jobpilot.config import ModelPurpose, Settings, settings
+from jobpilot.config import AgentLimits, ModelPurpose, Settings, settings
 from jobpilot.services.request_window import InputTokenHistory, estimate_request_tokens
 
 
@@ -24,6 +24,14 @@ def test_window_cap_and_agent_budget_are_validated() -> None:
     config["agent_limits"]["model_tokens"] -= 1
     with pytest.raises(ValidationError, match="有效窗口"):
         Settings.model_validate(config, by_name=True)
+
+
+def test_defaults_use_half_window_without_daily_limit() -> None:
+    config = settings.model_dump()
+    config["agent_limits"] = AgentLimits().model_dump()
+    defaults = Settings.model_validate(config, by_name=True)
+    assert defaults.effective_window(ModelPurpose.AGENT) == 524_288
+    assert Settings.model_fields["daily_token_limit"].default is None
 
 
 def test_config_rejects_unregistered_models() -> None:

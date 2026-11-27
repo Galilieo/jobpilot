@@ -524,11 +524,8 @@ async def _register_call(
     async with session_factory.begin() as session:
         if not await lock_active_account(session, user_id):
             raise ModelRunInactiveError("运行已取消或结束")
-        await lock_daily_quota(session, user_id)
         now = datetime.now().astimezone()
-        used = await daily_reserved_tokens(session, user_id, now)
-        if used + estimated_tokens > settings.daily_token_limit:
-            raise DailyModelQuotaError()
+        await _check_daily_quota(session, user_id, now, estimated_tokens)
         if budget_run_id is not None:
             await _check_persisted_budget(session, user_id, budget, estimated_tokens)
         return await _insert_call(
@@ -542,6 +539,18 @@ async def _register_call(
             estimated_tokens=estimated_tokens,
             now=now,
         )
+
+
+async def _check_daily_quota(
+    session: AsyncSession, user_id: UUID, now: datetime, estimated_tokens: int
+) -> None:
+    limit = settings.daily_token_limit
+    if limit is None:
+        return
+    await lock_daily_quota(session, user_id)
+    used = await daily_reserved_tokens(session, user_id, now)
+    if used + estimated_tokens > limit:
+        raise DailyModelQuotaError()
 
 
 async def _insert_call(

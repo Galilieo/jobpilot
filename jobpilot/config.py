@@ -8,7 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DAILY_TOKEN_LIMIT = 3_000_000
 
 
 class ModelPurpose(StrEnum):
@@ -65,11 +64,13 @@ class AgentLimits(BaseModel):
     """同一轮对话及其工具共享的预算与历史窗口。"""
 
     model_calls: int = Field(default=65, ge=1, le=150)
-    model_tokens: int = Field(default=250_000, gt=0)
+    # 校验要求至少为有效窗口的四倍；默认窗口 1M × 0.5 = 524,288。
+    model_tokens: int = Field(default=2_097_152, gt=0)
     tool_calls: int = Field(default=12, ge=1, le=30)
     seconds: float = Field(default=180, gt=0)
     context_window_ratio: float = Field(default=0.5, gt=0, le=1)
-    context_window_cap_tokens: int | None = Field(default=32_000, gt=0)
+    # 目前只有本人使用，不另设上限，有效窗口即模型窗口的一半。
+    context_window_cap_tokens: int | None = Field(default=None, gt=0)
     compact_trigger_ratio: float = Field(default=0.8, gt=0, lt=1)
     compact_target_ratio: float = Field(default=0.5, gt=0, lt=1)
     compact_summary_share: float = Field(default=0.2, gt=0, lt=1)
@@ -143,8 +144,9 @@ class Settings(BaseSettings):
 
     model_max_attempts: int = Field(default=2, ge=1)
     model_retry_delay_seconds: float = Field(default=0.5, ge=0)
-    daily_token_limit: int = Field(
-        default=DEFAULT_DAILY_TOKEN_LIMIT, gt=0, validation_alias="DAILY_TOKEN_LIMIT"
+    # 每个账号每天的预扣上限；不设置时不限，开放给他人前要设上。
+    daily_token_limit: int | None = Field(
+        default=None, gt=0, validation_alias="DAILY_TOKEN_LIMIT"
     )
 
     def model_for_purpose(self, purpose: str) -> ModelSettings:
