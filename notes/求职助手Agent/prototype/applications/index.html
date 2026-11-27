@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobPilot 投递页原型</title>
+<style>
+/* 原型只用来定布局、文案和交互，不是要复用的代码。颜色沿用 07 第 0 节方向 D，实现时从 antd 主题 token 读取。数据都是虚构的。 */
+:root {
+  --font-ui: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-head: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
+  --bg: #FFFFFF;
+  --side-bg: #F5F6F7;
+  --side-ink: #26313C;
+  --side-muted: #7D8893;
+  --side-active: #E8EDF2;
+  --ink: #1E2832;
+  --muted: #66717D;
+  --faint: #9DA6B0;
+  --line: #E7EAED;
+  --accent: #46607A;
+  --accent-soft: #EEF2F6;
+  --accent-text: #3B5268;
+  --ok: #2E6B58;
+  --ok-soft: #EAF3EE;
+  --warn: #9A6418;
+  --warn-soft: #FBF2E2;
+  --mark: #D9A04A;
+  --err: #B5534A;
+  --col-bg: #F7F8F9;
+  --r-s: 5px;
+  --r-m: 8px;
+  --r-l: 14px;
+  --shadow: 0 1px 2px rgba(30, 45, 60, .04), 0 8px 28px rgba(30, 45, 60, .07);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 14px/1.6 var(--font-ui); color: var(--ink); background: var(--bg); }
+button, input, select { font: inherit; color: inherit; }
+.num { font-variant-numeric: tabular-nums; }
+
+.shell { display: flex; min-height: 100%; }
+.side { width: 230px; flex: none; background: var(--side-bg); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; }
+.logo { font: 700 19px var(--font-head); padding: 2px 10px 16px; color: var(--side-ink); }
+.nav { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-s); color: var(--side-ink); text-decoration: none; position: relative; }
+.nav:hover { background: #EDEFF1; }
+.nav.on { background: var(--side-active); color: var(--accent-text); font-weight: 500; }
+.nav.on::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: var(--accent); border-radius: 2px; }
+.nav .new { margin-left: auto; font-size: 11px; color: var(--warn); background: var(--warn-soft); padding: 0 6px; border-radius: 4px; }
+.side small { color: var(--side-muted); padding: 16px 10px 4px; font-size: 12px; }
+
+.main { flex: 1; min-width: 0; padding: 28px 32px 48px; }
+.head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.head h1 { font: 700 26px var(--font-head); margin: 0; }
+.head p { margin: 2px 0 0; color: var(--muted); }
+.head .grow { flex: 1; }
+.btn { border: 1px solid var(--line); background: #fff; border-radius: var(--r-s); padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: #CDD6DF; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #3F566C; }
+.btn.small { padding: 1px 8px; font-size: 13px; }
+.btn.text { border-color: transparent; background: none; }
+.btn.danger { color: var(--err); }
+.link { color: var(--accent); text-decoration: none; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+
+.summary { display: flex; gap: 22px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-m); margin-bottom: 16px; }
+.summary div { display: flex; align-items: baseline; gap: 6px; }
+.summary strong { font: 700 20px var(--font-head); }
+.summary span { color: var(--muted); }
+.summary .stale strong { color: var(--warn); }
+
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.seg { display: inline-flex; background: #F1F3F5; border-radius: var(--r-s); padding: 2px; }
+.seg button { border: 0; background: none; padding: 3px 14px; border-radius: 4px; cursor: pointer; color: var(--muted); }
+.seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.search { border: 1px solid var(--line); border-radius: var(--r-s); padding: 4px 10px; width: 220px; }
+.check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
+.toolbar .grow { flex: 1; }
+.hint { color: var(--faint); font-size: 12px; }
+
+/* 看板 */
+.board { display: grid; grid-template-columns: repeat(var(--cols), minmax(210px, 1fr)); gap: 12px; align-items: start; overflow-x: auto; padding-bottom: 4px; }
+.col { background: var(--col-bg); border-radius: var(--r-m); padding: 10px; min-height: 120px; }
+.col-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; font-weight: 500; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.dot.applied { background: var(--accent); }
+.dot.written_test { background: #7B8FB0; }
+.dot.interviewing { background: var(--mark); }
+.dot.offer { background: var(--ok); }
+.dot.rejected { background: #C3C8CE; }
+.col-head .count { color: var(--faint); font-weight: 400; }
+.col-empty { color: var(--faint); font-size: 13px; padding: 4px 4px 8px; }
+.col.rejected { opacity: .85; }
+
+.card { background: #fff; border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+.card:hover { box-shadow: var(--shadow); border-color: #DCE2E8; }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.card-title { font-weight: 600; display: flex; gap: 6px; align-items: baseline; }
+.card-title .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .company { color: var(--muted); font-size: 13px; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.meta span { font-size: 12px; color: var(--muted); background: #F3F5F7; border-radius: 4px; padding: 0 6px; }
+.card-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--faint); }
+.card-foot .grow { flex: 1; }
+.chip { font-size: 12px; border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.chip.stale { color: var(--warn); background: var(--warn-soft); }
+.chip.gone { color: var(--muted); background: #EFF1F3; }
+.chip.again { color: var(--accent-text); background: var(--accent-soft); }
+.chip.old { color: var(--muted); border: 1px dashed #CDD3D9; }
+
+/* 列表 */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: default; }
+th.sortable { cursor: pointer; }
+th.sortable:hover { color: var(--ink); }
+td { padding: 10px; border-bottom: 1px solid #F0F2F4; vertical-align: top; }
+tr.row:hover td { background: #FAFBFC; cursor: pointer; }
+td select { border: 1px solid var(--line); border-radius: var(--r-s); padding: 1px 4px; background: #fff; }
+
+/* 改阶段弹层 */
+.pop { position: fixed; z-index: 30; background: #fff; border-radius: var(--r-m); box-shadow: 0 6px 30px rgba(30,45,60,.16); padding: 14px; width: 260px; display: none; }
+.pop.open { display: block; }
+.pop h4 { margin: 0 0 10px; font-size: 14px; }
+.pop label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.pop input, .pop select { width: 100%; border: 1px solid var(--line); border-radius: var(--r-s); padding: 4px 8px; margin-bottom: 10px; }
+.pop .row-btns { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* 抽屉 */
+.mask { position: fixed; inset: 0; background: rgba(20,30,40,.25); display: none; z-index: 20; }
+.mask.open { display: block; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 520px; max-width: 100%; background: #fff; z-index: 21; transform: translateX(100%); visibility: hidden; transition: transform .2s, visibility .2s; display: flex; flex-direction: column; }
+.drawer.open { transform: none; visibility: visible; }
+.drawer header { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; }
+.drawer header h3 { margin: 0; font-size: 17px; }
+.drawer header .grow { flex: 1; min-width: 0; }
+.drawer .body { padding: 18px 20px; overflow: auto; flex: 1; }
+.drawer section { margin-bottom: 22px; }
+.drawer section > h5 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 500; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 4px; }
+.timeline li { position: relative; padding: 0 0 12px 18px; border-left: 1px solid #DCE5E0; }
+.timeline li:last-child { border-left-color: transparent; }
+.timeline li::before { content: ""; position: absolute; left: -4px; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.timeline .d { color: var(--muted); margin-right: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.note { background: var(--accent-soft); color: var(--accent-text); border-radius: var(--r-s); padding: 8px 10px; font-size: 13px; }
+.close { border: 0; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: var(--muted); }
+
+.empty { border: 1px dashed #D5DBE1; border-radius: var(--r-m); padding: 40px 20px; text-align: center; color: var(--muted); }
+
+/* 标注 */
+.spec-toggle { position: fixed; right: 16px; bottom: 16px; z-index: 40; }
+.spec { display: none; position: fixed; right: 16px; bottom: 56px; width: 380px; max-height: 70vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: var(--shadow); padding: 14px 16px; z-index: 40; font-size: 13px; }
+.spec.open { display: block; }
+.spec h4 { margin: 0 0 6px; }
+.spec ol { padding-left: 18px; margin: 6px 0; }
+
+/* 窄屏：侧栏收起，看板改成按阶段分组的列表 */
+@media (max-width: 991px) {
+  .side { display: none; }
+  .main { padding: 18px 16px 48px; }
+  .board { grid-template-columns: 1fr; }
+  .col { min-height: 0; }
+  .search { width: 100%; }
+  .table-wrap { overflow-x: auto; }
+  .drawer { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="logo">JobPilot</div>
+    <a class="nav" href="#">＋ 新对话</a>
+    <a class="nav" href="#">工作台</a>
+    <a class="nav" href="#">岗位库</a>
+    <a class="nav on" href="#">投递 <span class="new">新</span></a>
+    <a class="nav" href="#">我的</a>
+    <small>最近对话</small>
+    <a class="nav" href="#">字节 · Agent 应用开发</a>
+    <a class="nav" href="#">补充项目经历</a>
+  </aside>
+
+  <main class="main">
+    <div class="head">
+      <div>
+        <h1>投递</h1>
+        <p>每次投递一张卡，阶段跟着投递走。同一岗位投两次就有两张。</p>
+      </div>
+      <div class="grow"></div>
+      <button class="btn primary" id="add">记录投递</button>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="toolbar">
+      <div class="seg" role="tablist" aria-label="切换视图">
+        <button class="on" data-view="board">看板</button>
+        <button data-view="list">列表</button>
+      </div>
+      <input class="search" id="q" placeholder="搜岗位名或公司">
+      <label class="check"><input type="checkbox" id="showRejected"> 显示未通过</label>
+      <div class="grow"></div>
+      <span class="hint">超过 14 天没有新进展的会标出来</span>
+    </div>
+
+    <div id="view"></div>
+  </main>
+</div>
+
+<div class="pop" id="pop" role="dialog" aria-label="改阶段">
+  <h4 id="popTitle">改到「面试」</h4>
+  <label for="popDate">发生日期</label>
+  <input type="date" id="popDate">
+  <div class="row-btns">
+    <button class="btn" id="popCancel">取消</button>
+    <button class="btn primary" id="popOk">改阶段</button>
+  </div>
+</div>
+
+<div class="mask" id="mask"></div>
+<aside class="drawer" id="drawer" aria-label="投递详情">
+  <header>
+    <div class="grow">
+      <h3 id="dTitle"></h3>
+      <div class="company" id="dCompany" style="color:var(--muted)"></div>
+    </div>
+    <button class="close" id="dClose" aria-label="关闭">×</button>
+  </header>
+  <div class="body" id="dBody"></div>
+</aside>
+
+<button class="btn spec-toggle" id="specToggle">显示实现标注</button>
+<div class="spec" id="spec">
+  <h4>实现标注</h4>
+  <ol>
+    <li><b>数据</b>：<code>GET /api/applications</code>（不传 job_id）。每条要多一个 <code>stage_changed_at</code>（最后一条阶段记录的发生日期），后端在查询里算，不存表。</li>
+    <li><b>一张卡 = 一次投递</b>。岗位名、公司取 <code>job_snapshot_json</code>；<code>user_job_id</code> 为空时标「岗位已删除」。同一岗位有多条时标「第 N 次投递」。</li>
+    <li><b>没进展</b>：阶段是已投递、笔试、面试，且距 <code>stage_changed_at</code> 超过 14 天。只是提示，不是阶段。</li>
+    <li><b>改阶段</b>：卡片右下「改阶段」或列表里的下拉 → 弹层填发生日期 → <code>PUT /api/applications/{id}</code> 带修订号，409 时提示并重读。不做拖拽（理由见任务书）。</li>
+    <li><b>详情抽屉</b>：复用岗位详情里现成的投递行，包括阶段记录、查看当时的简历、和现在对比、编辑、删除。</li>
+    <li><b>记录投递</b>：先选岗位（只列有定制简历的），再进现成的记录投递弹窗。</li>
+    <li><b>窄屏</b>：看板改成按阶段分组、上下排列；列表可横向滚动。</li>
+  </ol>
+</div>
+
+<script>
+const STAGES = [
+  { key: 'applied', label: '已投递' },
+  { key: 'written_test', label: '笔试' },
+  { key: 'interviewing', label: '面试' },
+  { key: 'offer', label: 'Offer' },
+  { key: 'rejected', label: '未通过' },
+]
+const ACTIVE = ['applied', 'written_test', 'interviewing']
+const STALE_DAYS = 14
+const TODAY = new Date('2026-11-27')
+
+// 虚构数据。events 是阶段记录（只追加）。
+const apps = [
+  { id: 1, job: 1, title: 'Agent 应用开发实习生', company: '北辰智能', loc: '北京', applied: '2026-11-20', channel: '官网', version: 3, stage: 'interviewing', rev: 3,
+    events: [['2026-11-20', null, 'applied'], ['2026-11-23', 'applied', 'written_test'], ['2026-11-26', 'written_test', 'interviewing']] },
+  { id: 2, job: 2, title: '大模型应用工程师（实习）', company: '远帆科技', loc: '上海', applied: '2026-11-05', channel: 'BOSS 直聘', version: 2, stage: 'applied', rev: 1,
+    events: [['2026-11-05', null, 'applied']] },
+  { id: 3, job: 3, title: 'AI 产品研发实习', company: '青禾数据', loc: '杭州', applied: '2026-11-18', channel: '内推', version: 1, stage: 'written_test', rev: 2,
+    events: [['2026-11-18', null, 'applied'], ['2026-11-21', 'applied', 'written_test']] },
+  { id: 4, job: 4, title: '后端开发实习生（Python）', company: '星舟软件', loc: '北京', applied: '2026-10-28', channel: '官网', version: 2, stage: 'rejected', rev: 2,
+    events: [['2026-10-28', null, 'applied'], ['2026-11-10', 'applied', 'rejected']] },
+  { id: 5, job: 4, title: '后端开发实习生（Python）', company: '星舟软件', loc: '北京', applied: '2026-11-22', channel: '内推', version: 4, stage: 'applied', rev: 1, nth: 2,
+    events: [['2026-11-22', null, 'applied']] },
+  { id: 6, job: null, title: 'RAG 算法实习', company: '岚山研究院', loc: '深圳', applied: '2026-11-01', channel: '邮箱', version: 1, stage: 'interviewing', rev: 2,
+    events: [['2026-11-01', null, 'applied'], ['2026-11-08', 'applied', 'interviewing']] },
+  { id: 7, job: 7, title: '智能体平台实习生', company: '澄明云', loc: '远程', applied: '2026-11-02', channel: '官网', version: null, stage: 'offer', rev: 1, backfilled: true,
+    events: [['2026-11-02', null, 'offer']] },
+  { id: 8, job: 8, title: '机器学习平台实习', company: '一川科技', loc: '北京', applied: '2026-11-12', channel: '牛客', version: 1, stage: 'rejected', rev: 2,
+    events: [['2026-11-12', null, 'applied'], ['2026-11-19', 'applied', 'rejected']] },
+]
+
+const state = { view: 'board', q: '', showRejected: false, sort: 'changed' }
+const $ = (s) => document.querySelector(s)
+const label = (k) => STAGES.find((s) => s.key === k).label
+const stageSince = (a) => a.events[a.events.length - 1][0]
+const days = (d) => Math.round((TODAY - new Date(d)) / 86400000)
+const isStale = (a) => ACTIVE.includes(a.stage) && days(stageSince(a)) > STALE_DAYS
+const short = (d) => d.slice(5).replace('-', '-')
+
+function visible() {
+  const q = state.q.trim()
+  return apps.filter((a) => !q || a.title.includes(q) || a.company.includes(q))
+}
+
+function chips(a) {
+  const out = []
+  if (isStale(a)) out.push(`<span class="chip stale">${days(stageSince(a))} 天没有进展</span>`)
+  if (a.job === null) out.push('<span class="chip gone">岗位已删除</span>')
+  if (a.nth) out.push(`<span class="chip again">第 ${a.nth} 次投递</span>`)
+  if (a.backfilled) out.push('<span class="chip old">迁移前记录</span>')
+  return out.join('')
+}
+
+function renderSummary() {
+  const all = visible()
+  const active = all.filter((a) => ACTIVE.includes(a.stage))
+  const stale = active.filter(isStale)
+  const count = (k) => all.filter((a) => a.stage === k).length
+  $('#summary').innerHTML = `
+    <div><strong class="num">${all.length}</strong><span>次投递</span></div>
+    <div><strong class="num">${active.length}</strong><span>条在等结果</span></div>
+    <div class="stale"><strong class="num">${stale.length}</strong><span>条超过 ${STALE_DAYS} 天没有进展</span></div>
+    <div><strong class="num">${count('offer')}</strong><span>个 Offer</span></div>`
+}
+
+function card(a) {
+  const meta = [`投递 ${short(a.applied)}`, a.channel, a.version ? `第 ${a.version} 版简历` : null].filter(Boolean)
+  return `<div class="card" tabindex="0" data-id="${a.id}">
+    <div class="card-title"><span class="t">${a.title}</span></div>
+    <div class="company">${a.company} · ${a.loc}</div>
+    <div class="meta">${meta.map((m) => `<span class="num">${m}</span>`).join('')}</div>
+    <div class="card-foot">${chips(a) || `<span class="num">本阶段 ${days(stageSince(a))} 天</span>`}<span class="grow"></span>
+      <button class="btn small text" data-move="${a.id}">改阶段 ▾</button></div>
+  </div>`
+}
+
+function renderBoard() {
+  const cols = STAGES.filter((s) => state.showRejected || s.key !== 'rejected')
+  const all = visible()
+  const html = cols.map((s) => {
+    const items = all.filter((a) => a.stage === s.key)
+      .sort((x, y) => stageSince(y).localeCompare(stageSince(x)))
+    return `<section class="col ${s.key}">
+      <div class="col-head"><span class="dot ${s.key}"></span>${s.label}<span class="count num">${items.length}</span></div>
+      ${items.map(card).join('') || `<div class="col-empty">${s.key === 'applied' ? '在岗位详情或对话里说「我投了」，就会出现在这里。' : '暂时没有'}</div>`}
+    </section>`
+  }).join('')
+  const hidden = all.filter((a) => a.stage === 'rejected').length
+  $('#view').innerHTML = `<div class="board" style="--cols:${cols.length}">${html}</div>` +
+    (!state.showRejected && hidden ? `<p class="hint" style="margin-top:12px">另有 ${hidden} 条未通过，<a class="link" id="revealRejected">显示</a></p>` : '')
+}
+
+function renderList() {
+  const rows = visible().filter((a) => state.showRejected || a.stage !== 'rejected')
+  const key = { changed: (a) => stageSince(a), applied: (a) => a.applied }[state.sort]
+  rows.sort((x, y) => key(y).localeCompare(key(x)))
+  const opts = (a) => STAGES.map((s) => `<option value="${s.key}" ${s.key === a.stage ? 'selected' : ''}>${s.label}</option>`).join('')
+  $('#view').innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>岗位</th><th>阶段</th><th class="sortable" data-sort="applied">投递日期${state.sort === 'applied' ? ' ↓' : ''}</th><th>渠道</th><th>简历</th><th class="sortable" data-sort="changed">最近变动${state.sort === 'changed' ? ' ↓' : ''}</th><th></th></tr></thead>
+    <tbody>${rows.map((a) => `<tr class="row" data-id="${a.id}">
+      <td><b>${a.title}</b><div style="color:var(--muted);font-size:13px">${a.company} · ${a.loc}</div></td>
+      <td><select data-stage="${a.id}" aria-label="阶段">${opts(a)}</select></td>
+      <td class="num">${a.applied}</td>
+      <td>${a.channel ?? '—'}</td>
+      <td class="num">${a.version ? `第 ${a.version} 版` : '—'}</td>
+      <td class="num">${stageSince(a)}</td>
+      <td>${chips(a)}</td>
+    </tr>`).join('')}</tbody></table></div>`
+}
+
+function render() {
+  renderSummary()
+  if (!visible().length) {
+    $('#view').innerHTML = `<div class="empty">${state.q ? '没有匹配的投递。' : '还没有投递记录。<br>在岗位详情点「记录投递」，或在对话里说「我投了」。'}</div>`
+    return
+  }
+  state.view === 'board' ? renderBoard() : renderList()
+}
+
+// 改阶段：先选目标阶段，再填发生日期，确认后追加一条阶段记录。
+let pending = null
+function openStageMenu(id, anchor) {
+  const a = apps.find((x) => x.id === id)
+  const pop = $('#pop')
+  pop.innerHTML = `<h4>把「${a.title}」改到</h4>
+    <label for="popStage">阶段</label>
+    <select id="popStage">${STAGES.filter((s) => s.key !== a.stage).map((s) => `<option value="${s.key}">${s.label}</option>`).join('')}</select>
+    <label for="popDate">发生日期</label>
+    <input type="date" id="popDate" value="2026-11-27" max="2026-11-27">
+    <div class="row-btns"><button class="btn" id="popCancel">取消</button><button class="btn primary" id="popOk">改阶段</button></div>`
+  placePop(anchor)
+  pending = { id }
+  wirePop()
+}
+function openStageConfirm(id, to, anchor) {
+  const pop = $('#pop')
+  pop.innerHTML = `<h4>改到「${label(to)}」</h4>
+    <label for="popDate">发生日期</label>
+    <input type="date" id="popDate" value="2026-11-27" max="2026-11-27">
+    <div class="row-btns"><button class="btn" id="popCancel">取消</button><button class="btn primary" id="popOk">改阶段</button></div>`
+  placePop(anchor)
+  pending = { id, to }
+  wirePop()
+}
+function placePop(anchor) {
+  const r = anchor.getBoundingClientRect()
+  const pop = $('#pop')
+  pop.classList.add('open')
+  pop.style.top = Math.min(r.bottom + 6, innerHeight - pop.offsetHeight - 8) + 'px'
+  pop.style.left = Math.max(8, Math.min(r.right - 260, innerWidth - 268)) + 'px'
+}
+function wirePop() {
+  $('#popCancel').onclick = closePop
+  $('#popOk').onclick = () => {
+    const a = apps.find((x) => x.id === pending.id)
+    const to = pending.to ?? $('#popStage').value
+    const date = $('#popDate').value
+    a.events.push([date, a.stage, to])
+    a.stage = to
+    a.rev += 1
+    closePop()
+    render()
+    if (drawerId === a.id) openDrawer(a.id)
+  }
+}
+function closePop() { $('#pop').classList.remove('open'); pending = null; render() }
+
+let drawerId = null
+function openDrawer(id) {
+  const a = apps.find((x) => x.id === id)
+  drawerId = id
+  $('#dTitle').textContent = a.title
+  $('#dCompany').innerHTML = `${a.company} · ${a.loc} ${a.job ? '· <a class="link">打开岗位详情</a>' : ''}`
+  const meta = [`投递 ${a.applied}`, a.channel, a.version ? `第 ${a.version} 版简历` : null].filter(Boolean)
+  $('#dBody').innerHTML = `
+    <section><div class="meta">${meta.map((m) => `<span class="num">${m}</span>`).join('')}</div>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${chips(a)}</div></section>
+    ${a.job === null ? '<section><div class="note">原岗位已从岗位库删除，这里显示投递时记下的岗位信息和简历快照。</div></section>' : ''}
+    ${a.backfilled ? '<section><div class="note">迁移前记录的进度，没有当时的简历。</div></section>' : ''}
+    <section><h5>当前阶段</h5>
+      <div style="display:flex;gap:8px;align-items:center"><b>${label(a.stage)}</b><span class="hint num">自 ${stageSince(a)} 起</span><span class="grow"></span>
+      <button class="btn small" data-move="${a.id}">改阶段</button></div></section>
+    <section><h5>阶段记录</h5><ul class="timeline">
+      ${a.events.map(([d, f, t]) => `<li><span class="d num">${d}</span>${f ? `${label(f)} → ` : ''}${label(t)}</li>`).join('')}
+    </ul></section>
+    <section><h5>这次投递</h5><div class="actions">
+      ${a.backfilled ? '' : '<button class="btn small">查看当时的简历</button><button class="btn small">和现在对比</button>'}
+      <button class="btn small">编辑投递</button>
+      <button class="btn small text danger">删除投递</button>
+    </div></section>`
+  $('#mask').classList.add('open'); $('#drawer').classList.add('open')
+}
+function closeDrawer() { drawerId = null; $('#mask').classList.remove('open'); $('#drawer').classList.remove('open') }
+
+document.addEventListener('click', (e) => {
+  const move = e.target.closest('[data-move]')
+  if (move) { e.stopPropagation(); openStageMenu(Number(move.dataset.move), move); return }
+  if (e.target.closest('#pop')) return
+  if ($('#pop').classList.contains('open')) { closePop(); return }
+  if (e.target.closest('select')) return
+  const sort = e.target.closest('[data-sort]')
+  if (sort) { state.sort = sort.dataset.sort; render(); return }
+  if (e.target.id === 'revealRejected') { state.showRejected = true; $('#showRejected').checked = true; render(); return }
+  const item = e.target.closest('[data-id]')
+  if (item) openDrawer(Number(item.dataset.id))
+})
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closePop(); closeDrawer() }
+  if (e.key === 'Enter' && e.target.classList?.contains('card')) openDrawer(Number(e.target.dataset.id))
+})
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest('[data-stage]')
+  if (sel) { const id = Number(sel.dataset.stage); const to = sel.value; sel.value = apps.find((a) => a.id === id).stage; openStageConfirm(id, to, sel) }
+})
+document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.seg button').forEach((x) => x.classList.toggle('on', x === b))
+  state.view = b.dataset.view; render()
+})
+$('#q').oninput = (e) => { state.q = e.target.value; render() }
+$('#showRejected').onchange = (e) => { state.showRejected = e.target.checked; render() }
+$('#mask').onclick = closeDrawer
+$('#dClose').onclick = closeDrawer
+$('#add').onclick = () => alert('原型：先选一个有定制简历的岗位，再打开岗位详情里现成的「记录投递」弹窗。')
+$('#specToggle').onclick = () => $('#spec').classList.toggle('open')
+render()
+</script>
+</body>
+</html>
