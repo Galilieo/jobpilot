@@ -12,6 +12,7 @@ from jobpilot.config import settings
 from jobpilot.db.history import history_rows
 from jobpilot.db.models import Message, MessageRole
 from jobpilot.services.agent.context import serialize
+from jobpilot.services.agent.step_details import model_view
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext
 
 MAX_HISTORY_PARTS = 10
@@ -73,7 +74,9 @@ def _tool_parts(message: Message) -> Iterator[HistoryPart]:
                     f"{answer.get('question', '')}\n{answer.get('answer', '')}",
                     {"question_id": question_id},
                 )
-        summary = {key: value for key, value in step.items() if key != "answers"}
+        summary = {
+            key: value for key, value in model_view(step).items() if key != "answers"
+        }
         readers = {key: tool for key, tool in _OBJECT_TOOLS.items() if key in summary}
         if summary.get("tool") in {"tailor_resume", "read_resume", "edit_resume_item"}:
             if "run_id" in summary:

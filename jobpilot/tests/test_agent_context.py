@@ -70,3 +70,7 @@ async def test_next_turn_sends_prior_steps_and_only_current_attachment(
             "</untrusted_data>",
         },
     ]
+    # 界面看的细节存在步骤记录里，但上面回传模型的 past_step 没有它。
+    saved = (await async_client.get(path)).json()["messages"]
+    steps = [step for message in saved for step in message["steps_json"]]
+    assert steps[0]["detail"] == {"jobs": []}

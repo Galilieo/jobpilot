@@ -13,6 +13,7 @@ from jobpilot.db.conversations import find_conversation
 from jobpilot.db.history import unsummarized_messages
 from jobpilot.db.models import Conversation, Message, MessageRole
 from jobpilot.services.agent.read_tools import current_job_summary
+from jobpilot.services.agent.step_details import DETAIL_KEY, model_view, step_detail
 from jobpilot.services.agent.types import (
     AgentDeps,
     AgentState,
@@ -83,6 +84,9 @@ def summarize_tool(name: str, result: Payload) -> Payload:
     summary = {key: result[key] for key in keys if key in result}
     if name == "ask_user" and "answers" in result:
         summary["answers"] = result["answers"]
+    detail = step_detail(name, result)
+    if detail is not None:
+        summary[DETAIL_KEY] = detail
     return {"tool": name, **summary}
 
 
@@ -151,7 +155,8 @@ def render_turn(messages: Iterable[Message], *, current: bool) -> list[Payload]:
                 {
                     "role": "assistant",
                     "content": wrap_untrusted_text(
-                        "past_step", serialize(message.steps_json)
+                        "past_step",
+                        serialize([model_view(step) for step in message.steps_json]),
                     ),
                 }
             )
