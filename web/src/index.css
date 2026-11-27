@@ -880,8 +880,12 @@ textarea {
   background: var(--ant-color-fill-tertiary);
   font-size: 13px;
 }
-.bubble-user .ant-bubble-content {
+/* 宽度上限放在 body 上：它的父级是整行。放在 content 上时百分比相对的是按文字收缩的 body，
+   会把短消息压成一字一行。 */
+.bubble-user .ant-bubble-body {
   max-width: min(86%, 640px);
+}
+.bubble-user .ant-bubble-content {
   padding: 10px 14px;
   border: 1px solid var(--ant-color-border);
   border-radius: var(--jp-radius-lg) var(--jp-radius-lg) 4px var(--jp-radius-lg);
