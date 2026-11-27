@@ -11,7 +11,7 @@ from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command, StateSnapshot
-from openai import AsyncOpenAI
+from openai import APIConnectionError, AsyncOpenAI
 from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -50,6 +50,10 @@ from jobpilot.services.agent.window_messages import CurrentInputOverflow
 logger = logging.getLogger("uvicorn.error").getChild("agent")
 _TIMEOUT_REPLY = "本轮已达到时长上限。已完成的步骤保留在对话中。"
 _ERROR_REPLY = "本轮对话未完成。可以查看已完成步骤，或重新发消息。"
+# 网关已经按 model_max_attempts 重发过仍连不上，多半是网络或代理，告诉用户该查什么。
+_CONNECTION_REPLY = (
+    "这一轮没有完成：连不上模型服务（网络超时或中断）。检查网络或代理后重新发送即可。"
+)
 LaunchTask = Callable[[UUID, Coroutine[Any, Any, None]], None]
 
 
@@ -257,9 +261,12 @@ class AgentRuntime:
                 describe_error(error),
                 error_locations(error),
             )
-            await _finish(
-                sessions, run, stream, RunStatus.FAILED, _ERROR_REPLY, action_id
+            reply = (
+                _CONNECTION_REPLY
+                if isinstance(error, APIConnectionError)
+                else _ERROR_REPLY
             )
+            await _finish(sessions, run, stream, RunStatus.FAILED, reply, action_id)
         finally:
             if self.streams.get(run.run_id) is stream:
                 self.streams.pop(run.run_id)
