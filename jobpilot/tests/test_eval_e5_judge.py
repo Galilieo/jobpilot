@@ -91,3 +91,27 @@ def test_public_manifest_matches_the_synthetic_inputs() -> None:
         assert manifest[split]["inputs"] == [
             str(path.relative_to(REPO_ROOT)) for path in dataset_paths(split)
         ]
+
+
+def test_short_blind_sheet_excludes_unsure_from_agreement(tmp_path) -> None:
+    from csv import writer
+
+    from evals.runners.e5_score import (
+        SHORT_SHEET_COLUMNS,
+        _certain_agreement,
+        _read_human,
+        _row_hash,
+    )
+
+    path = tmp_path / "human.csv"
+    rows = [("改写甲", "证据甲"), ("改写乙", "证据乙"), ("改写丙", "证据丙")]
+    with path.open("w", encoding="utf-8-sig", newline="") as file:
+        csv = writer(file)
+        csv.writerow(SHORT_SHEET_COLUMNS)
+        csv.writerows(
+            (*row, label)
+            for row, label in zip(rows, ("有編造", "拿不準", "沒有"), strict=True)
+        )
+    assert _read_human(path, [_row_hash(row) for row in rows]) == [True, None, False]
+    assert _certain_agreement([(2, True, True), (4, False, False)]) == (1.0, 1.0)
+    assert _certain_agreement([]) == (None, None)

@@ -31,7 +31,15 @@ HUMAN_LABELS = REPO_ROOT / "evals" / "private" / "e5-calibration.csv"
 PER_VERSION = 8
 SAMPLE_SEED = 20261126
 COLUMNS = ("改写句子", "相关原文", "有编造 / 没有")
-HUMAN_VALUES = {"有编造": True, "没有": False}
+SHORT_SHEET_COLUMNS = (*COLUMNS[:2], "有编造 / 没有 / 拿不准")
+HUMAN_VALUES = {
+    "有编造": True,
+    "有編造": True,
+    "没有": False,
+    "沒有": False,
+    "拿不准": None,
+    "拿不準": None,
+}
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -228,19 +236,20 @@ def agreement(human: list[bool], judge: list[bool]) -> tuple[float, float]:
     return observed, (observed - expected) / (1 - expected)
 
 
-def _read_human(path: Path, expected: list[str]) -> list[bool]:
+def _read_human(path: Path, expected: list[str]) -> list[bool | None]:
     with path.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
-        if tuple(reader.fieldnames or ()) != COLUMNS:
+        columns = tuple(reader.fieldnames or ())
+        if columns not in (COLUMNS, SHORT_SHEET_COLUMNS):
             raise ValueError("盲标表的三列表头有改动")
         rows = list(reader)
     actual = [_row_hash((row[COLUMNS[0]], row[COLUMNS[1]])) for row in rows]
     if actual != expected:
         raise ValueError("盲标表的条目、原文或行顺序有改动")
     try:
-        return [HUMAN_VALUES[row[COLUMNS[2]].strip()] for row in rows]
+        return [HUMAN_VALUES[row[columns[2]].strip()] for row in rows]
     except KeyError as exc:
-        raise ValueError("每一行须填「有编造」或「没有」") from exc
+        raise ValueError("每一行须填「有编造」「没有」或「拿不准」") from exc
 
 
 def calibrate(
@@ -280,34 +289,27 @@ def _compare_labels(sample, judging, human_path, output, judging_filename):
         raise ValueError("盲标表与裁判的证据口径或改写文件不一致")
     human = _read_human(human_path, sample["row_hashes"])
     verdicts = _verdicts(judging)
-    model = [bool(verdicts[key].types) for key in sample["keys"]]
-    try:
-        observed, kappa = agreement(human, model)
-    except ValueError:
-        if human != model or len(set(human)) != 1:
-            raise
-        observed, kappa = 1.0, None
-    labels = list(zip(human, model, strict=True))
+    certainty = [
+        (index, label, bool(verdicts[key].types))
+        for index, (label, key) in enumerate(zip(human, sample["keys"], strict=True), 2)
+        if label is not None
+    ]
+    observed, kappa = _certain_agreement(certainty)
     result = dict(
         count=len(human),
+        labeled_count=len(certainty),
+        unsure_count=len(human) - len(certainty),
+        unsure_rows=[index for index, label in enumerate(human, 2) if label is None],
         agreement=observed,
         kappa=kappa,
-        human_positive=sum(human),
-        judge_positive=sum(model),
-        missed_rows=[
-            i
-            for i, (human_label, predicted) in enumerate(labels, 2)
-            if human_label and not predicted
-        ],
+        human_positive=sum(label for _, label, _ in certainty),
+        judge_positive=sum(predicted for _, _, predicted in certainty),
+        missed_rows=[i for i, label, predicted in certainty if label and not predicted],
         false_alarm_rows=[
-            i
-            for i, (human_label, predicted) in enumerate(labels, 2)
-            if predicted and not human_label
+            i for i, label, predicted in certainty if predicted and not label
         ],
         disagreement_rows=[
-            index
-            for index, labels in enumerate(zip(human, model, strict=True), start=2)
-            if labels[0] != labels[1]
+            i for i, label, predicted in certainty if label != predicted
         ],
         judge_prompt=judging["judge_prompt"],
         judge_prompt_sha256=judging.get("judge_prompt_sha256"),
@@ -320,7 +322,22 @@ def _compare_labels(sample, judging, human_path, output, judging_filename):
     )
     _save_json(output, result)
     display = f"{kappa:.3f}" if kappa is not None else "无法计算"
-    print(f"一致率 {observed:.1%}，Cohen’s kappa {display} ({len(human)} 条)")
+    agreement_text = f"{observed:.1%}" if observed is not None else "无法计算"
+    print(
+        f"一致率 {agreement_text}，Cohen’s kappa {display}，"
+        f"计入 {len(certainty)}/{len(human)} 条"
+    )
+
+
+def _certain_agreement(
+    certainty: list[tuple[int, bool, bool]],
+) -> tuple[float | None, float | None]:
+    if not certainty:
+        return None, None
+    _, human, model = zip(*certainty, strict=True)
+    if len(set(human + model)) == 1:
+        return 1.0, None
+    return agreement(list(human), list(model))
 
 
 @dataclass
