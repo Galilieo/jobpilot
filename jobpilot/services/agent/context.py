@@ -4,6 +4,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from itertools import groupby
 from json import dumps
+from typing import Any
 from uuid import UUID
 
 from openai.types.chat import ChatCompletionSystemMessageParam
@@ -17,7 +18,12 @@ from jobpilot.db.memory_schema import MEMORY_AUTO_MAX_BODY_CHARS
 from jobpilot.db.models import Conversation, Message, MessageRole
 from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.read_tools import current_job_summary
-from jobpilot.services.agent.step_details import DETAIL_KEY, model_view, step_detail
+from jobpilot.services.agent.step_details import (
+    DETAIL_KEY,
+    live_step_detail,
+    model_view,
+    step_detail,
+)
 from jobpilot.services.agent.types import (
     AgentDeps,
     AgentState,
@@ -59,13 +65,26 @@ def _result_preview(value: object, limit: int) -> object:
     return None
 
 
+def _strip_internal_keys(value: Any) -> Any:
+    """过滤仅用于内部步骤持久化或引用的 `_` 前缀字段。"""
+    if isinstance(value, dict):
+        return {
+            key: _strip_internal_keys(item)
+            for key, item in value.items()
+            if not (isinstance(key, str) and key.startswith("_"))
+        }
+    if isinstance(value, list):
+        return [_strip_internal_keys(item) for item in value]
+    return value
+
+
 def serialize(value: object) -> str:
     return dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
 
 
 def serialize_tool_result(result: Payload, *, limit: int | None = None) -> str:
-    """先对工具回包做脱敏再序列化；超限时在字段边界裁剪。"""
-    redacted = redact_pii_data(result)
+    """先过滤内部字段并做脱敏再序列化；超限时在字段边界裁剪。"""
+    redacted = redact_pii_data(_strip_internal_keys(result))
     content = serialize(redacted)
     limit = settings.agent_limits.tool_result_bytes if limit is None else limit
     if len(content.encode()) <= limit:
@@ -79,7 +98,7 @@ def serialize_tool_result(result: Payload, *, limit: int | None = None) -> str:
     return serialize(preview)
 
 
-def summarize_tool(name: str, result: Payload) -> Payload:
+def summarize_tool(name: str, result: Payload, *, live: bool = False) -> Payload:
     keys = (
         "status",
         "job_id",
@@ -97,14 +116,19 @@ def summarize_tool(name: str, result: Payload) -> Payload:
     summary = {key: result[key] for key in keys if key in result}
     if name == "ask_user" and "answers" in result:
         summary["answers"] = result["answers"]
-    detail = step_detail(name, result)
+    detail = live_step_detail(name, result) if live else step_detail(name, result)
     if detail is not None:
         summary[DETAIL_KEY] = detail
     return {"tool": name, **summary}
 
 
-def summarize_tool_call(call: ToolCall, result: Payload) -> Payload:
-    return {**summarize_tool(call["name"], result), "tool_call_id": call["call_id"]}
+def summarize_tool_call(
+    call: ToolCall, result: Payload, *, live: bool = False
+) -> Payload:
+    return {
+        **summarize_tool(call["name"], result, live=live),
+        "tool_call_id": call["call_id"],
+    }
 
 
 def render_user_content(content: str, attachments: Sequence[str]) -> str:

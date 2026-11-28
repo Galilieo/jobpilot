@@ -447,3 +447,141 @@ async def test_vector_results_precede_pending_keyword_backfill_and_dedupe(
     assert embedded_only in snippets
     assert snippets.count(duplicate_text) == 1
     assert snippets[:2] == [embedded_only, duplicate_text]
+
+
+async def test_search_steps_store_locators_only_and_follow_source_deletion(
+    async_client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    ollama_inputs: list[str],
+) -> None:
+    from jobpilot.db.models import Message
+
+    await sign_in(async_client)
+    source_path = await conversation(async_client)
+    target_path = await conversation(async_client)
+    secret_text = "木槿协作面试问到了 Temporal 工作流"
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = json.loads(request.content)["messages"][-1]
+        if last.get("content") == "查一下木槿协作":
+            return batch(("search_conversations", {"query": "Temporal"}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        await async_client.post(
+            f"{source_path}/messages", json=message_body(secret_text)
+        )
+        await app.state.run_launcher.wait_all()
+        await async_client.post(
+            f"{target_path}/messages", json=message_body("查一下木槿协作")
+        )
+        await app.state.run_launcher.wait_all()
+
+    target_id = UUID(target_path.rsplit("/", 1)[-1])
+    async with session_factory() as session:
+        tool_msgs = list(
+            await session.scalars(
+                select(Message).where(
+                    Message.conversation_id == target_id,
+                    Message.role == MessageRole.TOOL,
+                )
+            )
+        )
+    assert len(tool_msgs) == 1
+    stored_hit = tool_msgs[0].steps_json[0]["detail"]["hits"][0]
+    assert "snippet" not in stored_hit
+    assert "title" not in stored_hit
+    assert stored_hit["conversation_id"] == source_path.rsplit("/", 1)[-1]
+    assert stored_hit["seq"] > 0
+
+    before_detail = (await async_client.get(target_path)).json()
+    before_hit = next(
+        step["detail"]["hits"][0]
+        for msg in before_detail["messages"]
+        for step in msg["steps_json"]
+        if step.get("tool") == "search_conversations"
+    )
+    assert before_hit["snippet"] == secret_text
+    assert before_hit["source_deleted"] is False
+
+    export_before = (await async_client.get("/api/account/export")).json()
+    exported_target_steps = [
+        step
+        for msg in export_before["messages"]
+        if msg["conversation_id"] == str(target_id)
+        for step in msg["steps_json"]
+        if step.get("tool") == "search_conversations"
+    ]
+    assert "snippet" not in exported_target_steps[0]["detail"]["hits"][0]
+
+    assert (await async_client.delete(source_path)).status_code == 204
+
+    after_detail = (await async_client.get(target_path)).json()
+    after_hit = next(
+        step["detail"]["hits"][0]
+        for msg in after_detail["messages"]
+        for step in msg["steps_json"]
+        if step.get("tool") == "search_conversations"
+    )
+    assert after_hit["source_deleted"] is True
+    assert after_hit.get("snippet") is None
+
+    export_after = (await async_client.get("/api/account/export")).json()
+    assert secret_text not in json.dumps(export_after, ensure_ascii=False)
+
+
+async def test_legacy_stored_search_snippet_is_ignored_on_read_and_export(
+    async_client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await sign_in(async_client)
+    target_path = await conversation(async_client)
+    target_id = UUID(target_path.rsplit("/", 1)[-1])
+    user_id = UUID((await async_client.get("/api/me")).json()["user_id"])
+    legacy_secret = "已经删掉的旧摘录副本"
+
+    async with session_factory.begin() as session:
+        run = AiRun(
+            user_id=user_id,
+            conversation_id=target_id,
+            kind="agent",
+            status=RunStatus.SUCCEEDED,
+            finished_at=datetime.now(UTC),
+        )
+        session.add(run)
+        await session.flush()
+        await add_message(
+            session,
+            run,
+            MessageRole.TOOL,
+            "tool:1:0:c1",
+            "",
+            steps=[
+                {
+                    "tool": "search_conversations",
+                    "total": 1,
+                    "detail": {
+                        "query": "旧词",
+                        "degraded": False,
+                        "hits": [
+                            {
+                                "conversation_id": str(UUID(int=999)),
+                                "seq": 1,
+                                "title": "已删旧标题",
+                                "snippet": legacy_secret,
+                            }
+                        ],
+                    },
+                }
+            ],
+        )
+
+    detail = (await async_client.get(target_path)).json()
+    hit = detail["messages"][0]["steps_json"][0]["detail"]["hits"][0]
+    assert hit["source_deleted"] is True
+    assert hit.get("snippet") is None
+    assert hit.get("title") is None
+
+    exported = (await async_client.get("/api/account/export")).json()
+    assert legacy_secret not in json.dumps(exported, ensure_ascii=False)

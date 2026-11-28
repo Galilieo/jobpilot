@@ -1,10 +1,11 @@
 """在本人其他对话范围内取回向量、全文命中和原文出处。"""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, fields
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, exists, func, select
+from sqlalchemy import ColumnElement, Select, exists, func, select, tuple_
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -137,3 +138,31 @@ async def _top_distinct(
         .limit(limit)
     )
     return [RankedChunk(**row) for row in (await session.execute(statement)).mappings()]
+
+
+async def load_message_sources(
+    session: AsyncSession,
+    user_id: UUID,
+    locators: Sequence[tuple[UUID, int]],
+) -> dict[tuple[UUID, int], tuple[str, str]]:
+    """按 (conversation_id, seq) 批量读取本人消息所属对话标题与原文。"""
+    if not locators:
+        return {}
+    statement = (
+        select(
+            Message.conversation_id,
+            Message.seq,
+            Conversation.title,
+            Message.content,
+        )
+        .join(Conversation, Conversation.conversation_id == Message.conversation_id)
+        .where(
+            Conversation.user_id == user_id,
+            Message.user_id == user_id,
+            tuple_(Message.conversation_id, Message.seq).in_(list(locators)),
+        )
+    )
+    return {
+        (row.conversation_id, row.seq): (row.title, row.content)
+        for row in (await session.execute(statement)).mappings()
+    }

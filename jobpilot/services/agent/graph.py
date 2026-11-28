@@ -358,7 +358,7 @@ async def _record(agent: AgentDeps, call: ToolCall, result: Payload) -> None:
         await add_message(
             session, run, MessageRole.TOOL, "tool:" + call["key"], "", steps=[summary]
         )
-    agent.emit("tool_end", summary)
+    agent.emit("tool_end", summarize_tool_call(call, result, live=True))
 
 
 def _tool_message(call: ToolCall, result: Payload) -> Payload:

@@ -40,16 +40,25 @@ class SearchConversationArgs(ToolArgs):
     limit: int = Field(default=5, ge=1, le=8)
 
 
-def _snippet(hit: RankedChunk) -> str:
-    # 切片边界先避开联系方式，再在换行转义前脱敏。
-    spans = pii_spans(hit.source_text)
-    start = hit.span_start
-    end = min(start + _SNIPPET_CHARS, hit.span_end)
+def snippet_for_span(
+    source_text: str, span_start: int | None, span_end: int | None
+) -> str:
+    """按字符范围截取摘要，避开被截断的联系方式后再脱敏。"""
+    if not source_text:
+        return ""
+    length = len(source_text)
+    raw_start = 0 if span_start is None else span_start
+    raw_end = length if span_end is None else span_end
+    start = max(0, min(raw_start, length))
+    end = max(start, min(start + _SNIPPET_CHARS, raw_end, length))
+    spans = pii_spans(source_text)
     if partial := pii_at_boundary(spans, start):
         start = partial[1]
     if partial := pii_at_boundary(spans, end):
         end = partial[0]
-    return redact_pii(hit.source_text[start:end])
+    if end <= start:
+        return ""
+    return redact_pii(source_text[start:end])
 
 
 def _hit_payload(result: SearchHit) -> Payload:
@@ -60,8 +69,10 @@ def _hit_payload(result: SearchHit) -> Payload:
         "seq": hit.seq,
         "role": hit.role,
         "date": hit.date.isoformat(),
-        "snippet": _snippet(hit),
+        "snippet": snippet_for_span(hit.source_text, hit.span_start, hit.span_end),
         "source": result.source,
+        "_span_start": hit.span_start,
+        "_span_end": hit.span_end,
     }
 
 

@@ -43,6 +43,7 @@ from jobpilot.services.agent.runtime import (
     card_payload,
     done_event,
 )
+from jobpilot.services.agent.step_details import resolve_search_steps
 from jobpilot.services.agent.tools import TOOL_DEFINITIONS
 from jobpilot.services.agent.types import Decision, DecisionIn, Payload, ToolError
 from jobpilot.services.agent.window_messages import AgentWindow
@@ -108,15 +109,17 @@ def _replay(
     card: AgentAction | None = None,
     action: AgentAction | None = None,
     messages: tuple[Message, ...] = (),
+    resolved_steps: dict[UUID, list[Payload]] | None = None,
 ) -> StreamingResponse:
     stream = EventStream()
+    steps_map = resolved_steps or {}
     for message in messages:
         if message.role == MessageRole.ASSISTANT and message.content:
             event = "error" if run.status == RunStatus.FAILED else "text"
             key = "message" if event == "error" else "text"
             stream.emit(event, {key: message.content})
         elif message.role == MessageRole.TOOL:
-            for step in message.steps_json:
+            for step in steps_map.get(message.message_id, message.steps_json):
                 if "tool" in step:
                     stream.emit("tool_end", step)
     if card:
@@ -134,8 +137,11 @@ async def _reattach(db: DbSession, runtime: Runtime, run: AiRun) -> StreamingRes
         return _response(running)
     card = await pending_action(run.user_id, db, run.run_id)
     messages = await run_messages(run.user_id, db, run.run_id)
+    resolved_steps = await resolve_search_steps(db, run.user_id, messages)
     await db.commit()
-    return _replay(run, card=card, messages=tuple(messages))
+    return _replay(
+        run, card=card, messages=tuple(messages), resolved_steps=resolved_steps
+    )
 
 
 def _launch(

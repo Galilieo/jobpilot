@@ -49,6 +49,9 @@ describe('最近对话', () => {
     const menuButtons = container.querySelectorAll('.ant-conversations-menu-icon')
     await user.click(menuButtons[0] as HTMLElement)
     await user.click(await screen.findByText('删除'))
+    expect(
+      await screen.findByText(/其他对话里 Agent 转述过的内容属于那段对话，不会一起删除/),
+    ).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: '删除对话' }))
 
     await waitFor(() => expect(screen.getByText('对话正在运行，请稍后删除')).toBeInTheDocument())

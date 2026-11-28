@@ -109,4 +109,11 @@ async def _owned_rows(
     rows = await session.execute(
         select(*columns).where(owner == user_id).order_by(*ordering)
     )
-    return [dict(row) for row in rows.mappings()]
+    items = [dict(row) for row in rows.mappings()]
+    if table is Message.__table__:
+        from jobpilot.services.agent.step_details import strip_search_step_excerpts
+
+        for item in items:
+            if isinstance(item.get("steps_json"), list):
+                item["steps_json"] = strip_search_step_excerpts(item["steps_json"])
+    return items

@@ -191,6 +191,13 @@ function searchLines({ detail }: StepCall, index: number): DetailLine[] {
     { key: `${index}:query`, text: `「${detail.query}」 · ${hits.length} 条命中${summary}` },
   ]
   for (const [rank, hit] of hits.entries()) {
+    if (hit.source_deleted === true) {
+      lines.push({
+        key: `${index}:hit:${rank}`,
+        text: '来源已删除',
+      })
+      continue
+    }
     const id = text(hit.conversation_id)
     const seq = hit.seq
     if (!id || typeof seq !== 'number') continue

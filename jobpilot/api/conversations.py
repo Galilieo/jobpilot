@@ -31,6 +31,7 @@ from jobpilot.services.agent.runtime import (
     card_payload,
     confirmation_status,
 )
+from jobpilot.services.agent.step_details import resolve_search_steps
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 Title = Annotated[
@@ -136,6 +137,7 @@ async def get_conversation(
     async with read_snapshot(sessions) as db:
         conversation = await require_conversation(user.user_id, db, conversation_id)
         messages = await conversation_messages(user.user_id, db, conversation_id)
+        resolved_steps = await resolve_search_steps(db, user.user_id, messages)
         run = await latest_agent_run(user.user_id, db, conversation_id)
         card = await latest_confirmation(user.user_id, db, run.run_id) if run else None
         decided = await latest_decided_action(user.user_id, db, conversation_id)
@@ -148,7 +150,16 @@ async def get_conversation(
     )
     return ConversationDetail(
         **ConversationOut.model_validate(conversation).model_dump(),
-        messages=[MessageOut.model_validate(message) for message in messages],
+        messages=[
+            (
+                MessageOut.model_validate(message).model_copy(
+                    update={"steps_json": resolved_steps[message.message_id]}
+                )
+                if message.message_id in resolved_steps
+                else MessageOut.model_validate(message)
+            )
+            for message in messages
+        ],
         run=AgentRunOut.model_validate(run) if run else None,
         pending_action=card_payload(card)
         if card and phase == ConfirmationStatus.WAITING_DECISION

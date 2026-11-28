@@ -59,7 +59,8 @@ export function RecentConversations({ onNavigate }: { onNavigate?: () => void })
   function confirmDelete(item: Conversation): void {
     modal.confirm({
       title: '删除这段对话？',
-      content: '对话里的消息会一起删除，岗位库和定制简历不受影响。',
+      content:
+        '对话里的消息会一起删除，岗位库和定制简历不受影响。其他对话里 Agent 转述过的内容属于那段对话，不会一起删除。',
       okText: '删除对话',
       okButtonProps: { danger: true },
       cancelText: '取消',

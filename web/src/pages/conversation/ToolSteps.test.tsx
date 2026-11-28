@@ -154,6 +154,39 @@ describe('ToolSteps', () => {
     expect(screen.getByText(/部分新消息仍在建立索引/)).toBeInTheDocument()
   })
 
+  it('来源对话已删除时显示来源已删除且不提供跳转链接', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <ToolSteps
+        steps={[
+          {
+            key: 'search3',
+            tool: 'search_conversations',
+            status: 'success',
+            result: {
+              total: 1,
+              detail: {
+                query: '木槿协作',
+                degraded: false,
+                hits: [
+                  {
+                    conversation_id: 'c-deleted',
+                    seq: 3,
+                    source_deleted: true,
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /搜索了其他对话/ }))
+    await user.click(screen.getByRole('button', { name: /搜索其他对话/ }))
+    expect(screen.getByText('来源已删除')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /来源已删除/ })).not.toBeInTheDocument()
+  })
+
   it('完成后默认收起，只显示概括和总用时；点开按动作列出，岗位做成标签', async () => {
     const user = userEvent.setup()
     renderWithProviders(<ToolSteps steps={READS} title={title} />)
