@@ -263,3 +263,68 @@ async def test_chunks_cascade_on_conversation_and_account_delete(
         )
     assert (await purge_accounts(session_factory)).deleted == 1
     assert await count_chunks() == 0
+
+
+async def test_app_notices_are_not_indexed_but_model_answers_are(
+    async_client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    ollama_inputs: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """程序生成的固定提示没有检索价值，额度用完后模型给的答复仍要能搜到。"""
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    monkeypatch.setattr(settings.agent_limits, "tool_calls", 1)
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        messages = json.loads(request.content)["messages"]
+        if messages[-1]["role"] == "user" and messages[-1]["content"] == "这轮会出错":
+            return httpx.Response(400, json={"error": {"message": "bad request"}})
+        if messages[-1]["role"] == "tool":
+            return reply("按已经查到的岗位回答")
+        return batch(("list_jobs", {}), ("list_jobs", {}))
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        for text in ("这轮会出错", "列两次岗位"):
+            sent = await async_client.post(f"{path}/messages", json=message_body(text))
+            assert sent.is_success
+            await app.state.run_launcher.wait_all()
+
+    shown = [m["content"] for m in (await async_client.get(path)).json()["messages"]]
+    assert "本轮对话未完成。可以查看已完成步骤，或重新发消息。" in shown
+    async with session_factory() as session:
+        indexed = set(await session.scalars(select(MessageChunk.content)))
+    assert indexed == {"这轮会出错", "列两次岗位", "按已经查到的岗位回答"}
+
+
+async def test_identical_texts_take_one_search_position(
+    async_client: httpx.AsyncClient, ollama_inputs: list[str]
+) -> None:
+    """按钮发出的同一句话出现在多段对话里，只占一个位置，其余留给别的结果。"""
+    await sign_in(async_client)
+    repeated = "从岗位库里选一个岗位继续准备。"
+    wanted = "木槿协作的技术栏写了 Temporal"
+    paths = [await conversation(async_client) for _ in range(5)]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = json.loads(request.content)["messages"][-1]
+        if last["content"] == "找 Temporal":
+            return batch(("search_conversations", {"query": "Temporal 岗位"}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        await async_client.post(f"{paths[0]}/messages", json=message_body(wanted))
+        for path in paths[1:4]:
+            await async_client.post(f"{path}/messages", json=message_body(repeated))
+            await app.state.run_launcher.wait_all()
+        response = await async_client.post(
+            f"{paths[4]}/messages", json=message_body("找 Temporal")
+        )
+        await app.state.run_launcher.wait_all()
+
+    [step] = [payload for name, payload in events(response) if name == "tool_end"]
+    snippets = [hit["snippet"] for hit in step["detail"]["hits"]]
+    assert snippets.count(repeated) == 1
+    assert wanted in snippets

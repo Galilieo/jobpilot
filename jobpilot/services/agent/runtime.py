@@ -356,7 +356,7 @@ async def _drive(
         snapshot.values.get("reply", ""),
         action_id,
         StopReason.BUDGET_EXHAUSTED if stopped else None,
-        reply_streamed=not notice,
+        from_model=not notice,
     )
     return True
 
@@ -421,7 +421,7 @@ async def _finish(
     action_id: UUID | None,
     stop_reason: StopReason | None = None,
     *,
-    reply_streamed: bool = False,
+    from_model: bool = False,
 ) -> None:
     async with sessions.begin() as session:
         run = await owned_agent_run(
@@ -438,7 +438,9 @@ async def _finish(
             return
         await finish_run(session, run.user_id, run.run_id, status)
         run.stop_reason = stop_reason
-        await add_message(session, run, MessageRole.ASSISTANT, "final", reply)
+        # 程序生成的固定提示另用键名，跨对话索引只收模型写的答复。
+        key = "final" if from_model else "notice"
+        await add_message(session, run, MessageRole.ASSISTANT, key, reply)
         action = (
             await find_action(run.user_id, session, action_id) if action_id else None
         )
@@ -446,7 +448,7 @@ async def _finish(
         stream.emit("error", {"message": reply})
     elif action and action.result_json and "error" in action.result_json:
         stream.emit("error", action.result_json)
-    elif status == RunStatus.BUDGET_EXHAUSTED and not reply_streamed:
+    elif status == RunStatus.BUDGET_EXHAUSTED and not from_model:
         # 固定提示没有经过模型流，要单独发；模型的答复已经逐字发过。
         stream.emit("text", {"text": reply})
     stream.emit("done", done_event(run, action))

@@ -1,10 +1,10 @@
 """在本人其他对话范围内取回向量、全文命中和原文出处。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import ColumnElement, Select, func, select
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,9 @@ class RankedChunk:
     span_start: int
     span_end: int
     score: float
+
+
+_RESULT_FIELDS = [field.name for field in fields(RankedChunk)]
 
 
 def _candidates(scope: SearchScope) -> Select:
@@ -62,15 +65,9 @@ async def vector_candidates(
     vector: list[float],
     limit: int,
 ) -> list[RankedChunk]:
-    distance = MessageChunk.embedding.cosine_distance(vector)
-    statement = (
-        _candidates(scope)
-        .add_columns((1 - distance).label("score"))
-        .where(MessageChunk.embedding_model == model)
-        .order_by(distance, Message.seq.desc(), MessageChunk.chunk_no)
-        .limit(limit)
-    )
-    return [RankedChunk(**row) for row in (await session.execute(statement)).mappings()]
+    score = 1 - MessageChunk.embedding.cosine_distance(vector)
+    statement = _candidates(scope).where(MessageChunk.embedding_model == model)
+    return await _top_distinct(session, statement, score, limit)
 
 
 async def keyword_candidates(
@@ -91,15 +88,34 @@ async def keyword_candidates(
             func.plainto_tsquery("simple", term)
         ).self_group()
     score = func.ts_rank_cd(MessageChunk.search_terms, query)
-    statement = (
-        _candidates(scope)
-        .add_columns(score.label("score"))
-        .where(MessageChunk.search_terms.op("@@")(query))
-        .order_by(score.desc(), Message.seq.desc(), MessageChunk.chunk_no)
-        .limit(limit)
-    )
+    statement = _candidates(scope).where(MessageChunk.search_terms.op("@@")(query))
     if missing_model is not None:
         statement = statement.where(
             MessageChunk.embedding_model.is_distinct_from(missing_model)
         )
+    return await _top_distinct(session, statement, score, limit)
+
+
+async def _top_distinct(
+    session: AsyncSession, candidates: Select, score: ColumnElement[float], limit: int
+) -> list[RankedChunk]:
+    """按分数取前几条，同一段文字只留排名最前的一份。
+
+    按钮发出的同一句话会出现在很多段对话里，短句又和短查询很接近，
+    不合并就会占满结果（2026-11-28 实际使用中前 5 条是同一句）。
+    """
+    best_first = (score.desc(), Message.seq.desc(), MessageChunk.chunk_no)
+    ranked = candidates.add_columns(
+        score.label("score"),
+        MessageChunk.chunk_no,
+        func.row_number()
+        .over(partition_by=MessageChunk.content, order_by=best_first)
+        .label("copy_no"),
+    ).subquery()
+    statement = (
+        select(*(ranked.c[name] for name in _RESULT_FIELDS))
+        .where(ranked.c.copy_no == 1)
+        .order_by(ranked.c.score.desc(), ranked.c.seq.desc(), ranked.c.chunk_no)
+        .limit(limit)
+    )
     return [RankedChunk(**row) for row in (await session.execute(statement)).mappings()]
