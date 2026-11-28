@@ -86,6 +86,7 @@ export type AgentToolStep =
 
 export interface ConversationMessage {
   message_id: string
+  seq: number
   run_id: string
   client_message_id: string | null
   role: 'user' | 'assistant' | 'tool'

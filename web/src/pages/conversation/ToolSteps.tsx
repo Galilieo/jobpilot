@@ -7,6 +7,7 @@ import {
   FileTextOutlined,
   LoadingOutlined,
   RightOutlined,
+  SearchOutlined,
   ToolOutlined,
   UnorderedListOutlined,
   UserOutlined,
@@ -35,6 +36,7 @@ const TOOL_ICON: Record<string, ReactNode> = {
   list_jobs: <UnorderedListOutlined />,
   read_facts: <UserOutlined />,
   read_job: <FileTextOutlined />,
+  search_conversations: <SearchOutlined />,
 }
 
 function totalDurationMs(steps: StepView[]): number | null {
@@ -61,10 +63,21 @@ function DetailList({ lines }: { lines: DetailLine[] }): ReactElement {
     <ul className="tool-step-details">
       {lines.map((line) => (
         <li key={line.key}>
-          {line.jobId ? <Link to={`/jobs/${line.jobId}`}>{line.text}</Link> : line.text}
+          <DetailText line={line} />
         </li>
       ))}
     </ul>
+  )
+}
+
+function DetailText({ line }: { line: DetailLine }): ReactNode {
+  if (line.jobId) return <Link to={`/jobs/${line.jobId}`}>{line.text}</Link>
+  if (!line.messageHref) return line.text
+  return (
+    <>
+      <Link to={line.messageHref}>{line.text}</Link>
+      {line.snippet && <div>{line.snippet}</div>}
+    </>
   )
 }
 

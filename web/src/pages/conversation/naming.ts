@@ -24,6 +24,7 @@ const TOOL_ACTION: Record<string, string> = {
   remember: '记住偏好',
   forget: '忘掉偏好',
   read_conversation_history: '查阅对话',
+  search_conversations: '搜索其他对话',
 }
 
 // 收起时概括用。读取类只写读了什么（read_job 按岗位个数另算），其余写完成后的短语。
@@ -46,6 +47,7 @@ const DONE_PHRASE: Record<string, string> = {
   record_application: '记了投递',
   remember: '记下了偏好',
   forget: '删掉了偏好',
+  search_conversations: '搜索了其他对话',
 }
 
 export function readObject(tool: string): string | null {

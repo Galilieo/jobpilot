@@ -66,6 +66,7 @@ class MessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     message_id: UUID
+    seq: int
     run_id: UUID
     client_message_id: UUID | None
     role: MessageRole

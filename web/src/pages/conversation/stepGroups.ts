@@ -1,6 +1,7 @@
 // 工具步骤的整理：每步的简短结果、按动作分组、收起时的一句话概括，以及展开后每次调用的细节。
 // 细节来自后端步骤记录的 detail（岗位名、事实库版本和条数），纯函数，不渲染。
 import { STOP_REASON } from '../../labels'
+import { messageAnchor } from './messageLink'
 import { donePhrase, readObject } from './naming'
 
 export type JobTitle = (jobId: string) => string
@@ -35,6 +36,8 @@ export interface DetailLine {
   key: string
   text: string
   jobId?: string
+  messageHref?: string
+  snippet?: string
 }
 
 /** 一步的简短结果：出错就说原因，其他只给计数或「完成」，不把原始 JSON 摆出来。 */
@@ -176,6 +179,27 @@ function reportLines(detail: Detail): DetailLine[] {
   ]
 }
 
+function searchLines({ detail }: StepCall, index: number): DetailLine[] {
+  if (!detail || typeof detail.query !== 'string') return []
+  const hits = Array.isArray(detail.hits) ? (detail.hits as Detail[]) : []
+  const summary = detail.degraded ? ' · 结果可能不全' : ''
+  const lines: DetailLine[] = [
+    { key: `${index}:query`, text: `「${detail.query}」 · ${hits.length} 条命中${summary}` },
+  ]
+  for (const [rank, hit] of hits.entries()) {
+    const id = text(hit.conversation_id)
+    const seq = hit.seq
+    if (!id || typeof seq !== 'number') continue
+    lines.push({
+      key: `${index}:hit:${rank}`,
+      text: `${text(hit.title) ?? '未命名对话'} · 第 ${seq} 条消息`,
+      messageHref: `/conversations/${encodeURIComponent(id)}#${messageAnchor(seq)}`,
+      snippet: text(hit.snippet) ?? undefined,
+    })
+  }
+  return lines
+}
+
 /** 展开一组后逐条列出：读过哪些岗位、事实库第几版多少条、报告的主要差距。没有细节的工具返回空。 */
 export function detailLines(group: StepGroup): DetailLine[] {
   if (group.status !== 'success') return []
@@ -190,6 +214,8 @@ export function detailLines(group: StepGroup): DetailLine[] {
       return last ? reportLines(last) : []
     case 'read_resume':
       return last ? [{ key: 'resume', text: `第 ${count(last.version)} 版` }] : []
+    case 'search_conversations':
+      return group.calls.flatMap(searchLines)
     default:
       return []
   }

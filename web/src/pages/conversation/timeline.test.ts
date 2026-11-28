@@ -10,6 +10,7 @@ function message(
 ): ConversationMessage {
   return {
     message_id: id,
+    seq: Number(id.slice(1)),
     run_id: 'r1',
     client_message_id: null,
     role,

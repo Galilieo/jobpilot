@@ -8,6 +8,7 @@ import type { BubbleListRef } from '@ant-design/x/es/bubble'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Alert, App } from 'antd'
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
+import { useLocation } from 'react-router'
 import { conversations } from '../../api/endpoints'
 import type {
   AgentActionCard,
@@ -17,6 +18,7 @@ import type {
 } from '../../api/types'
 import { MEMORIES_QUERY, WRITING_PREFERENCE_QUERY } from '../../queryKeys'
 import { CardResult, PendingCard, type CardOutcome } from './ActionCards'
+import { messageAnchor } from './messageLink'
 import { MessageText } from './MessageText'
 import type { LiveTurn } from './runControl'
 import { buildTimeline, hasCard, type TimelineItem } from './timeline'
@@ -61,17 +63,46 @@ function Attachments({ items }: { items: AgentTextAttachment[] }): ReactNode {
   )
 }
 
-function userBubble(key: string, content: string, attachments: AgentTextAttachment[]) {
+function MessageAnchor({ seq, children }: { seq: number; children: ReactNode }): ReactElement {
+  return (
+    <div id={messageAnchor(seq)} tabIndex={-1}>
+      {children}
+    </div>
+  )
+}
+
+function userBubble(
+  key: string,
+  content: string,
+  attachments: AgentTextAttachment[],
+  seq?: number,
+) {
+  const body = (
+    <>
+      {content && <div className="message-text">{content}</div>}
+      <Attachments items={attachments} />
+    </>
+  )
   return {
     key,
     role: 'user',
-    content: (
-      <>
-        {content && <div className="message-text">{content}</div>}
-        <Attachments items={attachments} />
-      </>
-    ),
+    content: seq === undefined ? body : <MessageAnchor seq={seq}>{body}</MessageAnchor>,
   }
+}
+
+function useMessageJump(messages: ConversationDetail['messages']): void {
+  const { hash } = useLocation()
+  const target = messages.find((message) => hash === `#${messageAnchor(message.seq)}`)
+  const seq = target?.seq
+  useEffect(() => {
+    if (seq === undefined) return
+    const frame = requestAnimationFrame(() => {
+      const anchor = document.getElementById(messageAnchor(seq))
+      anchor?.scrollIntoView({ block: 'center' })
+      anchor?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [seq])
 }
 
 export function MessageList(props: MessageListProps): ReactElement {
@@ -80,6 +111,7 @@ export function MessageList(props: MessageListProps): ReactElement {
   const { detail, live, title } = props
   const listRef = useRef<BubbleListRef>(null)
   const liveStarted = live !== null
+  useMessageJump(detail.messages)
 
   // 自己刚发出消息或提交决定时滚到底部；只在已经贴底时自动跟随是 Bubble.List 的默认行为。
   // 滚动容器在 Bubble.List 首次渲染之后才就绪，挂载时这一轮已开始（新对话发出第一条后跳转过来）
@@ -134,12 +166,16 @@ export function MessageList(props: MessageListProps): ReactElement {
   function itemOf(item: TimelineItem): BubbleItemType {
     switch (item.type) {
       case 'user':
-        return userBubble(item.key, item.content, item.attachments)
+        return userBubble(item.key, item.content, item.attachments, item.seq)
       case 'assistant':
         return {
           key: item.key,
           role: 'ai',
-          content: <MessageText text={item.content} />,
+          content: (
+            <MessageAnchor seq={item.seq}>
+              <MessageText text={item.content} />
+            </MessageAnchor>
+          ),
         }
       case 'steps':
         return {

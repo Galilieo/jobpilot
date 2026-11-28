@@ -11,8 +11,8 @@ import type {
 export type ToolResultStep = Extract<AgentToolStep, { tool: string }>
 
 export type TimelineItem =
-  | { type: 'user'; key: string; content: string; attachments: AgentTextAttachment[] }
-  | { type: 'assistant'; key: string; content: string }
+  | { type: 'user'; key: string; seq: number; content: string; attachments: AgentTextAttachment[] }
+  | { type: 'assistant'; key: string; seq: number; content: string }
   | { type: 'steps'; key: string; steps: ToolResultStep[] }
   | { type: 'card'; key: string; card: AgentActionCard; outcome: ToolResultStep | null }
   | { type: 'hint'; key: string; text: string }
@@ -81,6 +81,7 @@ export function buildTimeline(detail: ConversationDetail, title: JobTitle): Time
       items.push({
         type: 'user',
         key: message.message_id,
+        seq: message.seq,
         content: message.content,
         attachments: message.attachments_json,
       })
@@ -89,7 +90,12 @@ export function buildTimeline(detail: ConversationDetail, title: JobTitle): Time
     if (message.role === 'assistant') {
       if (message.content.trim()) {
         closeGroup()
-        items.push({ type: 'assistant', key: message.message_id, content: message.content })
+        items.push({
+          type: 'assistant',
+          key: message.message_id,
+          seq: message.seq,
+          content: message.content,
+        })
       }
       return
     }

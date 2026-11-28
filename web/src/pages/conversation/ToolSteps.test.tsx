@@ -89,6 +89,49 @@ describe('工具步骤的整理', () => {
 })
 
 describe('ToolSteps', () => {
+  it('展开跨对话搜索后显示查询、降级状态和原消息链接', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <ToolSteps
+        steps={[
+          {
+            key: 'search1',
+            tool: 'search_conversations',
+            status: 'success',
+            result: {
+              total: 1,
+              detail: {
+                query: '每周到岗',
+                degraded: true,
+                hits: [
+                  {
+                    conversation_id: 'c1',
+                    seq: 12,
+                    title: '云岬科技',
+                    snippet: '每周需要到岗四天',
+                    role: 'user',
+                    date: '2026-11-28T01:00:00Z',
+                    source: 'keyword',
+                  },
+                ],
+              },
+            },
+          },
+        ]}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /搜索了其他对话/ }))
+    await user.click(screen.getByRole('button', { name: /搜索其他对话/ }))
+    expect(screen.getByText(/每周到岗/)).toBeInTheDocument()
+    expect(screen.getByText(/结果可能不全/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /云岬科技/ })).toHaveAttribute(
+      'href',
+      '/conversations/c1#message-12',
+    )
+    expect(screen.getByText('每周需要到岗四天')).toBeInTheDocument()
+  })
+
   it('完成后默认收起，只显示概括和总用时；点开按动作列出，岗位做成标签', async () => {
     const user = userEvent.setup()
     renderWithProviders(<ToolSteps steps={READS} title={title} />)

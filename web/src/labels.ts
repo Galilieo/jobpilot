@@ -190,6 +190,7 @@ export const AGENT_TOOL: Record<string, string> = {
   set_writing_preference: '设置写作偏好',
   forget: '忘掉偏好',
   read_conversation_history: '查阅更早的对话',
+  search_conversations: '搜索其他对话',
 }
 
 export const toolLabel = (tool: string): string => AGENT_TOOL[tool] ?? tool
