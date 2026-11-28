@@ -1,13 +1,16 @@
 """读取仓库根目录配置，提供数据库连接信息和各用途的模型参数。"""
 
 from enum import StrEnum
+from ipaddress import ip_address
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+EMBEDDING_DIMENSIONS = 1024
 
 
 class ModelPurpose(StrEnum):
@@ -117,6 +120,50 @@ class Settings(BaseSettings):
     # 为 True 时浏览器只在 HTTPS 下发送 Cookie；本地 http 开发保持 False。
     cookie_secure: bool = False
     database_connect_timeout_seconds: int = Field(default=5, gt=0)
+
+    ollama_base_url: str = Field(
+        default="http://127.0.0.1:11434", validation_alias="OLLAMA_BASE_URL"
+    )
+    embedding_model: str = Field(
+        default="bge-m3",
+        min_length=1,
+        max_length=200,
+        validation_alias="EMBEDDING_MODEL",
+    )
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def validate_ollama_base_url(cls, value: str) -> str:
+        """搜索词和消息只允许发往本机 Ollama。"""
+        url = urlsplit(value)
+        host = url.hostname
+        if host is None:
+            raise ValueError("Ollama 地址需要本机主机名")
+        if host == "localhost":
+            local = True
+        else:
+            try:
+                local = ip_address(host).is_loopback
+            except ValueError:
+                local = False
+        if (
+            not local
+            or url.scheme not in {"http", "https"}
+            or url.username is not None
+            or url.path not in {"", "/"}
+            or url.query
+            or url.fragment
+        ):
+            raise ValueError("Ollama 地址必须是本机 HTTP(S) 服务的根地址")
+        return value.rstrip("/")
+
+    @field_validator("embedding_model")
+    @classmethod
+    def validate_embedding_model(cls, value: str) -> str:
+        model = value.strip()
+        if not model or model.lower().endswith((":cloud", "-cloud")):
+            raise ValueError("Embedding 需要本机 Ollama 模型")
+        return model
 
     # 一份简历常拆出几十条事实，2048 容易截断输出，默认放宽到 8192。
     extract_facts: ModelSettings = Field(

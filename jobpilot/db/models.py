@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -22,9 +23,10 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import text as sql_text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
+from jobpilot.config import EMBEDDING_DIMENSIONS
 from jobpilot.db.application_schema import (
     CHANNEL_LENGTH,
     SNAPSHOT_CHECK,
@@ -815,6 +817,9 @@ class Message(Base):
         ),
         UniqueConstraint("run_id", "event_key", name="uq_message_run_event"),
         UniqueConstraint(
+            "message_id", "conversation_id", "user_id", name="uq_message_chunk_parent"
+        ),
+        UniqueConstraint(
             "conversation_id", "client_message_id", name="uq_message_client_id"
         ),
         Index("ix_message_conversation_id_seq", "conversation_id", "seq"),
@@ -835,6 +840,42 @@ class Message(Base):
     steps_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, server_default=sql_text("'[]'::jsonb")
     )
+
+
+class MessageChunk(Base):
+    """只为用户正文和最终回复保存可重建的检索数据。"""
+
+    __tablename__ = "message_chunk"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["message_id", "conversation_id", "user_id"],
+            ["message.message_id", "message.conversation_id", "message.user_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("message_id", "chunk_no", name="uq_message_chunk_number"),
+        CheckConstraint(
+            "chunk_no >= 0 AND span_start >= 0 AND span_end > span_start "
+            "AND span_end - span_start = char_length(content)",
+            name="ck_message_chunk_span",
+        ),
+        CheckConstraint(
+            "(embedding IS NULL) = (embedding_model IS NULL)",
+            name="ck_message_chunk_embedding_model",
+        ),
+        Index("ix_message_chunk_user_id", "user_id"),
+    )
+
+    chunk_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    message_id: Mapped[UUID] = mapped_column(Uuid)
+    conversation_id: Mapped[UUID] = mapped_column(Uuid)
+    user_id: Mapped[UUID] = mapped_column(Uuid)
+    chunk_no: Mapped[int] = mapped_column(Integer)
+    span_start: Mapped[int] = mapped_column(Integer)
+    span_end: Mapped[int] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
+    embedding_model: Mapped[str | None] = mapped_column(String(200))
+    search_terms: Mapped[str | None] = mapped_column(TSVECTOR)
 
 
 class ActionStatus(StrEnum):
