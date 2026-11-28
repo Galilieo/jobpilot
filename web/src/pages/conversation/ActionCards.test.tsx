@@ -263,6 +263,23 @@ it('新版记忆和遗忘确认卡标明记忆与来源原话，忘记显示待�
   expect(decide).toHaveBeenCalledTimes(2)
 })
 
+it('记忆确认卡撤销后提示下一轮起生效', () => {
+  const card: AgentActionCard = {
+    ...base,
+    kind: 'confirmation',
+    tool: 'forget',
+    args: { memory_id: 'm1', category: 'job_pref', content: '不投外包公司', quote: '忘掉' },
+  }
+  renderWithProviders(
+    <CardResult
+      tool={card.tool}
+      title={title}
+      outcome={{ state: 'decided', action: { ...card, status: 'undone', result: {} } }}
+    />,
+  )
+  expect(screen.getByText('已撤销（下一轮起生效）')).toBeInTheDocument()
+})
+
 it('shows the application details and offers undo after the confirmed write', async () => {
   const user = userEvent.setup()
   const decide = vi.fn(async () => null)

@@ -11,6 +11,7 @@ from jobpilot.db.conversations import (
     add_message,
     agent_input,
     find_tool_action,
+    latest_confirmation,
     owned_agent_run,
     propose_action,
 )
@@ -28,6 +29,7 @@ from jobpilot.db.memory_schema import (
 from jobpilot.db.models import (
     ActionStatus,
     AgentAction,
+    AiRun,
     Message,
     MessageRole,
     RunStatus,
@@ -209,6 +211,28 @@ async def _change_preference(
     }
 
 
+async def _require_active_memory_run(
+    session: AsyncSession,
+    user_id: UUID,
+    conversation_id: UUID,
+    run_id: UUID,
+    *,
+    lock: bool,
+) -> AiRun:
+    run = await owned_agent_run(user_id, session, conversation_id, run_id, lock=lock)
+    if run is None or run.status not in ACTIVE_RUN_STATUSES:
+        raise MemoryError("对话运行已结束", 409)
+    if run.status == RunStatus.WAITING_CONFIRMATION:
+        card = await latest_confirmation(user_id, session, run.run_id)
+        if (
+            card is None
+            or card.status == ActionStatus.PENDING
+            or card.decision_json is None
+        ):
+            raise MemoryError("当前有待确认卡片，暂不能写入记忆", 409)
+    return run
+
+
 async def prepare_memory(
     context: ToolContext,
     args: RememberArgs | ForgetArgs | SetWritingPreferenceArgs,
@@ -217,11 +241,9 @@ async def prepare_memory(
     agent = context.agent
     try:
         async with agent.sessions() as session:
-            run = await owned_agent_run(
-                agent.user_id, session, agent.conversation_id, agent.run_id
+            run = await _require_active_memory_run(
+                session, agent.user_id, agent.conversation_id, agent.run_id, lock=False
             )
-            if run is None or run.status not in ACTIVE_RUN_STATUSES:
-                raise MemoryError("对话运行已结束", 409)
             message = _validate_quote(
                 await agent_input(agent.user_id, session, run.run_id),
                 args.quote,
@@ -360,11 +382,9 @@ async def _record(
 ) -> Payload:
     agent, call = context.agent, context.call
     await require_memory_account(session, agent.user_id)
-    run = await owned_agent_run(
-        agent.user_id, session, agent.conversation_id, agent.run_id, lock=True
+    run = await _require_active_memory_run(
+        session, agent.user_id, agent.conversation_id, agent.run_id, lock=True
     )
-    if run is None or run.status != RunStatus.RUNNING:
-        raise MemoryError("对话运行已结束", 409)
     prior = await find_tool_action(session, agent.user_id, run.run_id, call["key"])
     if prior is not None:
         return prior.result_json or {"status": 409, "error": "旧版记忆操作已失效"}

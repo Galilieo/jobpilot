@@ -288,6 +288,6 @@ it('自动记录步骤直接显示内容、原话和撤销，刷新后沿用撤�
   expect(undoCalls).toEqual(['a1'])
   render.unmount()
   renderWithProviders(<ToolSteps steps={steps} records={{ undone: ['a1'], onUndo }} />)
-  expect(screen.getByText('已撤销')).toBeInTheDocument()
+  expect(screen.getByText('已撤销（下一轮起生效）')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /撤\s?销/ })).not.toBeInTheDocument()
 })

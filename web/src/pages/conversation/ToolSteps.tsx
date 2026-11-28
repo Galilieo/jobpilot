@@ -174,7 +174,7 @@ function RecordStep({
         <Typography.Text type="secondary">你说的「{detail.quote}」</Typography.Text>
       )}
       {undone ? (
-        <Typography.Text type="secondary">已撤销</Typography.Text>
+        <Typography.Text type="secondary">已撤销（下一轮起生效）</Typography.Text>
       ) : (
         actionId &&
         controls && (

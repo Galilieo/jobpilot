@@ -48,7 +48,7 @@ function WritingCard(): ReactElement {
       {preference && (
         <Space orientation="vertical" size={12}>
           <Typography.Text type="secondary">
-            新建改写会使用这些选项。对话从下一段对话开始或压缩后读取改动。
+            新建改写会使用这些选项。对话从下一轮起生效。
           </Typography.Text>
           {writingFields.map((field) => (
             <Space key={field} wrap>
@@ -186,7 +186,7 @@ export function MemoryList(): ReactElement {
         }
       >
         <Space orientation="vertical" size={16} className="full-width">
-          <Typography.Text type="secondary">页面改动从下一段对话开始或压缩后生效。</Typography.Text>
+          <Typography.Text type="secondary">页面改动从下一轮起生效。</Typography.Text>
           {query.isPending && <Skeleton active paragraph={{ rows: 2 }} />}
           {query.isError && <Alert type="error" showIcon title={query.error.message} />}
           {data && (

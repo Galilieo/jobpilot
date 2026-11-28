@@ -541,7 +541,11 @@ function outcomeText(tool: string, outcome: CardOutcome, title: JobTitle): React
     case 'failed':
       return `没有执行：${typeof result.error === 'string' ? result.error : '执行时出错'}`
     case 'undone':
-      return '已撤销'
+      return action.tool === 'remember' ||
+        action.tool === 'forget' ||
+        action.tool === 'set_writing_preference'
+        ? '已撤销（下一轮起生效）'
+        : '已撤销'
     case 'confirmed':
       return '已确认，正在执行…'
     default:

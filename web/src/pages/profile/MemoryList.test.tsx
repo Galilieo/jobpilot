@@ -42,6 +42,8 @@ describe('记忆管理', () => {
     })
     renderWithProviders(<MemoryList />)
     expect(await screen.findByText(/在对话里说出你的偏好/)).toBeInTheDocument()
+    expect(screen.getByText(/对话从下一轮起生效/)).toBeInTheDocument()
+    expect(screen.getByText('页面改动从下一轮起生效。')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '手动添加' }))
     await user.type(screen.getByRole('textbox', { name: '记忆内容' }), memory.content)
     await user.click(screen.getByRole('button', { name: /保\s?存/ }))

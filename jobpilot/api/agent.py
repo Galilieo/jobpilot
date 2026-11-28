@@ -194,8 +194,9 @@ async def send_message(
                 "pending_action": card_payload(card) if card else None,
             },
         )
-    if conversation.memory_snapshot_json is None:
-        conversation.memory_snapshot_json = await build_memory_snapshot(db, user_id)
+    snapshot = await build_memory_snapshot(db, user_id)
+    if conversation.memory_snapshot_json != snapshot:
+        conversation.memory_snapshot_json = snapshot
     run = AiRun(
         kind="agent",
         user_id=user_id,

@@ -7,7 +7,6 @@ import httpx
 import pytest
 
 from jobpilot.api.deps import get_model_client
-from jobpilot.config import settings
 from jobpilot.db.memory_schema import MEMORY_AUTO_MAX_BODY_CHARS
 from jobpilot.main import app
 from jobpilot.tests.test_agent_api import (
@@ -20,7 +19,7 @@ from jobpilot.tests.test_agent_api import (
     reply,
     sign_in,
 )
-from jobpilot.tests.test_call_accounting import completion_response, fake_upstream
+from jobpilot.tests.test_call_accounting import fake_upstream
 
 QUOTE = "我不投外包"
 CONTENT = "不投外包公司"
@@ -321,51 +320,161 @@ async def test_record_budget_includes_entries_and_limits_successful_writes(
     assert records[0]["status"] == 409
 
 
-async def test_snapshot_is_frozen_until_compaction_and_new_conversation(
-    async_client: httpx.AsyncClient, monkeypatch
+async def test_snapshot_rebuilds_next_turn_when_memories_change(
+    async_client: httpx.AsyncClient,
 ):
     await sign_in(async_client)
-    path = await conversation(async_client)
-    monkeypatch.setattr(settings.agent_limits, "context_window_cap_tokens", 24_000)
+    conv_a = await conversation(async_client)
+    conv_b = await conversation(async_client)
     system_messages = []
 
     def respond(request: httpx.Request):
         payload = loads(request.content)
         if payload.get("stream"):
             system_messages.append(payload["messages"][0]["content"])
-            return reply()
-        return completion_response('{"goal":"准备改写"}')
+            if payload["messages"][-1]["content"] == QUOTE:
+                return batch(remember())
+        return reply()
 
     async with fake_upstream(respond) as fake:
         app.dependency_overrides[get_model_client] = lambda: fake
-        assert (
-            done_of(await send(async_client, path, "第一轮"))["status"] == "succeeded"
-        )
-        await async_client.post(
-            "/api/memories", json={"category": "agent_rule", "content": CONTENT}
-        )
-        await async_client.put(
-            "/api/writing-preference", json={"expected_revision": 0, "tone": "平实"}
+        res_a = await send(async_client, conv_a, QUOTE)
+        assert done_of(res_a)["status"] == "succeeded"
+        action_id = next(
+            data["detail"]["action_id"]
+            for name, data in events(res_a)
+            if name == "tool_end" and data["tool"] == "remember"
         )
         assert (
-            done_of(await send(async_client, path, "第二轮"))["status"] == "succeeded"
+            done_of(await send(async_client, conv_b, "B 第一轮"))["status"]
+            == "succeeded"
+        )
+        assert CONTENT in system_messages[-1]
+        prefix_before = system_messages[-1]
+        assert (
+            done_of(await send(async_client, conv_b, "B 第二轮"))["status"]
+            == "succeeded"
+        )
+        assert system_messages[-1] == prefix_before
+
+        assert (
+            await async_client.post(f"/api/actions/{action_id}/undo")
+        ).status_code == 200
+        assert (
+            done_of(await send(async_client, conv_a, "A 下一轮"))["status"]
+            == "succeeded"
         )
         assert CONTENT not in system_messages[-1]
-        assert 'label="long_term_memory"' not in system_messages[-1]
-        fresh = await conversation(async_client)
         assert (
-            done_of(await send(async_client, fresh, "新对话"))["status"] == "succeeded"
+            done_of(await send(async_client, conv_b, "B 下一轮"))["status"]
+            == "succeeded"
         )
-        assert CONTENT in system_messages[-1]
-        assert '"tone":"平实"' in system_messages[-1]
-        for _ in range(3):
-            assert (
-                done_of(await send(async_client, path, "乙" * 2300))["status"]
-                == "succeeded"
-            )
-            await app.state.run_launcher.wait_all()
+        assert CONTENT not in system_messages[-1]
+        conv_c = await conversation(async_client)
         assert (
-            done_of(await send(async_client, path, "压缩后"))["status"] == "succeeded"
+            done_of(await send(async_client, conv_c, "C 新开"))["status"] == "succeeded"
         )
-        assert 'label="work_summary"' in system_messages[-1]
-        assert CONTENT in system_messages[-1]
+        assert CONTENT not in system_messages[-1]
+
+
+async def test_record_memory_succeeds_after_confirmation_card_resume(
+    async_client: httpx.AsyncClient,
+    session_factory,
+):
+    from datetime import UTC, datetime
+    from uuid import UUID
+
+    from jobpilot.db.models import FactSet, ResumeDocument
+    from jobpilot.tests.test_tailored_resumes_api import _seed_tailored_resume
+
+    await sign_in(async_client)
+    user_id = UUID((await async_client.get("/api/me")).json()["user_id"])
+    async with session_factory.begin() as db:
+        doc = ResumeDocument(user_id=user_id, raw_text="合成简历")
+        fact_set = FactSet(user_id=user_id, version=1)
+        db.add_all([doc, fact_set])
+        await db.flush()
+        job_id, _ = await _seed_tailored_resume(
+            db,
+            user_id,
+            doc_id=doc.doc_id,
+            fact_set_id=fact_set.fact_set_id,
+            job_title="后端实习",
+            job_company="示例公司",
+            version_number=1,
+            created_at=datetime.now(UTC),
+        )
+    conv = await async_client.post(
+        "/api/conversations", json={"current_job_id": str(job_id)}
+    )
+    path = f"/api/conversations/{conv.json()['conversation_id']}"
+    body = "我刚投了这个岗位。我不投外包"
+
+    def respond(request: httpx.Request):
+        messages = loads(request.content)["messages"]
+        last = messages[-1]
+        if last["role"] == "tool":
+            tools_seen = [m for m in messages if m["role"] == "tool"]
+            if len(tools_seen) == 1:
+                return batch(remember())
+            return reply("已记录投递并记住偏好")
+        return batch(("record_application", {}))
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        first = await send(async_client, path, body)
+        card = card_of(first)
+        assert card["tool"] == "record_application"
+        resumed = await async_client.post(
+            f"{path}/actions/{card['action_id']}", json={"decision": "confirm"}
+        )
+    assert done_of(resumed)["status"] == "succeeded"
+    (saved,) = await entries(async_client)
+    assert saved["content"] == CONTENT
+    assert len((await async_client.get("/api/applications")).json()) == 1
+
+
+async def test_record_memory_rejects_when_confirmation_card_still_pending(
+    async_client: httpx.AsyncClient,
+    session_factory,
+):
+    from uuid import UUID
+
+    from jobpilot.db.conversations import owned_agent_run
+    from jobpilot.services.agent.memory_actions import RememberArgs, record_memory
+    from jobpilot.services.agent.types import AgentDeps, ToolCall, ToolContext
+
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    conv_id = UUID(path.rsplit("/", 1)[-1])
+    user_id = UUID((await async_client.get("/api/me")).json()["user_id"])
+
+    async with fake_upstream(
+        lambda _: batch(("ask_user", {"questions": ["哪家公司？"]}))
+    ) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        first = await send(async_client, path, QUOTE)
+        card = card_of(first)
+
+    async with session_factory() as db:
+        run = await owned_agent_run(user_id, db, conv_id, UUID(card["run_id"]))
+        assert run is not None
+        deps = AgentDeps(
+            session_factory,
+            fake,
+            user_id,
+            conv_id,
+            run.run_id,
+            lambda *_: None,
+            0.0,
+            60.0,
+        )
+        ctx = ToolContext(
+            deps,
+            ToolCall(call_id="c1", name="remember", arguments="{}", key="1:0:c1"),
+        )
+        res = await record_memory(
+            ctx, RememberArgs(category="job_pref", content=CONTENT, quote=QUOTE)
+        )
+    assert res["status"] == 409
+    assert await entries(async_client) == []
