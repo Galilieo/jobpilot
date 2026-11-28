@@ -9,10 +9,10 @@ from uuid import UUID
 from openai.types.chat import ChatCompletionMessageParam
 
 from jobpilot.db.models import Message
-from jobpilot.services.agent.context import serialize
 from jobpilot.services.agent.history import HistorySource, history_parts
 from jobpilot.services.agent.work_summary import AnsweredQuestion, WorkSummary
 from jobpilot.services.llm_gateway import (
+    dump_for_model,
     preview_text,
     redact_pii,
     request_messages_for_model,
@@ -79,17 +79,27 @@ def _request(
     content = [
         wrap_untrusted_text(
             "previous_summary",
-            previous.model_dump_json(
-                exclude_none=True, exclude={"quotes_verified", "executed_actions"}
+            dump_for_model(
+                previous.model_dump(
+                    mode="json",
+                    exclude_none=True,
+                    exclude={"quotes_verified", "executed_actions"},
+                ),
+                separators=(",", ":"),
             ),
         ),
-        wrap_untrusted_text("completed_turns", serialize(rows)),
+        wrap_untrusted_text(
+            "completed_turns", dump_for_model(rows, separators=(",", ":"))
+        ),
     ]
     if answers:
         content.append(
             wrap_untrusted_text(
                 "submitted_questions",
-                serialize([answer.model_dump(mode="json") for answer in answers]),
+                dump_for_model(
+                    [answer.model_dump(mode="json") for answer in answers],
+                    separators=(",", ":"),
+                ),
             )
         )
     if focus:

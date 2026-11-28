@@ -7,7 +7,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from jobpilot.services.llm_gateway import preview_text, wrap_untrusted_text
+from jobpilot.services.llm_gateway import (
+    dump_for_model,
+    preview_text,
+    wrap_untrusted_text,
+)
 from jobpilot.services.text_clauses import contains_complete_sentence
 
 MAX_ITEMS = 12
@@ -173,12 +177,18 @@ def render_summary(summary: StoredWorkSummary) -> str:
         ("已完成和已决定（模型概括，未核实）", summary.done_and_decided),
         (
             "已确认的动作结果",
-            [action.model_dump_json() for action in summary.executed_actions],
+            [
+                dump_for_model(action.model_dump(mode="json"))
+                for action in summary.executed_actions
+            ],
         ),
         ("待处理", summary.open_items),
         (
             "已回答的问题",
-            [question.model_dump_json() for question in summary.answered_questions],
+            [
+                dump_for_model(question.model_dump(mode="json"))
+                for question in summary.answered_questions
+            ],
         ),
         ("待核实", summary.unverified),
     ]

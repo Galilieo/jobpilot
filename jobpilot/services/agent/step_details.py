@@ -63,7 +63,12 @@ def _read_resume(result: Payload) -> Payload:
 
 
 def _conversation_search(result: Payload) -> Payload:
-    return {key: result[key] for key in ("query", "hits", "degraded")}
+    return {
+        "query": result["query"],
+        "hits": result["hits"],
+        "degraded": result["degraded"],
+        "index_pending": bool(result.get("index_pending")),
+    }
 
 
 def _memory_record(result: Payload) -> Payload:

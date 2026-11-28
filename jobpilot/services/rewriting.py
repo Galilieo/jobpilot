@@ -8,7 +8,6 @@
 这里只负责「写」和「校验输出的格式与引用范围」，内容有没有超出事实由依据检查负责。
 """
 
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -25,6 +24,7 @@ from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.grounding import GroundingFact, GroundingIssue
 from jobpilot.services.llm_gateway import (
     ModelQuota,
+    dump_for_model,
     request_completion,
     wrap_untrusted_text,
 )
@@ -127,7 +127,7 @@ def _facts_payload(facts: Sequence[GroundingFact]) -> str:
         }
         for label, fact in zip(labels_of(facts), facts, strict=True)
     ]
-    return json.dumps(rows, ensure_ascii=False)
+    return dump_for_model(rows)
 
 
 def format_rewrite_messages(
@@ -146,8 +146,8 @@ def format_rewrite_messages(
     }
     user_content = "\n\n".join(
         [
-            wrap_untrusted_text("task", json.dumps(task_payload, ensure_ascii=False)),
-            wrap_untrusted_text("job_focus", json.dumps(focus, ensure_ascii=False)),
+            wrap_untrusted_text("task", dump_for_model(task_payload)),
+            wrap_untrusted_text("job_focus", dump_for_model(focus)),
             wrap_untrusted_text("facts", _facts_payload(task.facts)),
         ]
     )
@@ -171,14 +171,12 @@ def format_revise_messages(
     }
     user_content = "\n\n".join(
         [
-            wrap_untrusted_text(
-                "bullet", json.dumps(bullet_payload, ensure_ascii=False)
-            ),
+            wrap_untrusted_text("bullet", dump_for_model(bullet_payload)),
             wrap_untrusted_text("facts", _facts_payload(facts)),
             # 问题清单里带着模型自己写的片段，也按不可信数据处理。
             wrap_untrusted_text(
                 "issues",
-                json.dumps([issue.message for issue in issues], ensure_ascii=False),
+                dump_for_model([issue.message for issue in issues]),
             ),
         ]
     )

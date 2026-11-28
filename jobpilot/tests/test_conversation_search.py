@@ -328,3 +328,122 @@ async def test_identical_texts_take_one_search_position(
     snippets = [hit["snippet"] for hit in step["detail"]["hits"]]
     assert snippets.count(repeated) == 1
     assert wanted in snippets
+
+
+async def test_search_redacts_multiline_phone_before_serialization(
+    async_client: httpx.AsyncClient, ollama_inputs: list[str]
+) -> None:
+    await sign_in(async_client)
+    old_path = await conversation(async_client)
+    new_path = await conversation(async_client)
+    body = "云岬科技联系方式\n138\n1234\n5678"
+    captured: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        messages = json.loads(request.content)["messages"]
+        if messages[-1]["role"] == "tool":
+            captured.append(messages[-1]["content"])
+            return reply()
+        if messages[-1].get("content") == "查联系方式":
+            return batch(("search_conversations", {"query": "云岬科技"}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        assert (
+            await async_client.post(f"{old_path}/messages", json=message_body(body))
+        ).is_success
+        await app.state.run_launcher.wait_all()
+        assert (
+            await async_client.post(
+                f"{new_path}/messages", json=message_body("查联系方式")
+            )
+        ).is_success
+
+    assert len(captured) == 1
+    assert "[PHONE]" in captured[0]
+    assert "138" not in captured[0]
+    assert "5678" not in captured[0]
+
+
+async def test_vector_results_precede_pending_keyword_backfill_and_dedupe(
+    async_client: httpx.AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    ollama_inputs: list[str],
+) -> None:
+    from jobpilot.db.conversations import find_conversation
+    from jobpilot.services.conversation_terms import search_terms
+
+    await sign_in(async_client)
+    user_id = UUID((await async_client.get("/api/me")).json()["user_id"])
+    old_paths = [await conversation(async_client) for _ in range(7)]
+    new_path = await conversation(async_client)
+    embedded_only = "精确命中的向量历史"
+    duplicate_text = "项目周报重复内容"
+
+    async with session_factory.begin() as session:
+        model_name = settings.embedding_model
+        specs = [
+            (old_paths[0], embedded_only, [1.0, *([0.0] * 1023)], model_name),
+            (old_paths[1], duplicate_text, [0.8, 0.6, *([0.0] * 1022)], model_name),
+            (old_paths[2], duplicate_text, None, None),
+            *((old_paths[i], f"项目待算消息 {i}", None, None) for i in range(3, 7)),
+        ]
+        for path, text_body, vector, chunk_model in specs:
+            cid = UUID(path.rsplit("/", 1)[-1])
+            conv = await find_conversation(user_id, session, cid)
+            assert conv is not None
+            run = AiRun(
+                user_id=user_id,
+                conversation_id=cid,
+                kind="agent",
+                status=RunStatus.SUCCEEDED,
+                finished_at=datetime.now(UTC),
+            )
+            session.add(run)
+            await session.flush()
+            await add_message(session, run, MessageRole.USER, "input", text_body)
+            await session.flush()
+            from jobpilot.db.models import Message
+
+            msg = await session.scalar(
+                select(Message).where(Message.run_id == run.run_id)
+            )
+            assert msg is not None
+            session.add(
+                MessageChunk(
+                    message_id=msg.message_id,
+                    conversation_id=cid,
+                    user_id=user_id,
+                    chunk_no=0,
+                    span_start=0,
+                    span_end=len(text_body),
+                    content=text_body,
+                    embedding=vector,
+                    embedding_model=chunk_model,
+                    search_terms=func.to_tsvector("simple", search_terms(text_body)),
+                )
+            )
+
+    tool_outputs: list[dict] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        messages = json.loads(request.content)["messages"]
+        if messages[-1]["role"] == "tool":
+            content = messages[-1]["content"]
+            tool_outputs.append(json.loads(content.splitlines()[1]))
+            return reply()
+        return batch(("search_conversations", {"query": "项目", "limit": 5}))
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        await async_client.post(f"{new_path}/messages", json=message_body("查项目"))
+
+    payload = tool_outputs[0]
+    assert payload["degraded"] is False
+    assert payload["index_pending"] is True
+    snippets = [hit["snippet"] for hit in payload["hits"]]
+    assert len(snippets) == 5
+    assert embedded_only in snippets
+    assert snippets.count(duplicate_text) == 1
+    assert snippets[:2] == [embedded_only, duplicate_text]

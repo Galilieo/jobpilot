@@ -26,7 +26,12 @@ from jobpilot.services.agent.types import (
     ToolCall,
 )
 from jobpilot.services.agent.work_summary import StoredWorkSummary, render_summary
-from jobpilot.services.llm_gateway import redact_pii, wrap_untrusted_text
+from jobpilot.services.llm_gateway import (
+    dump_for_model,
+    redact_pii,
+    redact_pii_data,
+    wrap_untrusted_text,
+)
 from jobpilot.services.memories import reference_entries
 from jobpilot.services.prompts import load_prompt
 from jobpilot.services.writing_preferences import writing_preferences_snapshot
@@ -59,14 +64,15 @@ def serialize(value: object) -> str:
 
 
 def serialize_tool_result(result: Payload, *, limit: int | None = None) -> str:
-    """在字段边界裁剪当轮超量回包，始终交给模型完整的 JSON。"""
-    content = serialize(result)
+    """先对工具回包做脱敏再序列化；超限时在字段边界裁剪。"""
+    redacted = redact_pii_data(result)
+    content = serialize(redacted)
     limit = settings.agent_limits.tool_result_bytes if limit is None else limit
     if len(content.encode()) <= limit:
         return content
     preview: Payload = {"truncated": True}
-    field_limit = limit // max(1, len(result))
-    for key, value in result.items():
+    field_limit = limit // max(1, len(redacted))
+    for key, value in redacted.items():
         candidate = {**preview, key: _result_preview(value, field_limit)}
         if len(serialize(candidate).encode()) <= limit:
             preview = candidate
@@ -131,7 +137,10 @@ class SystemContext:
         if self.memories:
             blocks.append(
                 "长期记忆\n"
-                + wrap_untrusted_text("long_term_memory", serialize(self.memories))
+                + wrap_untrusted_text(
+                    "long_term_memory",
+                    dump_for_model(self.memories, separators=(",", ":")),
+                )
             )
         if summary:
             work = StoredWorkSummary.model_validate(summary)
@@ -140,7 +149,11 @@ class SystemContext:
             )
         if self.tasks is not None:
             blocks.append(
-                "任务状态\n" + wrap_untrusted_text("task_state", serialize(self.tasks))
+                "任务状态\n"
+                + wrap_untrusted_text(
+                    "task_state",
+                    dump_for_model(self.tasks, separators=(",", ":")),
+                )
             )
         return {"role": "system", "content": "\n".join(blocks)}
 
@@ -198,7 +211,10 @@ def render_turn(messages: Iterable[Message], *, current: bool) -> list[Payload]:
                     "role": "assistant",
                     "content": wrap_untrusted_text(
                         "past_step",
-                        serialize([model_view(step) for step in message.steps_json]),
+                        dump_for_model(
+                            [model_view(step) for step in message.steps_json],
+                            separators=(",", ":"),
+                        ),
                     ),
                 }
             )

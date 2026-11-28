@@ -3,7 +3,6 @@
 只接收已发布（confirmed）的事实；绝不输出笼统的匹配度总分或百分比。
 """
 
-import json
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -36,6 +35,7 @@ from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.jobs import BasicFields, ParsedJob, Requirement, RequirementType
 from jobpilot.services.llm_gateway import (
     ModelQuota,
+    dump_for_model,
     request_completion,
     wrap_untrusted_text,
 )
@@ -445,15 +445,11 @@ def format_match_messages(
         for e in education
     ]
     user_content = (
-        wrap_untrusted_text(
-            "job_requirements", json.dumps(job_payload, ensure_ascii=False)
-        )
+        wrap_untrusted_text("job_requirements", dump_for_model(job_payload))
         + "\n\n"
-        + wrap_untrusted_text("facts", json.dumps(facts_payload, ensure_ascii=False))
+        + wrap_untrusted_text("facts", dump_for_model(facts_payload))
         + "\n\n"
-        + wrap_untrusted_text(
-            "criteria", json.dumps(criteria_payload, ensure_ascii=False)
-        )
+        + wrap_untrusted_text("criteria", dump_for_model(criteria_payload))
     )
     return [
         {"role": "system", "content": prompt_text},

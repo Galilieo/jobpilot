@@ -11,7 +11,6 @@
 额度耗尽不在此列，照常抛出，由改写流程停止整次运行。
 """
 
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -27,6 +26,7 @@ from jobpilot.services.grounding import GroundingFact, GroundingIssue, IssueKind
 from jobpilot.services.llm_gateway import (
     EmptyModelResponseError,
     ModelQuota,
+    dump_for_model,
     request_completion,
     wrap_untrusted_text,
 )
@@ -87,7 +87,7 @@ def format_messages(
     user_content = (
         wrap_untrusted_text("sentence", sentence)
         + "\n\n"
-        + wrap_untrusted_text("facts", json.dumps(payload, ensure_ascii=False))
+        + wrap_untrusted_text("facts", dump_for_model(payload))
     )
     return [
         {"role": "system", "content": system_prompt},

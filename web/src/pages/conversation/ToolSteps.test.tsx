@@ -132,6 +132,28 @@ describe('ToolSteps', () => {
     expect(screen.getByText('每周需要到岗四天')).toBeInTheDocument()
   })
 
+  it('索引未齐但未降级时提示部分新消息仍在建立索引', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <ToolSteps
+        steps={[
+          {
+            key: 'search2',
+            tool: 'search_conversations',
+            status: 'success',
+            result: {
+              total: 0,
+              detail: { query: '项目', degraded: false, index_pending: true, hits: [] },
+            },
+          },
+        ]}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: /搜索了其他对话/ }))
+    await user.click(screen.getByRole('button', { name: /搜索其他对话/ }))
+    expect(screen.getByText(/部分新消息仍在建立索引/)).toBeInTheDocument()
+  })
+
   it('完成后默认收起，只显示概括和总用时；点开按动作列出，岗位做成标签', async () => {
     const user = userEvent.setup()
     renderWithProviders(<ToolSteps steps={READS} title={title} />)

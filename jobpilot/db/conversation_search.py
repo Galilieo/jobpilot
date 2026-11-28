@@ -4,7 +4,7 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, func, select
+from sqlalchemy import ColumnElement, Select, exists, func, select
 from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ class RankedChunk:
     seq: int
     role: str
     date: datetime
+    content: str
     source_text: str
     span_start: int
     span_end: int
@@ -43,6 +44,7 @@ def _candidates(scope: SearchScope) -> Select:
             Message.seq,
             Message.role,
             Message.created_at.label("date"),
+            MessageChunk.content,
             Message.content.label("source_text"),
             MessageChunk.span_start,
             MessageChunk.span_end,
@@ -54,6 +56,22 @@ def _candidates(scope: SearchScope) -> Select:
         .where(
             MessageChunk.user_id == scope.user_id,
             MessageChunk.conversation_id != scope.current_conversation_id,
+        )
+    )
+
+
+async def has_pending_embeddings(
+    scope: SearchScope, session: AsyncSession, model: str
+) -> bool:
+    return bool(
+        await session.scalar(
+            select(
+                exists().where(
+                    MessageChunk.user_id == scope.user_id,
+                    MessageChunk.conversation_id != scope.current_conversation_id,
+                    MessageChunk.embedding_model.is_distinct_from(model),
+                )
+            )
         )
     )
 

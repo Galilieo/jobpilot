@@ -8,6 +8,7 @@ from jobpilot.config import settings
 from jobpilot.db.conversation_search import (
     RankedChunk,
     SearchScope,
+    has_pending_embeddings,
     keyword_candidates,
     vector_candidates,
 )
@@ -23,7 +24,7 @@ from jobpilot.services.conversation_terms import (
     keyword_query_terms,
 )
 from jobpilot.services.embedding import EmbeddingUnavailable, embed_texts
-from jobpilot.services.llm_gateway import pii_at_boundary, pii_spans
+from jobpilot.services.llm_gateway import pii_at_boundary, pii_spans, redact_pii
 
 _SNIPPET_CHARS = 300
 _SEARCH_TIMEOUT_SECONDS = 5
@@ -40,7 +41,7 @@ class SearchConversationArgs(ToolArgs):
 
 
 def _snippet(hit: RankedChunk) -> str:
-    # 脱敏由模型网关统一做，但切片边界不能把联系方式截成无法识别的两段。
+    # 切片边界先避开联系方式，再在换行转义前脱敏。
     spans = pii_spans(hit.source_text)
     start = hit.span_start
     end = min(start + _SNIPPET_CHARS, hit.span_end)
@@ -48,7 +49,7 @@ def _snippet(hit: RankedChunk) -> str:
         start = partial[1]
     if partial := pii_at_boundary(spans, end):
         end = partial[0]
-    return hit.source_text[start:end]
+    return redact_pii(hit.source_text[start:end])
 
 
 def _hit_payload(result: SearchHit) -> Payload:
@@ -64,6 +65,21 @@ def _hit_payload(result: SearchHit) -> Payload:
     }
 
 
+def _merge_hits(
+    vectors: list[RankedChunk], pending: list[RankedChunk], limit: int
+) -> list[SearchHit]:
+    hits = source_hits(vectors, SearchSource.VECTOR)
+    seen = {hit.chunk.content for hit in hits}
+    for chunk in pending:
+        if len(hits) >= limit:
+            break
+        if chunk.content in seen:
+            continue
+        seen.add(chunk.content)
+        hits.append(SearchHit(chunk, SearchSource.KEYWORD, chunk.score))
+    return hits[:limit]
+
+
 async def search_conversations(
     context: ToolContext, args: SearchConversationArgs
 ) -> Payload:
@@ -73,29 +89,28 @@ async def search_conversations(
     query_vector = await _query_vector(args.query, model)
     terms = keyword_query_terms(args.query, DEFAULT_KEYWORD_SELECTION)
     async with read_snapshot(agent.sessions) as session:
-        keywords = await keyword_candidates(
-            scope,
-            session,
-            terms,
-            args.limit,
-            missing_model=model if query_vector is not None else None,
-        )
-        # 给尚无可比较向量的块保留全文命中的展示位置。
-        remaining = args.limit - len(keywords)
-        vectors = (
-            await vector_candidates(scope, session, model, query_vector, remaining)
-            if query_vector is not None and remaining
-            else []
-        )
-    hits = [
-        *source_hits(keywords, SearchSource.KEYWORD),
-        *source_hits(vectors, SearchSource.VECTOR),
-    ]
+        index_pending = await has_pending_embeddings(scope, session, model)
+        if query_vector is None:
+            keywords = await keyword_candidates(scope, session, terms, args.limit)
+            hits = source_hits(keywords, SearchSource.KEYWORD)
+        else:
+            vectors = await vector_candidates(
+                scope, session, model, query_vector, args.limit
+            )
+            pending = (
+                await keyword_candidates(
+                    scope, session, terms, args.limit, missing_model=model
+                )
+                if index_pending and len(vectors) < args.limit
+                else []
+            )
+            hits = _merge_hits(vectors, pending, args.limit)
     return {
         "query": args.query,
         "hits": [_hit_payload(hit) for hit in hits],
         "total": len(hits),
         "degraded": query_vector is None,
+        "index_pending": index_pending,
     }
 
 

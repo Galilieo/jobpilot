@@ -182,7 +182,11 @@ function reportLines(detail: Detail): DetailLine[] {
 function searchLines({ detail }: StepCall, index: number): DetailLine[] {
   if (!detail || typeof detail.query !== 'string') return []
   const hits = Array.isArray(detail.hits) ? (detail.hits as Detail[]) : []
-  const summary = detail.degraded ? ' · 结果可能不全' : ''
+  const summary = detail.degraded
+    ? ' · 结果可能不全'
+    : detail.index_pending
+      ? ' · 部分新消息仍在建立索引'
+      : ''
   const lines: DetailLine[] = [
     { key: `${index}:query`, text: `「${detail.query}」 · ${hits.length} 条命中${summary}` },
   ]

@@ -284,3 +284,12 @@ async def test_gateway_redacts_multipart_content_for_order_ocr(
     assert parts[0]["text"] == "图1：手机 [PHONE]"
     assert parts[1]["text"] == "图2：邮箱 [EMAIL]"
     assert messages == original_snapshot
+
+
+def test_dump_for_model_redacts_multiline_phone_before_json_escaping() -> None:
+    from jobpilot.services.llm_gateway import dump_for_model
+
+    wire = dump_for_model({"snippet": "联系\n138\n1234\n5678"})
+    assert "[PHONE]" in wire
+    assert "138" not in wire
+    assert "5678" not in wire

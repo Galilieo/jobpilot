@@ -86,6 +86,29 @@ def redact_pii(text: str) -> str:
     return text
 
 
+def redact_pii_data(value: Any) -> Any:
+    """在序列化为 JSON 之前递归遮蔽数据结构中的字符串，避免换行转义破坏匹配。"""
+    if isinstance(value, str):
+        return redact_pii(value)
+    if isinstance(value, list):
+        return [redact_pii_data(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_pii_data(item) for item in value)
+    if isinstance(value, dict):
+        return {key: redact_pii_data(item) for key, item in value.items()}
+    return value
+
+
+def dump_for_model(value: Any, *, separators: tuple[str, str] | None = None) -> str:
+    """先对字段值做 PII 脱敏，再序列化为外发给模型的 JSON 字符串。"""
+    return dumps(
+        redact_pii_data(value),
+        ensure_ascii=False,
+        default=str,
+        separators=separators,
+    )
+
+
 def pii_spans(text: str) -> list[tuple[int, int]]:
     """返回原文字索引，合并重叠片段，切分时一次保留完整片段。"""
     ranges = sorted(
