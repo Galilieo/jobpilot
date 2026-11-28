@@ -1,0 +1,30 @@
+{"id": "test-01", "query": "read_note", "type": "exact", "relevant": ["c16:u02"]}
+{"id": "test-02", "query": "pgvector", "type": "exact", "relevant": ["c17:u01"]}
+{"id": "test-03", "query": "Flink", "type": "exact", "relevant": ["c18:u01"]}
+{"id": "test-04", "query": "device_family", "type": "exact", "relevant": ["c19:u02"]}
+{"id": "test-05", "query": "Taro", "type": "exact", "relevant": ["c20:u01"]}
+{"id": "test-06", "query": "FFmpeg", "type": "exact", "relevant": ["c21:u01"]}
+{"id": "test-07", "query": "resume_version", "type": "exact", "relevant": ["c22:u02"]}
+{"id": "test-08", "query": "DuckDB", "type": "exact", "relevant": ["c30:u01", "c30:u03", "c30:a07", "c30:a09"]}
+{"id": "test-09", "query": "助手拿着另一个人的笔记编号去读时，你让它和哪种请求比较响应？", "type": "paraphrase", "relevant": ["c16:a02"]}
+{"id": "test-10", "query": "一轮客服回答分成两个片段都排在前面，评估时它们是两条正确原话吗？", "type": "paraphrase", "relevant": ["c17:u03", "c17:a03"]}
+{"id": "test-11", "query": "仓库断网两小时后才送来上午入站的记录，原本那次入站被算进几点的数据？", "type": "paraphrase", "relevant": ["c18:u02", "c18:a02"]}
+{"id": "test-12", "query": "新老手机同时使用表单时，有些旧记录没发送设备类型，怎么避免统计总量变小？", "type": "paraphrase", "relevant": ["c19:u02", "c19:a02"]}
+{"id": "test-13", "query": "会员活动详情到了点进去才需要，为什么首页启动的下载量会因此变小？", "type": "paraphrase", "relevant": ["c20:u02", "c20:a02", "c20:u03"]}
+{"id": "test-14", "query": "同一辆车跨收费区时卡片多算了一次换车，你提出用什么来判断是不是还坐在原来的车上？", "type": "paraphrase", "relevant": ["c24:u02", "c24:a02", "c24:a06"]}
+{"id": "test-15", "query": "同样挪一点经度的位置为什么可能不一样远，原来怎么修复附近小店的半径？", "type": "paraphrase", "relevant": ["c25:u02", "c25:a02", "c25:a03"]}
+{"id": "test-16", "query": "把网页直接改成 Word 后缀还能通过浏览器选择，后端检查里面什么才决定继续读？", "type": "paraphrase", "relevant": ["c28:u02", "c28:a02"]}
+{"id": "test-17", "query": "耳机拔掉以后，播放器怎样知道该用哪个输出，还能从之前听的位置继续？", "type": "gist", "relevant": ["c21:u02", "c21:a02"]}
+{"id": "test-18", "query": "以前那份求职申请删掉对应岗位后还查得到吗，系统保存了什么来找回当时简历？", "type": "gist", "relevant": ["c22:u02", "c22:u03", "c22:a03"]}
+{"id": "test-19", "query": "删掉对话能让当天剩余额度变多吗，真正销户后系统还保存哪种用量？", "type": "gist", "relevant": ["c23:u02", "c23:a02", "c23:u03"]}
+{"id": "test-20", "query": "文档测试开发面试的超大文件用例，应该观察接口有什么反应、用什么样例做对照？", "type": "gist", "relevant": ["c26:u02", "c26:a02"]}
+{"id": "test-21", "query": "向外发请求前就取消，跟对方没及时回消息的那次为什么用量状态不一样？", "type": "gist", "relevant": ["c27:u02", "c27:a02", "c27:a10"]}
+{"id": "test-22", "query": "用手机随手拍一叠简历，横拍的照片与选错的页面次序，系统分别处理到了哪一步？", "type": "gist", "relevant": ["c29:u02", "c29:a02", "c29:u03"]}
+{"id": "test-23", "query": "你建议怎样避开先跑一次就把数据读进缓存造成的报表提速误差？", "type": "gist", "relevant": ["c30:a04", "c30:a05"]}
+{"id": "test-24", "query": "做聊天检索演示时，你建议怎样布置旧对话来证明系统理解了另一种说法？", "type": "gist", "relevant": ["c17:u06", "c17:a06"]}
+{"id": "test-25", "query": "榆弦的 MCP 工具认证令牌设置了多少分钟有效期？", "type": "no_answer", "relevant": []}
+{"id": "test-26", "query": "浮岑报表中补录表由哪个团队在次日几点进行审核？", "type": "no_answer", "relevant": []}
+{"id": "test-27", "query": "墨环小程序分包改完在真机进入首页平均加快几毫秒？", "type": "no_answer", "relevant": []}
+{"id": "test-28", "query": "折线财务每天预扣的 token 配额具体是多少？", "type": "no_answer", "relevant": []}
+{"id": "test-29", "query": "鲤灯导入接口决定拒绝的最大 ZIP 解压比是多少？", "type": "no_answer", "relevant": []}
+{"id": "test-30", "query": "折枝离线报表那次同机对比用了多少行战斗日志？", "type": "no_answer", "relevant": []}

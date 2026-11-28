@@ -8,6 +8,7 @@ E1 评测简历事实拆分，E2 评测 JD 解析。把原文交给待测功能�
 | `datasets/jds/` | 用于演示标注格式的合成 JD 文本 |
 | `datasets/jd-sources.json` | 真实岗位清单，含来源、职级、方向、详略和本地文本校验值 |
 | `datasets/annotations/` | 以 `sample_id` 对应输入的人工标注 |
+| `datasets/e13/` | 跨对话检索的合成语料与消息标注 |
 | `private/jds/` | 从公开招聘页复制的真实 JD 原文，仅存本地 |
 | `runners/` | 评测运行脚本 |
 | `results/` | 本地运行记录，可能包含原文和模型输出，Git 忽略 |
@@ -621,3 +622,32 @@ C 首次试跑发现 `resume-011` 的混合栏目被评测导入切成了只有�
 | 合计 | 约 2,200 | 约 375 万 | 约 45 万 | 约 33.4 元 |
 
 正式运行在第一阶段提交的独立检出上。用户批准后用 `python -m evals.runners.w_budget` 创建批次账本，设置 `JOBPILOT_W_BUDGET` 指向这个文件。上限取批准金额与预估金额的 120% 中较低的值。网关前按该调用的输入体和最大输出预留，收到供应商实际用量再结算；未知用量保留预留。每步写出实际输入、输出、已知调用数、未知调用数与未命中缓存金额估计。工作目录和账本绑定同一个提交。
+
+## E13 跨对话检索
+
+`e13-v2` 逐段编写 30 段合成求职对话，共 255 轮、510 则消息，每段 6～20 轮。开发与测试各使用独立的 15 段对话和 30 条查询。两边均有主题相近的对话，例如实时订单去重与分区积压、按归属读取笔记与客服语义检索，以及公交换乘与附近地点搜索。校验会去掉消息里的空白，拒绝跨对话重复的整条消息。
+
+每个切分含原词、换说法、只记得大意各 8 条，以及无答案 6 条。标注使用 `c08:a03` 这样的稳定消息 ID，`u` 代表用户，`a` 代表 Agent。开发集有 19 条查询引用 Agent 回复、17 条有多个相关消息，测试集分别有 17 条和 16 条。AB 可用 `e13_dataset.seed_conversations` 装入同一批起始对话。
+
+第一版语料和 SHA-256 作废。正式测试集已按 [e13-v2 封存指纹](datasets/e13/test-seal.json)重新封存。已准备 10 段供用户抽查，实际嵌入评测等待抽查完成。
+
+### 首次运行前的预期和取舍
+
+- A 使用 BGE-M3 向量与精确余弦排序。B 使用 jieba 分词后的 PostgreSQL 全文匹配。C 将 A、B 的前 20 个块以 RRF 融合，常数为 60。
+- 预期 B 对原词查询有竞争力，A 对换说法和只记得大意更有优势。预期 C 能提升前五条召回，幅度未知。无答案查询先记录每种方法的最高分，暂无拒答阈值。
+- 比较开发集上 C 与 A 的结果。只有 Recall@5 提升至少 12.5 个百分点，MRR@20 下降至多 0.03，且 p95 增加至多 100 ms，才将融合用作默认检索。开发集定下默认方案后，在正式测试集上各跑一遍 A、B、C 并记录结果。
+- Recall@5 按相关消息去重，消息的多个块仍占用展示名次。MRR 统计到第 20 个块。有答案查询用于汇总召回和 MRR；无答案分数独立列出，无匹配记为 `null`。逐查询记录耗时，汇总 p50/p95。A 含查询嵌入和向量 SQL，B 含分词和全文 SQL，C 计两段耗时之和再加融合，语料嵌入不计入查询耗时。
+
+### 运行
+
+使用局部环境变量把 `POSTGRES_DB` 指向本机独立的 `jobpilot_e13`，迁移到最新版本。用 `OLLAMA_NO_CLOUD=1 ollama serve` 启动本机服务并准备 `bge-m3`。从仓库根目录运行。
+
+```bash
+uv run --project jobpilot python -m evals.runners.e13_search --split dev --validate-only
+uv run --project jobpilot python -m evals.runners.e13_search --split test --validate-only
+
+uv run --project jobpilot python -m evals.runners.e13_search --split dev
+uv run --project jobpilot python -m evals.runners.e13_search --split test
+```
+
+`--validate-only` 检查语料、切分和引用，不访问数据库或 Ollama。实际运行向独立评测库写入临时合成账号，读回每条查询的排序，最终删除该账号及派生索引。报告保存在 `evals/results/e13-<切分>-<数据指纹>.json`。正式测试沿用开发集已记录的模型与默认方案。

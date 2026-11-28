@@ -152,6 +152,8 @@ pnpm --dir web build
 
 手动清理已过恢复期的账号可运行 `uv run --project jobpilot python -m jobpilot.scripts.purge_accounts`。查看单个账号的只读使用统计可运行 `uv run --project jobpilot python -m jobpilot.scripts.usage_stats --email <邮箱>`。备份还原步骤见 [05 的本地备份恢复演练](notes/求职助手Agent/05-落地与里程碑.md#本地备份和还原)。
 
+跨对话搜索按需找回本人其他对话的原文。启用语义匹配时，用 `OLLAMA_NO_CLOUD=1 ollama serve` 启动本机 Ollama，并安装 `bge-m3`。程序读取 `OLLAMA_BASE_URL` 和 `EMBEDDING_MODEL`，配置示例见 [.env.example](.env.example)。本机 Ollama 未启动时仍可搜索已分块的关键词。首次迁移、服务中断或更换模型后，在仓库根目录运行 `uv run --project jobpilot python -m jobpilot.scripts.embed_messages` 补算。 [Ollama 本机模式说明](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features)
+
 ## 技术栈
 
 - **前端**：React 19 + Vite + TypeScript + Ant Design + Ant Design X + TanStack Query + React Router
