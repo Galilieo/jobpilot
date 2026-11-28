@@ -1,0 +1,83 @@
+# 城市归一名表：由 services/job_facets.py 读取。
+# cities 为标准城市名（不含「市」）；multi_aliases 统一归为「多地」；aliases 为外文或常见别名映射。
+
+cities:
+  - 北京
+  - 上海
+  - 广州
+  - 深圳
+  - 杭州
+  - 南京
+  - 苏州
+  - 成都
+  - 武汉
+  - 西安
+  - 重庆
+  - 天津
+  - 长沙
+  - 郑州
+  - 合肥
+  - 厦门
+  - 青岛
+  - 大连
+  - 宁波
+  - 无锡
+  - 福州
+  - 济南
+  - 沈阳
+  - 哈尔滨
+  - 长春
+  - 昆明
+  - 贵阳
+  - 南宁
+  - 佛山
+  - 东莞
+  - 珠海
+  - 中山
+  - 惠州
+  - 常州
+  - 嘉兴
+  - 绍兴
+  - 温州
+  - 南通
+  - 扬州
+  - 徐州
+  - 石家庄
+  - 太原
+  - 呼和浩特
+  - 南昌
+  - 海口
+  - 兰州
+  - 乌鲁木齐
+  - 香港
+  - 澳门
+  - 台北
+
+multi_aliases:
+  - 多地
+  - 全国
+  - 远程
+  - 居家
+  - 居家办公
+  - 远程办公
+  - 不限
+  - 地点不限
+  - 各地
+  - remote
+
+aliases:
+  Beijing: 北京
+  Shanghai: 上海
+  Guangzhou: 广州
+  Shenzhen: 深圳
+  Hangzhou: 杭州
+  Nanjing: 南京
+  Suzhou: 苏州
+  Chengdu: 成都
+  Wuhan: 武汉
+  Xian: 西安
+  "Xi'an": 西安
+  Chongqing: 重庆
+  Tianjin: 天津
+  Changsha: 长沙
+  Hong Kong: 香港

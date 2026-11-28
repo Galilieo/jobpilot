@@ -846,3 +846,116 @@ async def test_delete_nonexistent_job_returns_404(
 ) -> None:
     response = await signed_in.delete(f"/api/jobs/{uuid4()}")
     assert response.status_code == 404
+
+
+async def test_list_jobs_returns_facets_and_supports_search_and_overrides(
+    signed_in: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    ai_jd = (
+        "青梧数智 · AI 应用实习生（上海·徐汇）\n"
+        "职责：负责知识库问答链路优化。\n"
+        "要求：熟悉 FastAPI、RAG。\n"
+    )
+    ai_output = {
+        "basic_fields": {
+            "company": "青梧数智",
+            "title": "AI 应用实习生",
+            "location": "上海·徐汇",
+        },
+        "requirements": [],
+        "duties": [],
+        "keywords": ["FastAPI", "RAG"],
+    }
+    backend_jd = (
+        "星桥数据 · 后端实习生（北京/杭州）\n"
+        "职责：负责订单链路稳定性建设。\n"
+        "要求：熟悉 Go、Redis。\n"
+    )
+    backend_output = {
+        "basic_fields": {
+            "company": "星桥数据",
+            "title": "后端实习生",
+            "location": "北京/杭州",
+        },
+        "requirements": [],
+        "duties": [],
+        "keywords": ["Go", "Redis"],
+    }
+
+    model_outputs.append(json.dumps(ai_output, ensure_ascii=False))
+    first = await signed_in.post(
+        "/api/jobs", json={"raw_text": ai_jd}, headers=new_idempotency_headers()
+    )
+    assert first.status_code == 201
+    first_id = first.json()["job_id"]
+
+    model_outputs.append(json.dumps(backend_output, ensure_ascii=False))
+    second = await signed_in.post(
+        "/api/jobs", json={"raw_text": backend_jd}, headers=new_idempotency_headers()
+    )
+    assert second.status_code == 201
+    second_id = second.json()["job_id"]
+
+    all_jobs = {
+        item["job_id"]: item for item in (await signed_in.get("/api/jobs")).json()
+    }
+    assert all_jobs[first_id]["directions"] == ["AI 应用"]
+    assert all_jobs[first_id]["cities"] == ["上海"]
+    assert all_jobs[first_id]["created_at"]
+    assert all_jobs[second_id]["directions"] == ["后端"]
+    assert all_jobs[second_id]["cities"] == ["北京", "杭州"]
+
+    # 搜索标题、公司、关键词（含全半角与大小写）、JD 原文
+    for q, expected_id in (
+        ("ai 应用", first_id),
+        ("青梧数智", first_id),
+        ("ＦＡＳＴＡＰＩ", first_id),
+        ("订单链路稳定性", second_id),
+    ):
+        matched = (await signed_in.get("/api/jobs", params={"q": q})).json()
+        assert [item["job_id"] for item in matched] == [expected_id], q
+
+    # 用户修改字段后：列表方向/城市同步变化，且按修改后的值搜索（即使不在 JD 原文里）
+    updated = await signed_in.put(
+        f"/api/jobs/{second_id}",
+        json={
+            "basic_fields": {
+                "title": "前端实习生",
+                "company": "新名称科技",
+                "location": "成都",
+            },
+            "keywords": ["React", "TypeScript"],
+        },
+    )
+    assert updated.status_code == 200
+
+    after_edit = {
+        item["job_id"]: item for item in (await signed_in.get("/api/jobs")).json()
+    }[second_id]
+    assert after_edit["directions"] == ["前端"]
+    assert after_edit["cities"] == ["成都"]
+
+    for q in ("前端实习生", "新名称科技", "成都", "typescript"):
+        matched = (await signed_in.get("/api/jobs", params={"q": q})).json()
+        assert [item["job_id"] for item in matched] == [second_id], q
+
+    # 被覆盖且不在原文里的旧字段不再被搜到
+    re_edited = await signed_in.put(
+        f"/api/jobs/{second_id}",
+        json={"basic_fields": {"title": "全栈实习生"}},
+    )
+    assert re_edited.status_code == 200
+    assert (await signed_in.get("/api/jobs", params={"q": "前端实习生"})).json() == []
+    re_edited_matches = (
+        await signed_in.get("/api/jobs", params={"q": "全栈实习生"})
+    ).json()
+    assert [item["job_id"] for item in re_edited_matches] == [second_id]
+
+
+async def test_list_jobs_rejects_overlong_or_empty_query(
+    signed_in: httpx.AsyncClient,
+) -> None:
+    assert (await signed_in.get("/api/jobs", params={"q": "a" * 60})).status_code == 200
+    assert (await signed_in.get("/api/jobs", params={"q": "a" * 61})).status_code == 422
+    assert (await signed_in.get("/api/jobs", params={"q": ""})).status_code == 422

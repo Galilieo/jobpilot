@@ -1,8 +1,7 @@
-"""岗位库接口：提交 JD 并解析、列表、详情、修改。
+"""岗位库接口：提交 JD 并解析、列表与搜索、详情、修改。
 
 job_posting 存原文和解析结果，不随个人修改而变；个人的归档状态、备注和对解析结果的修改
 写在 user_job。路径里的 job_id 指 user_job，不是本人的一律 404。
-本周 MVP 不做薪资换算、筛选、统计和自定义字段（见 06 执行进度）。
 """
 
 from collections.abc import AsyncIterator
@@ -11,7 +10,7 @@ from hashlib import sha256
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy.exc import IntegrityError
@@ -40,6 +39,7 @@ from jobpilot.db.runs import set_run_status
 from jobpilot.services.applications import derive_job_stage
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.injection import detect_injection
+from jobpilot.services.job_facets import job_cities, job_directions, matches_job_query
 from jobpilot.services.jobs import (
     BasicFields,
     ParsedJob,
@@ -126,8 +126,11 @@ class JobSummary(BaseModel):
     education: str | None
     stage: JobStage
     keywords: list[str]
+    directions: list[str]
+    cities: list[str]
     injection_count: int
     match_summary: JobMatchSummary | None
+    created_at: datetime
     updated_at: datetime
 
 
@@ -309,13 +312,21 @@ async def _reuse_job(
 
 
 @router.get("/jobs")
-async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
+async def list_jobs(
+    user: CurrentUser,
+    db: DbSession,
+    q: Annotated[str | None, Query(min_length=1, max_length=60)] = None,
+) -> list[JobSummary]:
     rows = await list_user_jobs(db, user.user_id)
     latest_reports = await latest_match_reports_by_job(db, user.user_id)
     stages = await latest_application_stages(user.user_id, db)
     summaries = []
     for posting, user_job in rows:
         parsed = effective_parsed_job(posting, user_job)
+        if q is not None and not matches_job_query(
+            q, parsed=parsed, raw_text=posting.raw_text
+        ):
+            continue
         fields = parsed.basic_fields
         report = latest_reports.get(user_job.user_job_id)
         summaries.append(
@@ -329,8 +340,11 @@ async def list_jobs(user: CurrentUser, db: DbSession) -> list[JobSummary]:
                 education=fields.education,
                 stage=derive_job_stage(user_job, stages.get(user_job.user_job_id)),
                 keywords=parsed.keywords,
+                directions=job_directions(fields.title, parsed.keywords),
+                cities=job_cities(fields.location),
                 injection_count=len(posting.injection_flags),
                 match_summary=summarize_stored_match(*report) if report else None,
+                created_at=user_job.created_at,
                 updated_at=user_job.updated_at,
             )
         )

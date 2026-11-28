@@ -19,7 +19,8 @@ class KeywordTableError(ValueError):
     """同义词表格式不对，或同一个别名指向两个标准名。"""
 
 
-def _key(word: str) -> str:
+def normalize_key(word: str) -> str:
+    """规范化比较键：全半角统一（NFKC）、去首尾空白、折叠大小写。"""
     return unicodedata.normalize("NFKC", word).strip().casefold()
 
 
@@ -37,7 +38,7 @@ def load_keyword_table(path: Path) -> dict[str, str]:
             raise KeywordTableError(f"{path.name}：每项都要有字符串 name：{entry!r}")
         name = entry["name"].strip()
         for word in [name, *(entry.get("aliases") or [])]:
-            key = _key(str(word))
+            key = normalize_key(str(word))
             if table.get(key, name) != name:
                 raise KeywordTableError(
                     f"{path.name}：「{word}」同时属于「{table[key]}」和「{name}」"
@@ -59,11 +60,11 @@ def normalize_keywords(
     result: list[str] = []
     seen: set[str] = set()
     for word in words:
-        key = _key(word)
+        key = normalize_key(word)
         if not key:
             continue
         name = table.get(key, unicodedata.normalize("NFKC", word).strip())
-        if _key(name) not in seen:
-            seen.add(_key(name))
+        if normalize_key(name) not in seen:
+            seen.add(normalize_key(name))
             result.append(name)
     return result

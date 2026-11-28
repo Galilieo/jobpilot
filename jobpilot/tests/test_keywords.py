@@ -8,6 +8,7 @@ from jobpilot.services.keywords import (
     DEFAULT_TABLE,
     KeywordTableError,
     load_keyword_table,
+    normalize_key,
     normalize_keywords,
 )
 
@@ -70,3 +71,8 @@ def test_conflicting_alias_is_rejected(tmp_path: Path) -> None:
 def test_project_table_is_valid() -> None:
     """仓库里的同义词表能解析、标准名和别名没有冲突。"""
     assert load_keyword_table(DEFAULT_TABLE)
+
+
+def test_normalize_key_handles_case_width_and_whitespace() -> None:
+    assert normalize_key("  ＦａｓｔＡＰＩ ") == "fastapi"
+    assert normalize_key("　ＬＬＭ　") == "llm"

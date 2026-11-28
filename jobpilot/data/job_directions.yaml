@@ -1,0 +1,148 @@
+# 岗位方向归类规则：由 services/job_facets.py 读取，按列表先后顺序匹配。
+# 规则：先看岗位标题（命中几个方向就归几个）；标题都未命中时，回退到技术关键词里命中最多的一项；都未命中归「其他」。
+# 这里的 keywords 必须是 jobpilot/data/tech_keywords.yaml 里存在的标准名（name），加载时会校验。
+
+- name: AI 应用
+  title_words:
+    - AI
+    - 大模型
+    - LLM
+    - Agent
+    - 智能体
+    - AIGC
+    - RAG
+    - Prompt
+    - 多模态
+    - 生成式
+    - GenAI
+    - Artificial Intelligence
+  keywords:
+    - LLM
+    - AI Agent
+    - 多智能体
+    - 多模态大模型
+    - RAG
+    - Prompt Engineering
+    - 生成式 AI
+    - Deep Research
+
+- name: 算法
+  title_words:
+    - 算法
+    - NLP
+    - CV
+    - 视觉
+    - 推荐
+    - 搜索算法
+    - 机器学习
+    - 深度学习
+    - 多模态理解
+    - 语音
+    - 因果推断
+  keywords:
+    - NLP
+    - 计算机视觉
+    - 机器学习
+    - 深度学习
+    - PyTorch
+    - TensorFlow
+    - YOLO
+    - 模型量化
+    - 知识蒸馏
+    - 模型剪枝
+    - 指令微调
+    - OCR
+
+- name: 后端
+  title_words:
+    - 后端
+    - 后台
+    - 服务端
+    - Backend
+    - Java
+    - Go
+    - Golang
+    - C++
+    - Python
+    - 网关
+    - 架构
+  keywords:
+    - FastAPI
+    - Flask
+    - Spring Boot
+    - MySQL
+    - PostgreSQL
+    - Redis
+    - Kafka
+
+- name: 前端
+  title_words:
+    - 前端
+    - Web
+    - Frontend
+    - H5
+  keywords:
+    - Vue
+    - React
+    - TypeScript
+    - JavaScript
+    - H5
+
+- name: 客户端
+  title_words:
+    - 客户端
+    - Android
+    - 安卓
+    - iOS
+    - Flutter
+    - 移动端
+  keywords:
+    - Android
+    - iOS
+    - Flutter
+    - Kotlin
+    - Swift
+
+- name: 基础设施
+  title_words:
+    - Infra
+    - SRE
+    - 运维
+    - 云原生
+    - 平台工程
+    - 基础架构
+    - 分布式系统
+    - 存储
+  keywords:
+    - Kubernetes
+    - Docker
+    - client-go
+    - Linux
+    - vLLM
+
+- name: 全栈
+  title_words:
+    - 全栈
+    - Full Stack
+    - Full-Stack
+    - Fullstack
+  keywords: []
+
+- name: 数据
+  title_words:
+    - 数据工程
+    - 数据分析
+    - 数据科学
+    - Data Engineer
+    - Data Scientist
+    - 数仓
+  keywords:
+    - SQL
+
+- name: 测试
+  title_words:
+    - 测试
+    - 测开
+    - QA
+    - 质量保障
+  keywords: []

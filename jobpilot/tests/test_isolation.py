@@ -1059,3 +1059,43 @@ async def test_in_flight_application_write_stops_after_account_deletion(
     assert (await login(user_a, "a@isolation.invalid")).status_code == 204
     assert (await user_a.post("/api/account/restore")).status_code == 204
     assert await _database_records(user_a, user_b) == before
+
+
+async def test_job_search_only_returns_callers_jobs(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    model_outputs: list[str],
+) -> None:
+    """搜索接口只过滤本人岗位，搜不到其他用户的原文或改写后字段。"""
+    model_outputs.append(
+        json.dumps(
+            {
+                "basic_fields": {
+                    "company": "B专属公司",
+                    "title": "AI 应用实习生",
+                    "location": "上海",
+                },
+                "requirements": [],
+                "duties": [],
+                "keywords": ["RAG"],
+            },
+            ensure_ascii=False,
+        )
+    )
+    created = await user_b.post(
+        "/api/jobs",
+        json={"raw_text": "B专属秘密岗位原文 9981"},
+        headers=new_idempotency_headers(),
+    )
+    assert created.status_code == 201, created.text
+    b_job_id = created.json()["job_id"]
+    updated = await user_b.put(
+        f"/api/jobs/{b_job_id}",
+        json={"basic_fields": {"title": "B改后标题XYZ"}},
+    )
+    assert updated.status_code == 200, updated.text
+
+    for query in ("B专属秘密岗位原文", "B专属公司", "B改后标题XYZ", "RAG"):
+        assert (await user_a.get("/api/jobs", params={"q": query})).json() == []
+        matched_b = (await user_b.get("/api/jobs", params={"q": query})).json()
+        assert [row["job_id"] for row in matched_b] == [b_job_id]
