@@ -45,15 +45,11 @@ const OVERVIEW_DATA = {
   },
 }
 
-const MEMORIES_DATA = [
-  { key: 'target_direction', label: '目标方向', value: null, revision: 0, deleted: false },
-  { key: 'cities', label: '城市', value: ['上海', '杭州'], revision: 1, deleted: false },
-  { key: 'excluded_types', label: '排除类型', value: null, revision: 0, deleted: false },
-  { key: 'job_notes', label: '其他求职偏好', value: null, revision: 0, deleted: false },
-  { key: 'tone', label: '语气', value: '平实', revision: 1, deleted: false },
-  { key: 'bullet_length', label: '每条长度', value: null, revision: 0, deleted: false },
-  { key: 'tech_terms', label: '技术名写法', value: null, revision: 0, deleted: false },
-]
+const MEMORIES_DATA = {
+  entries: [{ content: '不投外包公司' }, { content: '回复简短' }],
+  used_chars: 10,
+  budget_chars: 1500,
+}
 
 describe('WorkspacePage 工作台布局、顶部输入、记忆分栏与看板', () => {
   afterEach(() => {
@@ -93,7 +89,7 @@ describe('WorkspacePage 工作台布局、顶部输入、记忆分栏与看板',
 
     // 横向三栏读取记住的偏好，链接指向我的 -> 记忆
     expect(container.querySelector('.workspace-ledger')).toBeInTheDocument()
-    expect(screen.getByText(/上海、杭州/)).toBeInTheDocument()
+    expect(await screen.findByText('不投外包公司 · 回复简短')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '管理' })).toHaveAttribute('href', '/me?tab=memories')
 
     // 空列为虚线框并给出下一步

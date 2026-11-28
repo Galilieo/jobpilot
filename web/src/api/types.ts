@@ -104,6 +104,7 @@ export interface AgentRun {
 export interface ConversationDetail extends Conversation, AgentConfirmationDetails {
   messages: ConversationMessage[]
   run: AgentRun | null
+  undone_record_actions?: string[]
 }
 
 export interface AgentActionResult {
@@ -190,7 +191,12 @@ export type FactKind = 'action' | 'technology' | 'result' | 'role'
 export type Responsibility = 'lead' | 'own' | 'participate' | 'na'
 export type ItemStatus = 'pending' | 'confirmed' | 'deleted'
 export type SectionKind = 'education' | 'project' | 'internship' | 'skill' | 'award' | 'other'
-export type CriterionField = 'onsite_days_per_week' | 'internship_months' | 'earliest_start'
+export type CriterionField =
+  | 'onsite_days_per_week'
+  | 'internship_months'
+  | 'earliest_start'
+  | 'target_direction'
+  | 'preferred_cities'
 export type DegreeLevel = 'associate' | 'bachelor' | 'master' | 'phd'
 export type EducationStatus = 'enrolled' | 'completed'
 
@@ -199,6 +205,7 @@ export interface PublishedCriterion {
   field: CriterionField
   int_value: number | null
   text_value: string | null
+  list_value?: string[] | null
   source: 'resume' | 'user'
   source_doc_id: string | null
   source_quote: string | null
@@ -211,6 +218,7 @@ export interface DraftCriterion {
   status: ItemStatus
   int_value: number | null
   text_value: string | null
+  list_value?: string[] | null
   source: 'resume' | 'user'
   source_doc_id: string | null
   source_quote: string | null
@@ -425,6 +433,12 @@ export interface MatchReport {
     suggestion: string
   }[]
   created_at: string
+  location_check?: {
+    status: 'match' | 'outside' | 'review'
+    note: string
+    location: string | null
+    preferred_cities: string[]
+  } | null
 }
 
 export type MatchSummary = Omit<MatchReport, 'items'>
@@ -565,18 +579,15 @@ export interface TailoredResumeSummary {
 
 // ---------- 长期记忆 ----------
 
-export type MemoryKey =
-  | 'target_direction'
-  | 'cities'
-  | 'excluded_types'
-  | 'job_notes'
-  | 'tone'
-  | 'bullet_length'
-  | 'tech_terms'
+export type MemoryCategory = 'job_pref' | 'agent_rule'
+export type WritingField = 'tone' | 'bullet_length' | 'tech_terms'
 
-export type MemoryGroup = 'job' | 'writing'
-export type MemoryValueType = 'text' | 'list' | 'enum'
-export type MemoryValue = string | string[]
+export interface WritingPreference {
+  values: Record<WritingField, string | null>
+  revision: number
+  options: Record<WritingField, string[]>
+  labels: Record<WritingField, string>
+}
 
 // 下一次请求估算的输入 token；超过 compact_at_tokens 后本轮结束会自动压缩。
 export interface ContextUsage {
@@ -592,17 +603,31 @@ export interface CompactResult {
 }
 
 export interface MemoryItem {
-  key: MemoryKey
-  value: MemoryValue | null
+  memory_id: string
+  category: MemoryCategory
+  content: string
   revision: number
-  deleted: boolean
-  label?: string
-  group?: MemoryGroup
-  type?: MemoryValueType
-  options?: string[]
-  max_length?: number | null
-  max_items?: number | null
+  source:
+    | { kind: 'manual' }
+    | {
+        kind: 'conversation'
+        conversation_id: string
+        message_id: string
+        quote?: string
+      }
+  conversation_title: string | null
+  created_at: string
+  updated_at: string
 }
+
+export interface MemoryCollection {
+  entries: MemoryItem[]
+  used_chars: number
+  budget_chars: number
+}
+
+export type MemoryInput = Pick<MemoryItem, 'category' | 'content'>
+export type MemoryWriteResult = { status: 'saved' | 'exists'; entry: MemoryItem }
 
 export interface ApplicationInput {
   job_id: string

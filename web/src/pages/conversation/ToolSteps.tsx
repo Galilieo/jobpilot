@@ -11,6 +11,7 @@ import {
   UnorderedListOutlined,
   UserOutlined,
 } from '@ant-design/icons'
+import { Button, Typography } from 'antd'
 import { useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { toolLabel } from '../../labels'
@@ -112,7 +113,101 @@ function GroupRow({ group, title }: { group: StepGroup; title?: JobTitle }): Rea
   )
 }
 
-export function ToolSteps({ steps, title }: { steps: StepView[]; title?: JobTitle }): ReactElement {
+export interface RecordControls {
+  undone: string[]
+  undoing?: string
+  onUndo: (id: string) => void
+}
+
+const recordTools = new Set(['remember', 'forget', 'set_writing_preference'])
+const preferenceLabels: Record<string, string> = {
+  tone: '语气',
+  bullet_length: '每条长度',
+  tech_terms: '技术名写法',
+}
+
+function RecordStep({
+  step,
+  controls,
+}: {
+  step: StepView
+  controls?: RecordControls
+}): ReactElement {
+  const result = step.result
+  const detail = result?.detail as Record<string, unknown> | undefined
+  const actionId = typeof detail?.action_id === 'string' ? detail.action_id : null
+  const undone = actionId && controls?.undone.includes(actionId)
+  let text = String(detail?.content ?? '')
+  if (step.tool === 'set_writing_preference') {
+    const label = preferenceLabels[String(detail?.field)] ?? '写作偏好'
+    text = `${label}为「${String(detail?.value ?? '默认')}」`
+  }
+  const label =
+    result?.status === 'exists'
+      ? '已存在'
+      : step.tool === 'forget'
+        ? '已忘记'
+        : step.tool === 'set_writing_preference'
+          ? '已更新写作偏好'
+          : '已记住'
+
+  return (
+    <li className="tool-step">
+      <CheckCircleOutlined className="tool-step-icon" />
+      <span>
+        {label}：{text}
+      </span>
+      {typeof detail?.quote === 'string' && (
+        <Typography.Text type="secondary">你说的「{detail.quote}」</Typography.Text>
+      )}
+      {undone ? (
+        <Typography.Text type="secondary">已撤销</Typography.Text>
+      ) : (
+        actionId &&
+        controls && (
+          <Button
+            type="link"
+            size="small"
+            loading={controls.undoing === actionId}
+            disabled={controls.undoing !== undefined}
+            onClick={() => controls.onUndo(actionId)}
+          >
+            撤销
+          </Button>
+        )
+      )}
+    </li>
+  )
+}
+
+export function ToolSteps({
+  steps,
+  title,
+  records,
+}: {
+  steps: StepView[]
+  title?: JobTitle
+  records?: RecordControls
+}): ReactElement {
+  const recordSteps = steps.filter(
+    (step) => recordTools.has(step.tool) && step.status === 'success' && step.result?.detail,
+  )
+  const otherSteps = steps.filter((step) => !recordSteps.includes(step))
+  return (
+    <>
+      {recordSteps.length > 0 && (
+        <ul className="tool-step-list" aria-label="记忆更新">
+          {recordSteps.map((step) => (
+            <RecordStep key={step.key} step={step} controls={records} />
+          ))}
+        </ul>
+      )}
+      {otherSteps.length > 0 && <GroupedToolSteps steps={otherSteps} title={title} />}
+    </>
+  )
+}
+
+function GroupedToolSteps({ steps, title }: { steps: StepView[]; title?: JobTitle }): ReactElement {
   const [open, setOpen] = useState(false)
   const running = steps.find((step) => step.status === 'loading')
   if (running) {

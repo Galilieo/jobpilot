@@ -5,7 +5,7 @@ import { FileTextOutlined } from '@ant-design/icons'
 import { Bubble } from '@ant-design/x'
 import type { BubbleItemType } from '@ant-design/x'
 import type { BubbleListRef } from '@ant-design/x/es/bubble'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Alert, App } from 'antd'
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
 import { conversations } from '../../api/endpoints'
@@ -15,11 +15,12 @@ import type {
   AgentTextAttachment,
   ConversationDetail,
 } from '../../api/types'
+import { MEMORIES_QUERY, WRITING_PREFERENCE_QUERY } from '../../queryKeys'
 import { CardResult, PendingCard, type CardOutcome } from './ActionCards'
 import { MessageText } from './MessageText'
 import type { LiveTurn } from './runControl'
 import { buildTimeline, hasCard, type TimelineItem } from './timeline'
-import { ToolSteps, type StepView } from './ToolSteps'
+import { ToolSteps, type RecordControls, type StepView } from './ToolSteps'
 
 type JobTitle = (jobId: string) => string
 
@@ -75,6 +76,7 @@ function userBubble(key: string, content: string, attachments: AgentTextAttachme
 
 export function MessageList(props: MessageListProps): ReactElement {
   const { message } = App.useApp()
+  const queryClient = useQueryClient()
   const { detail, live, title } = props
   const listRef = useRef<BubbleListRef>(null)
   const liveStarted = live !== null
@@ -91,11 +93,21 @@ export function MessageList(props: MessageListProps): ReactElement {
     mutationFn: (actionId: string) => conversations.undo(actionId),
     onSuccess: async () => {
       message.success('已撤销')
-      await props.refresh()
+      await Promise.all([
+        props.refresh(),
+        queryClient.invalidateQueries({ queryKey: MEMORIES_QUERY }),
+        queryClient.invalidateQueries({ queryKey: WRITING_PREFERENCE_QUERY }),
+      ])
     },
     // 例如「简历版本已变更，无法撤销」：之后又改过，后端拒绝撤销。
     onError: (error) => void message.error(error.message),
   })
+
+  const recordControls = {
+    undone: detail.undone_record_actions ?? [],
+    undoing: undo.isPending ? undo.variables : undefined,
+    onUndo: (id: string) => undo.mutate(id),
+  }
 
   function cardBubble(card: AgentActionCard, outcome: CardOutcome | 'pending'): ReactNode {
     if (outcome === 'pending') {
@@ -136,6 +148,7 @@ export function MessageList(props: MessageListProps): ReactElement {
           content: (
             <ToolSteps
               title={title}
+              records={recordControls}
               steps={item.steps.map((step, index): StepView => ({
                 key: `${item.key}:${index}`,
                 tool: step.tool,
@@ -160,7 +173,7 @@ export function MessageList(props: MessageListProps): ReactElement {
   const items: BubbleItemType[] = buildTimeline(detail, title).map(itemOf)
   for (const hint of props.localHints)
     items.push({ key: hint.key, role: 'system', content: hint.text })
-  if (live) items.push(...liveItems(live, detail, title, cardBubble))
+  if (live) items.push(...liveItems(live, detail, title, cardBubble, recordControls))
   return <Bubble.List ref={listRef} className="message-list" items={items} role={ROLES} />
 }
 
@@ -169,6 +182,7 @@ function liveItems(
   detail: ConversationDetail,
   title: JobTitle,
   cardBubble: (card: AgentActionCard, outcome: 'pending') => ReactNode,
+  recordControls: RecordControls,
 ): BubbleItemType[] {
   const items: BubbleItemType[] = []
   const { input } = live
@@ -180,7 +194,11 @@ function liveItems(
       key: 'live:steps',
       role: 'ai',
       content: (
-        <ToolSteps title={title} steps={live.steps.map((step) => ({ ...step, key: step.id }))} />
+        <ToolSteps
+          title={title}
+          records={recordControls}
+          steps={live.steps.map((step) => ({ ...step, key: step.id }))}
+        />
       ),
     })
   }

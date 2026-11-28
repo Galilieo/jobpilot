@@ -222,3 +222,29 @@ describe('展开看每次调用的细节', () => {
     )
   })
 })
+
+it('自动记录步骤直接显示内容、原话和撤销，刷新后沿用撤销状态', async () => {
+  const user = userEvent.setup()
+  const steps: StepView[] = [
+    {
+      key: 'remember-a',
+      tool: 'remember',
+      status: 'success',
+      result: {
+        status: 'remembered',
+        detail: { content: '不投外包公司', quote: '我不投外包', action_id: 'a1' },
+      },
+    },
+  ]
+  const undoCalls: string[] = []
+  const onUndo = (id: string) => undoCalls.push(id)
+  const render = renderWithProviders(<ToolSteps steps={steps} records={{ undone: [], onUndo }} />)
+  expect(screen.getByText('已记住：不投外包公司')).toBeInTheDocument()
+  expect(screen.getByText('你说的「我不投外包」')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /撤\s?销/ }))
+  expect(undoCalls).toEqual(['a1'])
+  render.unmount()
+  renderWithProviders(<ToolSteps steps={steps} records={{ undone: ['a1'], onUndo }} />)
+  expect(screen.getByText('已撤销')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /撤\s?销/ })).not.toBeInTheDocument()
+})

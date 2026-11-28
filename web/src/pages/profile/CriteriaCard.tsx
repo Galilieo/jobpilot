@@ -19,12 +19,20 @@ const FIELDS: readonly CriterionField[] = [
   'onsite_days_per_week',
   'internship_months',
   'earliest_start',
+  'target_direction',
+  'preferred_cities',
 ]
 
-function formatValue(field: CriterionField, intVal: number | null, textVal: string | null): string {
+function formatValue(
+  field: CriterionField,
+  intVal: number | null,
+  textVal: string | null,
+  listVal?: string[] | null,
+): string {
   if (field === 'onsite_days_per_week' && intVal !== null) return `${intVal} 天/周`
   if (field === 'internship_months' && intVal !== null) return `${intVal} 个月`
-  if (field === 'earliest_start' && textVal) return textVal
+  if (textVal) return textVal
+  if (listVal?.length) return listVal.join('、')
   return '未填写'
 }
 
@@ -64,13 +72,15 @@ export function CriteriaCard({
     const p = pubByField.get(field)
     setEditingField(field)
     setDraftInt(d?.int_value ?? p?.int_value ?? null)
-    setDraftText(d?.text_value ?? p?.text_value ?? '')
+    const current = d ?? p
+    setDraftText(current?.list_value?.join('、') ?? current?.text_value ?? '')
   }
 
   return (
     <Card
+      id="job-criteria"
       title="求职条件"
-      extra={<Typography.Text type="secondary">匹配直接引用，确认后随事实库发布</Typography.Text>}
+      extra={<Typography.Text type="secondary">确认后随事实库发布</Typography.Text>}
     >
       <ul className="row-list">
         {FIELDS.map((field) => {
@@ -82,8 +92,22 @@ export function CriteriaCard({
           const isPending = d?.status === 'pending'
           const blocked = Boolean(d && d.source === 'resume' && !d.quote_verified)
           const hasAny = Boolean(current)
+          const isList = field === 'preferred_cities'
+          const isText = field === 'earliest_start' || field === 'target_direction'
+          const cityList = isList
+            ? [
+                ...new Set(
+                  draftText
+                    .split(/[、，,\n]/u)
+                    .map((city) => city.trim())
+                    .filter(Boolean),
+                ),
+              ]
+            : null
+          const invalidCities =
+            cityList && (cityList.length > 5 || cityList.some((city) => [...city].length > 20))
           const formatted = current
-            ? formatValue(field, current.int_value, current.text_value)
+            ? formatValue(field, current.int_value, current.text_value, current.list_value)
             : '未填写'
 
           const primaryAction = isPending ? (
@@ -160,11 +184,19 @@ export function CriteriaCard({
                 </Space>
                 {isEditing && (
                   <Space size={8} wrap>
-                    {field === 'earliest_start' ? (
+                    {isText || isList ? (
                       <Input
                         size="small"
                         aria-label={CRITERION_LABEL[field]}
-                        placeholder="如：12 月中旬、可立即到岗"
+                        placeholder={
+                          isList
+                            ? '上海、杭州（最多 5 个）'
+                            : field === 'target_direction'
+                              ? '如 Agent 应用开发'
+                              : '如 12 月中旬'
+                        }
+                        maxLength={field === 'target_direction' ? 100 : 200}
+                        status={invalidCities ? 'error' : undefined}
                         value={draftText}
                         onChange={(e) => setDraftText(e.target.value)}
                       />
@@ -182,12 +214,19 @@ export function CriteriaCard({
                       size="small"
                       type="primary"
                       loading={save.isPending}
-                      disabled={field === 'earliest_start' ? !draftText.trim() : draftInt === null}
+                      disabled={
+                        isList
+                          ? !cityList?.length || Boolean(invalidCities)
+                          : isText
+                            ? !draftText.trim()
+                            : draftInt === null
+                      }
                       onClick={() =>
                         save.mutate({
                           field,
-                          int_value: field === 'earliest_start' ? null : draftInt,
-                          text_value: field === 'earliest_start' ? draftText.trim() : null,
+                          int_value: isText || isList ? null : draftInt,
+                          text_value: isText ? draftText.trim() : null,
+                          list_value: cityList,
                           confirmed: true,
                           expected_revision: revision,
                         })

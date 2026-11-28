@@ -36,8 +36,7 @@ export function ProfilePage(): ReactElement {
     queryFn: ({ signal }) => memories.list(signal),
   })
 
-  const memoryItems = memoriesQuery.data ?? []
-  const filledMemories = memoryItems.filter((item) => item.value !== null && !item.deleted).length
+  const memoryItems = memoriesQuery.data
 
   const publishedCount = library.data?.facts.length ?? 0
   const version = library.data?.fact_set?.version
@@ -73,8 +72,8 @@ export function ProfilePage(): ReactElement {
         <StatCard label="定制简历" value={resumes.isPending ? '—' : resumeCount} unit="份" />
         <StatCard
           label="记忆"
-          value={memoriesQuery.isPending ? '—' : filledMemories}
-          unit={memoriesQuery.isPending ? undefined : `/ ${memoryItems.length || 7} 栏`}
+          value={memoryItems?.used_chars ?? '—'}
+          unit={memoryItems ? `/ ${memoryItems.budget_chars} 字` : undefined}
         />
       </div>
 

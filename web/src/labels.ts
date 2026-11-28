@@ -63,6 +63,8 @@ export const CRITERION_LABEL: Record<CriterionField, string> = {
   onsite_days_per_week: '每周可到岗天数',
   internship_months: '可实习月数',
   earliest_start: '最早到岗时间',
+  target_direction: '目标方向',
+  preferred_cities: '意向城市',
 }
 
 export const DEGREE_LABEL: Record<DegreeLevel, string> = {
@@ -185,6 +187,7 @@ export const AGENT_TOOL: Record<string, string> = {
   ask_user: '向你提问',
   record_application: '记录投递',
   remember: '记住偏好',
+  set_writing_preference: '设置写作偏好',
   forget: '忘掉偏好',
   read_conversation_history: '查阅更早的对话',
 }

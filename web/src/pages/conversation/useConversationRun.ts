@@ -13,6 +13,7 @@ import {
   MEMORIES_QUERY,
   OVERVIEW_QUERY,
   TAILORED_RESUMES_QUERY,
+  WRITING_PREFERENCE_QUERY,
   conversationQuery,
 } from '../../queryKeys'
 import {
@@ -32,6 +33,7 @@ const AFFECTED_QUERIES = [
   MEMORIES_QUERY,
   OVERVIEW_QUERY,
   TAILORED_RESUMES_QUERY,
+  WRITING_PREFERENCE_QUERY,
   ['tailor-run'],
   ['tailor-resume'],
   ['match-report'],

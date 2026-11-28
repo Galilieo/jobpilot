@@ -9,7 +9,7 @@ import type {
   FactsOverview,
   GroundingOverview,
   JobBoard,
-  MemoryItem,
+  MemoryCollection,
 } from '../api/types'
 import { useCurrentUser } from '../auth'
 import { EmptyHint } from '../components/EmptyHint'
@@ -25,11 +25,6 @@ function greetingPrefix(hour: number): string {
   if (hour < 12) return '早上好'
   if (hour < 18) return '下午好'
   return '晚上好'
-}
-
-function formatMemoryValue(value: MemoryItem['value']): string {
-  if (Array.isArray(value)) return value.join('、')
-  return value ?? ''
 }
 
 export function WorkspacePage(): ReactElement {
@@ -113,13 +108,13 @@ function LedgerBar({
 }: {
   facts: FactsOverview
   grounding: GroundingOverview
-  memoriesList: MemoryItem[] | undefined
+  memoriesList: MemoryCollection | undefined
 }): ReactElement {
-  const activeMemories = (memoriesList ?? []).filter((item) => item.value !== null && !item.deleted)
+  const activeMemories = memoriesList?.entries ?? []
   const memoryPreview = activeMemories
     .slice(0, 2)
-    .map((item) => `${item.label ?? item.key}：${formatMemoryValue(item.value)}`)
-    .join('；')
+    .map((item) => item.content)
+    .join(' · ')
 
   return (
     <div className="workspace-ledger">

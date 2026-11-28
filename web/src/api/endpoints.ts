@@ -27,9 +27,11 @@ import type {
   Library,
   MatchReport,
   MatchSummary,
-  MemoryItem,
-  MemoryKey,
-  MemoryValue,
+  MemoryCollection,
+  MemoryInput,
+  MemoryWriteResult,
+  WritingField,
+  WritingPreference,
   Overview,
   Responsibility,
   SectionKind,
@@ -131,6 +133,7 @@ export const facts = {
     field: CriterionField
     int_value?: number | null
     text_value?: string | null
+    list_value?: string[] | null
     confirmed?: boolean
     delete?: boolean
     expected_revision: number
@@ -257,11 +260,19 @@ export const conversations = {
 // ---------- 长期记忆 ----------
 
 export const memories = {
-  list: (signal?: AbortSignal) => request<MemoryItem[]>('/api/memories', { signal }),
-  update: (key: MemoryKey, body: { expected_revision: number; value: MemoryValue }) =>
-    request<MemoryItem>(`/api/memories/${key}`, { method: 'PUT', json: body }),
-  remove: (key: MemoryKey, body: { expected_revision: number }) =>
-    request<MemoryItem>(`/api/memories/${key}`, { method: 'DELETE', json: body }),
+  list: (signal?: AbortSignal) => request<MemoryCollection>('/api/memories', { signal }),
+  add: (body: MemoryInput) =>
+    request<MemoryWriteResult>('/api/memories', { method: 'POST', json: body }),
+  update: (id: string, body: MemoryInput & { expected_revision: number }) =>
+    request<MemoryWriteResult>(`/api/memories/${id}`, { method: 'PUT', json: body }),
+  remove: (id: string, body: { expected_revision: number }) =>
+    request<void>(`/api/memories/${id}`, { method: 'DELETE', json: body }),
+}
+
+export const writingPreference = {
+  get: (signal?: AbortSignal) => request<WritingPreference>('/api/writing-preference', { signal }),
+  update: (body: { expected_revision: number } & Partial<Record<WritingField, string | null>>) =>
+    request<WritingPreference>('/api/writing-preference', { method: 'PUT', json: body }),
 }
 
 export const applications = {

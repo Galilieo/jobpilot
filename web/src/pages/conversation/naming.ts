@@ -13,6 +13,7 @@ const TOOL_ACTION: Record<string, string> = {
   read_job: '读取岗位',
   read_facts: '读取事实',
   read_match_report: '读取匹配报告',
+  set_writing_preference: '设置写作偏好',
   read_resume: '读取简历',
   parse_jd: '解析岗位',
   match_job: '匹配',
@@ -29,6 +30,7 @@ const TOOL_ACTION: Record<string, string> = {
 const READ_OBJECT: Record<string, string> = {
   read_facts: '你的经历',
   read_match_report: '匹配报告',
+  set_writing_preference: '写作偏好',
   read_resume: '定制简历',
   read_conversation_history: '更早的对话',
 }

@@ -210,131 +210,19 @@ describe('提问卡', () => {
   })
 })
 
-describe('记忆确认卡 remember / forget', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('remember(add) 显示栏目、增加动作、完整值并高亮新增项，以及原话来源', async () => {
-    const user = userEvent.setup()
-    const decide = vi.fn(async () => null)
-    stubFetch({
-      'GET /api/memories': () =>
-        jsonResponse(200, [
-          {
-            key: 'cities',
-            label: '城市',
-            group: 'job',
-            type: 'list',
-            options: [],
-            value: ['北京'],
-            revision: 1,
-            deleted: false,
-          },
-        ]),
-    })
-    const card: AgentActionCard = {
-      ...base,
-      kind: 'confirmation',
-      tool: 'remember',
-      args: {
-        key: 'cities',
-        label: '城市',
-        op: 'add',
-        value: ['北京', '上海'],
-        quote: '也考虑上海',
-        expected_revision: 1,
-        source: { kind: 'conversation' },
-      },
-    }
-    const { container } = renderWithProviders(
-      <PendingCard card={card} title={title} decide={decide} />,
-    )
-
-    expect(screen.queryByText(/执行「/)).not.toBeInTheDocument()
-    expect(screen.getByText('记住偏好')).toBeInTheDocument()
-    expect(screen.getByText('城市')).toBeInTheDocument()
-    expect(screen.getByText('增加')).toBeInTheDocument()
-    expect(screen.getByText('北京')).toBeInTheDocument()
-    expect(screen.getByText('上海')).toBeInTheDocument()
-    expect(screen.getByText('来源：你刚才说的『也考虑上海』')).toBeInTheDocument()
-    await waitFor(() => {
-      const added = Array.from(container.querySelectorAll('.memory-chip.is-added')).map(
-        (el) => el.textContent,
-      )
-      expect(added).toEqual(['上海'])
-    })
-
-    await user.click(screen.getByRole('button', { name: '确认记住' }))
-    expect(decide).toHaveBeenCalledWith({ decision: 'confirm' })
-  })
-
-  it('remember(replace) 与 forget(remove / clear) 渲染动作、完整值和来源，并支持撤销结果行', async () => {
-    const user = userEvent.setup()
-    const replaceCard: AgentActionCard = {
-      ...base,
-      kind: 'confirmation',
-      tool: 'remember',
-      args: {
-        key: 'tone',
-        label: '语气',
-        op: 'replace',
-        value: '偏技术细节',
-        quote: '以后写简历偏技术细节一点',
-        expected_revision: 1,
-        source: { kind: 'conversation' },
-      },
-    }
-    const { unmount } = renderWithProviders(
-      <PendingCard card={replaceCard} title={title} decide={vi.fn()} />,
-    )
-    expect(screen.getByText('替换')).toBeInTheDocument()
-    expect(screen.getByText('偏技术细节')).toBeInTheDocument()
-    expect(screen.getByText('来源：你刚才说的『以后写简历偏技术细节一点』')).toBeInTheDocument()
-    unmount()
-
-    const forgetCard: AgentActionCard = {
-      ...base,
-      kind: 'confirmation',
-      tool: 'forget',
-      args: {
-        key: 'job_notes',
-        label: '其他求职偏好',
-        op: 'clear',
-        value: null,
-        quote: '忘掉其他求职偏好',
-        expected_revision: 1,
-        source: { kind: 'conversation' },
-      },
-    }
-    renderWithProviders(<PendingCard card={forgetCard} title={title} decide={vi.fn()} />)
-    expect(screen.getByText('忘掉偏好')).toBeInTheDocument()
-    expect(screen.getByText('清空')).toBeInTheDocument()
-    expect(screen.getByText('来源：你刚才说的『忘掉其他求职偏好』')).toBeInTheDocument()
-
-    const onUndo = vi.fn()
-    renderWithProviders(
-      <CardResult
-        tool="remember"
-        title={title}
-        outcome={{
-          state: 'decided',
-          action: {
-            action_id: 'a2',
-            run_id: 'r1',
-            kind: 'confirmation',
-            tool: 'remember',
-            args: {},
-            status: 'executed',
-            result: { key: 'cities', op: 'add', revision: 2 },
-          },
-        }}
-        onUndo={onUndo}
-      />,
-    )
-    await user.click(screen.getByRole('button', { name: /撤\s?销/ }))
-    expect(onUndo).toHaveBeenCalledTimes(1)
-  })
+it('升级前尚未决定的记忆卡可关闭', async () => {
+  const user = userEvent.setup()
+  const decide = vi.fn(async () => null)
+  const card: AgentActionCard = {
+    ...base,
+    kind: 'confirmation',
+    tool: 'remember',
+    args: {},
+  }
+  renderWithProviders(<PendingCard card={card} title={title} decide={decide} />)
+  expect(screen.getByText('旧版记忆确认')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /关\s?闭/ }))
+  expect(decide).toHaveBeenCalledWith({ decision: 'reject' })
 })
 
 it('shows the application details and offers undo after the confirmed write', async () => {

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { App, Button, Input, Space, Typography } from 'antd'
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { memories, tailoring } from '../../api/endpoints'
+import { tailoring } from '../../api/endpoints'
 import type {
   AgentActionCard,
   AgentDecidedAction,
@@ -18,7 +18,7 @@ import { MetaList } from '../../components/MetaList'
 import { FactBadge } from '../../components/FactBadge'
 import { indexResumeFacts, type IndexedFact } from '../../factIndex'
 import { formatDateTime, toolLabel } from '../../labels'
-import { MEMORIES_QUERY, tailorResumeQuery } from '../../queryKeys'
+import { tailorResumeQuery } from '../../queryKeys'
 import type { ToolResultStep } from './timeline'
 
 type Decide = (decision: AgentDecision) => Promise<string | null>
@@ -31,14 +31,6 @@ const JOB_CHOICE_LABEL: Record<AgentJobChoice, string> = {
   new: '新开对话',
   switch: '切换到新岗位',
   keep: '保持不变',
-}
-
-const MEMORY_OP_LABEL: Record<string, string> = {
-  set: '设为',
-  add: '增加',
-  replace: '替换',
-  remove: '删除几项',
-  clear: '清空',
 }
 
 const MEMORY_LABEL_FALLBACK: Record<string, string> = {
@@ -157,64 +149,6 @@ function ResumeEditBody({ args }: { args: Record<string, unknown> }): ReactEleme
   )
 }
 
-function MemoryActionBody({ args }: { args: Record<string, unknown> }): ReactElement {
-  const key = typeof args.key === 'string' ? args.key : ''
-  const label = typeof args.label === 'string' ? args.label : (MEMORY_LABEL_FALLBACK[key] ?? key)
-  const op = typeof args.op === 'string' ? args.op : 'set'
-  const quote = typeof args.quote === 'string' ? args.quote : ''
-  const value = args.value
-  const memoriesQuery = useQuery({
-    queryKey: MEMORIES_QUERY,
-    queryFn: ({ signal }) => memories.list(signal),
-    enabled: op === 'add',
-  })
-
-  const addedItems = useMemo(() => {
-    if (op !== 'add' || !Array.isArray(value)) return new Set<string>()
-    const existing = memoriesQuery.data?.find((item) => item.key === key)?.value
-    if (Array.isArray(existing)) {
-      const prior = new Set(existing)
-      return new Set(value.map(String).filter((item) => !prior.has(item)))
-    }
-    return new Set(value.map(String).filter((item) => quote.includes(item)))
-  }, [key, memoriesQuery.data, op, quote, value])
-
-  return (
-    <div className="action-card-content memory-card-body">
-      <div className="memory-card-head">
-        <span className="memory-card-label">{label}</span>
-        <span className="memory-op-badge">{MEMORY_OP_LABEL[op] ?? op}</span>
-      </div>
-      <div className="memory-card-value">
-        {op === 'clear' || value === null || value === undefined ? (
-          <Typography.Text type="secondary">清空这一栏的内容</Typography.Text>
-        ) : Array.isArray(value) ? (
-          value.length > 0 ? (
-            <div className="memory-chips">
-              {value.map((item) => {
-                const text = String(item)
-                return (
-                  <span
-                    key={text}
-                    className={addedItems.has(text) ? 'memory-chip is-added' : 'memory-chip'}
-                  >
-                    {text}
-                  </span>
-                )
-              })}
-            </div>
-          ) : (
-            <Typography.Text type="secondary">清空这一栏的内容</Typography.Text>
-          )
-        ) : (
-          <span className="memory-text-value">{String(value)}</span>
-        )}
-      </div>
-      {quote && <p className="memory-quote">来源：你刚才说的『{quote}』</p>}
-    </div>
-  )
-}
-
 function GenericBody({ card }: { card: AgentActionCard }): ReactElement {
   return (
     <dl className="generic-args">
@@ -282,12 +216,15 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
     }
   }
   if (card.tool === 'remember' || card.tool === 'forget') {
-    const isRemember = card.tool === 'remember'
     return {
-      kind: isRemember ? '记住偏好' : '忘掉偏好',
-      body: <MemoryActionBody args={args} />,
-      confirm: isRemember ? '确认记住' : '确认忘掉',
-      reject: isRemember ? '不记了' : '留着',
+      kind: '旧版记忆确认',
+      body: (
+        <div className="action-card-content">
+          关闭这张确认卡后，可以直接在对话里说出想记住或忘掉的偏好。
+        </div>
+      ),
+      confirm: null,
+      reject: '关闭',
     }
   }
   return {
@@ -321,14 +258,16 @@ function ConfirmationCard(props: {
         >
           {view.reject}
         </Button>
-        <Button
-          type="primary"
-          disabled={submitting !== null}
-          loading={submitting === 'confirm'}
-          onClick={() => void submit('confirm', { decision: 'confirm' })}
-        >
-          {view.confirm}
-        </Button>
+        {view.confirm && (
+          <Button
+            type="primary"
+            disabled={submitting !== null}
+            loading={submitting === 'confirm'}
+            onClick={() => void submit('confirm', { decision: 'confirm' })}
+          >
+            {view.confirm}
+          </Button>
+        )}
       </div>
     </CardFrame>
   )
@@ -443,13 +382,7 @@ export function PendingCard(props: {
 
 // ---------- 决定之后 ----------
 
-const UNDOABLE_TOOLS = new Set([
-  'set_current_job',
-  'edit_resume_item',
-  'remember',
-  'forget',
-  'record_application',
-])
+const UNDOABLE_TOOLS = new Set(['set_current_job', 'edit_resume_item', 'record_application'])
 
 function canUndo(action: AgentDecidedAction): boolean {
   if (action.status !== 'executed') return false

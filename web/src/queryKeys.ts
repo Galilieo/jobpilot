@@ -19,6 +19,7 @@ export const conversationQuery = (conversationId: string) =>
 export const contextUsageQuery = (conversationId: string, messages: number, updatedAt: string) =>
   [...conversationQuery(conversationId), 'context', messages, updatedAt] as const
 export const MEMORIES_QUERY = ['memories'] as const
+export const WRITING_PREFERENCE_QUERY = ['writing-preference'] as const
 
 export const APPLICATIONS_QUERY = ['applications'] as const
 export const applicationsQuery = (jobId: string) => [...APPLICATIONS_QUERY, 'job', jobId] as const

@@ -218,6 +218,17 @@ function ReportBody({
           基于第 {report.fact_set_version} 版事实库
         </Typography.Paragraph>
       )}
+      {report.location_check && (
+        <div className="report-meta">
+          <Tag color={report.location_check.status === 'match' ? 'success' : 'warning'}>
+            {report.location_check.note}
+          </Tag>
+          <Typography.Text type="secondary">
+            {report.location_check.location ?? '岗位未填写地点'} · 意向{' '}
+            {report.location_check.preferred_cities.join('、')}
+          </Typography.Text>
+        </div>
+      )}
       {topGaps.length > 0 && (
         <section>
           <Typography.Title level={5}>主要短板</Typography.Title>
