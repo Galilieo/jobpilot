@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import Select, func, select
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.db.models import Conversation, Message, MessageChunk
@@ -75,13 +76,21 @@ async def vector_candidates(
 async def keyword_candidates(
     scope: SearchScope,
     session: AsyncSession,
-    terms: str,
+    terms: list[str],
     limit: int,
     *,
     missing_model: str | None = None,
 ) -> list[RankedChunk]:
-    query = func.websearch_to_tsquery("simple", terms)
-    score = func.ts_rank(MessageChunk.search_terms, query)
+    if not terms:
+        return []
+    # 每个词作为普通文本解析，OR 只由程序组装。
+    first, *rest = terms
+    query = func.plainto_tsquery("simple", first)
+    for term in rest:
+        query = query.op("||", return_type=TSQUERY())(
+            func.plainto_tsquery("simple", term)
+        ).self_group()
+    score = func.ts_rank_cd(MessageChunk.search_terms, query)
     statement = (
         _candidates(scope)
         .add_columns(score.label("score"))

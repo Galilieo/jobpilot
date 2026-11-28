@@ -112,5 +112,6 @@ def test_e13_scoring_requires_the_labeled_chunk_of_a_long_reply() -> None:
 
     assert (wrong.recall_at_5, wrong.reciprocal_rank) == (0, 0)
     assert (correct.recall_at_5, correct.reciprocal_rank) == (1, 0.5)
+    assert wrong.hit_at_5 is False and correct.hit_at_5 is True
     assert correct.hits == ["c01:a04@0", "c01:a04@9"]
     assert (whole_score.recall_at_5, whole_score.reciprocal_rank) == (1, 1)

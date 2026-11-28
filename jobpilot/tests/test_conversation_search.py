@@ -115,9 +115,13 @@ async def test_search_finds_a_saved_message_and_returns_a_source_link(
     assert [row["text"] for row in history["rows"]] == [body]
 
 
+@pytest.mark.parametrize(
+    "query", ["云岬科技", "上次聊过的实习到岗安排，你还有印象吗？！"]
+)
 async def test_offline_ollama_keeps_messages_and_returns_keyword_hits(
     async_client: httpx.AsyncClient,
     caplog: pytest.LogCaptureFixture,
+    query: str,
 ) -> None:
     await sign_in(async_client)
     old_path = await conversation(async_client)
@@ -127,7 +131,7 @@ async def test_offline_ollama_keeps_messages_and_returns_keyword_hits(
     def respond(request: httpx.Request) -> httpx.Response:
         last = json.loads(request.content)["messages"][-1]
         if last["content"] == "请查上一段聊过的公司":
-            return batch(("search_conversations", {"query": "云岬科技"}))
+            return batch(("search_conversations", {"query": query}))
         return reply()
 
     async with fake_upstream(respond) as fake:

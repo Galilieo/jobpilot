@@ -18,7 +18,10 @@ from jobpilot.services.conversation_retrieval import (
     SearchSource,
     source_hits,
 )
-from jobpilot.services.conversation_terms import search_terms
+from jobpilot.services.conversation_terms import (
+    DEFAULT_KEYWORD_SELECTION,
+    keyword_query_terms,
+)
 from jobpilot.services.embedding import EmbeddingUnavailable, embed_texts
 from jobpilot.services.llm_gateway import pii_at_boundary, pii_spans
 
@@ -68,7 +71,7 @@ async def search_conversations(
     scope = SearchScope(agent.user_id, agent.conversation_id)
     model = settings.embedding_model
     query_vector = await _query_vector(args.query, model)
-    terms = search_terms(args.query)
+    terms = keyword_query_terms(args.query, DEFAULT_KEYWORD_SELECTION)
     async with read_snapshot(agent.sessions) as session:
         keywords = await keyword_candidates(
             scope,
@@ -77,7 +80,7 @@ async def search_conversations(
             args.limit,
             missing_model=model if query_vector is not None else None,
         )
-        # 新块的原词命中有确定出处，先占展示位置，避免被尚不可比较的向量结果挤掉。
+        # 给尚无可比较向量的块保留全文命中的展示位置。
         remaining = args.limit - len(keywords)
         vectors = (
             await vector_candidates(scope, session, model, query_vector, remaining)
