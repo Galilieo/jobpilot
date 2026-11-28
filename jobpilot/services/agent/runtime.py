@@ -346,15 +346,17 @@ async def _drive(
     if interrupted := _interrupted_action(snapshot):
         await _pause(sessions, run, stream, interrupted, action_id)
         return False
-    exhausted = snapshot.values.get("budget_exhausted", False)
+    notice = snapshot.values.get("budget_exhausted", False)
+    stopped = notice or snapshot.values.get("tool_limit_reached", False)
     await _finish(
         sessions,
         run,
         stream,
-        RunStatus.BUDGET_EXHAUSTED if exhausted else RunStatus.SUCCEEDED,
+        RunStatus.BUDGET_EXHAUSTED if stopped else RunStatus.SUCCEEDED,
         snapshot.values.get("reply", ""),
         action_id,
-        StopReason.BUDGET_EXHAUSTED if exhausted else None,
+        StopReason.BUDGET_EXHAUSTED if stopped else None,
+        reply_streamed=not notice,
     )
     return True
 
@@ -418,6 +420,8 @@ async def _finish(
     reply: str,
     action_id: UUID | None,
     stop_reason: StopReason | None = None,
+    *,
+    reply_streamed: bool = False,
 ) -> None:
     async with sessions.begin() as session:
         run = await owned_agent_run(
@@ -442,6 +446,7 @@ async def _finish(
         stream.emit("error", {"message": reply})
     elif action and action.result_json and "error" in action.result_json:
         stream.emit("error", action.result_json)
-    elif status == RunStatus.BUDGET_EXHAUSTED:
+    elif status == RunStatus.BUDGET_EXHAUSTED and not reply_streamed:
+        # 固定提示没有经过模型流，要单独发；模型的答复已经逐字发过。
         stream.emit("text", {"text": reply})
     stream.emit("done", done_event(run, action))

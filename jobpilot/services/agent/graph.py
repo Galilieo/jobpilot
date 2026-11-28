@@ -93,8 +93,39 @@ _TOOL_FAILURES = (
 )
 
 
+_TOOL_LIMIT_RESULT = {
+    "status": "tool_limit_reached",
+    "error": "本轮工具调用次数已用完，这个调用没有执行。不要再调用工具，"
+    "根据已经拿到的信息直接回答；没查全的地方如实告诉用户。",
+}
+
+
 def _exhausted() -> AgentState:
     return {"reply": _BUDGET_REPLY, "budget_exhausted": True, "next_tool": "finish"}
+
+
+def _answer_without_tools(state: AgentState) -> AgentState:
+    """工具次数用完时不丢掉已查到的结果，让模型再答一次。
+
+    未执行的调用也要回一条工具消息，否则请求不符合工具调用协议。
+    模型仍要调用工具时才停下并给出固定提示，避免循环。
+    """
+    if state.get("tool_limit_reached"):
+        return _exhausted()
+    skipped = [
+        {
+            "role": "tool",
+            "tool_call_id": call["call_id"],
+            "content": serialize(_TOOL_LIMIT_RESULT),
+        }
+        for call in state["calls"]
+    ]
+    return {
+        "messages": [*state["messages"], *skipped],
+        "calls": [],
+        "tool_limit_reached": True,
+        "next_tool": "call_model",
+    }
 
 
 def _model_message(
@@ -265,7 +296,7 @@ def _select_tool(state: AgentState) -> AgentState:
     if not state["calls"]:
         return {"next_tool": "call_model"}
     if state["tools_left"] < 1:
-        return _exhausted()
+        return _answer_without_tools(state)
     tool = TOOLS.get(state["calls"][0]["name"])
     if tool is not None and tool.category in (ToolCategory.WRITE, ToolCategory.ASK):
         return {"next_tool": "propose_action"}

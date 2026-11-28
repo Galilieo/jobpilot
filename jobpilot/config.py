@@ -70,7 +70,9 @@ class AgentLimits(BaseModel):
     # 每轮 token 上限可选，默认不设：防失控靠调用和工具次数，费用靠服务商用量上限，
     # 与 Hermes、Claude Agent SDK、Pydantic AI 的做法一致。设了就是固定数，不随窗口变。
     model_tokens: int | None = Field(default=None, gt=0)
-    tool_calls: int = Field(default=12, ge=1, le=30)
+    # 只拦失控：搜一次再翻几段旧对话就要十几次读取，
+    # 2026-11-28 前的 12 次会把这种正常轮次截断。
+    tool_calls: int = Field(default=30, ge=1, le=60)
     seconds: float = Field(default=180, gt=0)
     context_window_ratio: float = Field(default=0.5, gt=0, le=1)
     # 目前只有本人使用，不另设上限，有效窗口即模型窗口的一半。
@@ -84,7 +86,8 @@ class AgentLimits(BaseModel):
     match_job_calls: int = Field(default=2, ge=1)
     tailor_resume_calls: int = Field(default=1, ge=1)
     parse_jd_without_attachments: int = Field(default=1, ge=1)
-    tool_result_bytes: int = Field(default=6000, ge=512)
+    # 单个工具结果的出站字节上限，要放得下一整页历史（history.MAX_HISTORY_BYTES）。
+    tool_result_bytes: int = Field(default=16_000, ge=512)
 
 
 class Settings(BaseSettings):

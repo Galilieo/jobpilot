@@ -29,8 +29,10 @@ from jobpilot.services.llm_gateway import (
 )
 
 MAX_HISTORY_PARTS = 10
-MAX_HISTORY_BYTES = 4500
-MAX_HISTORY_PART_BYTES = 1800
+# 按出站字节计（JSON 转义也算），中文一字三字节：一页约 4,500 字，一段约 1,500 字，
+# 一段多段长回复通常一次读完。2026-11-28 前一页只有约 1,500 字，翻旧对话常要翻好几页。
+MAX_HISTORY_BYTES = 13_500
+MAX_HISTORY_PART_BYTES = 4_500
 
 _OBJECT_TOOLS = {
     "job_id": "read_job",
@@ -212,13 +214,18 @@ def _search_offset(part: HistoryPart, needle: str) -> int:
     return -1
 
 
+def history_page_limits() -> tuple[int, int]:
+    """返回一页和一段的出站字节上限；一页至少放得下三段。"""
+    budget = min(MAX_HISTORY_BYTES, settings.agent_limits.tool_result_bytes)
+    return budget, min(MAX_HISTORY_PART_BYTES, budget // 3)
+
+
 async def read_history(context: ToolContext, args: HistoryArgs) -> Payload:
     agent = context.agent
     conversation_id = args.conversation_id or agent.conversation_id
     cursor = args.cursor or HistoryCursor(seq=args.start_seq or 1, part=0)
     rows: list[Payload] = []
-    budget = min(MAX_HISTORY_BYTES, settings.agent_limits.tool_result_bytes)
-    limit = min(MAX_HISTORY_PART_BYTES, budget // 3)
+    budget, limit = history_page_limits()
     needle = args.query.casefold() if args.query else None
     async with agent.sessions() as session:
         if args.conversation_id is not None and not await find_conversation(

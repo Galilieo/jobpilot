@@ -80,6 +80,8 @@ class AgentState(TypedDict, total=False):
     action_id: str
     reply: str
     budget_exhausted: bool
+    # 工具次数用完后已让模型不调工具再答一次；运行仍记为额度用完。
+    tool_limit_reached: bool
     asked: bool
     message_used_as_jd: bool
     clarification: str | None

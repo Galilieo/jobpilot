@@ -10,6 +10,7 @@ from sqlalchemy import select
 from jobpilot.api.deps import get_model_client
 from jobpilot.db.models import AgentAction, Message
 from jobpilot.main import app
+from jobpilot.services.agent.history import history_page_limits
 from jobpilot.tests.test_agent_api import (
     batch,
     card_of,
@@ -53,9 +54,10 @@ async def test_history_page_resumes_at_whole_contact_before_redaction(
             return batch(("read_conversation_history", {"start_seq": 1}))
         return reply()
 
-    # 单段上限 1500 出站字节，JSON 两个引号之后还剩 1498 字节。
-    prefix = "甲" * 498
-    assert len(prefix.encode()) == 1494
+    # JSON 两个引号之后剩下的字节放满汉字，联系方式正好跨过单段边界。
+    _, limit = history_page_limits()
+    prefix = "甲" * ((limit - 2) // 3)
+    assert len(prefix.encode()) > limit - 2 - 3
     async with fake_upstream(respond) as fake:
         app.dependency_overrides[get_model_client] = lambda: fake
         attachment = {"text": prefix + contact + "乙"}
@@ -212,3 +214,35 @@ async def test_history_keyword_recovers_legacy_answer_and_unescaped_attachment(
     answers = [row for row in results[0]["rows"] if row["source"] == "question_answer"]
     assert [row["text"] for row in answers] == ["接受外包吗？\n不接受外包"]
     assert any(row["text"] == attachment_text for row in results[1]["rows"])
+
+
+async def test_long_chinese_reply_is_read_in_one_page(
+    async_client: httpx.AsyncClient,
+) -> None:
+    # 中文一个字占三个出站字节；一条常见的长回复不该要翻好几页才读完。
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    long_reply = "这段回复讲压测写法。" * 120
+    pages = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        last = loads(request.content)["messages"][-1]
+        if last["role"] == "tool":
+            content = last["content"]
+            pages.append(loads(content[content.index("\n") + 1 : content.rindex("\n")]))
+        elif last["content"] == "写一段长的":
+            return reply(long_reply)
+        elif last["content"] == "读回来":
+            return batch(("read_conversation_history", {"start_seq": 1}))
+        return reply()
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        for text in ("写一段长的", "读回来"):
+            sent = await async_client.post(f"{path}/messages", json=message_body(text))
+            assert sent.status_code == 200
+    assert len(long_reply) == 1200
+    (page,) = pages
+    assert [row["text"] for row in page["rows"] if row["source"] == "assistant"][
+        0
+    ] == long_reply
