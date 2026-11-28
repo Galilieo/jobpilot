@@ -192,8 +192,11 @@ TOOLS = {
         _register(
             "remember",
             ToolCategory.RECORD,
-            "自动记录本轮正文表达的长期偏好或对 Agent 的要求。"
-            "quote 逐字引用本轮正文；改口用 replaces 引用记忆 ID。"
+            "记录本轮正文表达的长期偏好或对 Agent 的要求。"
+            "quote 须逐字引用本轮正文的完整句子（逗号不算句界）；"
+            "改口用 replaces 引用记忆 ID。"
+            "仅在正文较短且未带附件、未读取外部内容时自动记录，"
+            "否则由服务端自动转为确认卡，无需自行判断。"
             "经历、求职条件、JD、进度和一次性要求不记；"
             "敏感信息仅在用户明确要求时记录。",
             RememberArgs,
@@ -202,15 +205,17 @@ TOOLS = {
         _register(
             "forget",
             ToolCategory.RECORD,
-            "按记忆 ID 忘掉用户要求删除或已改口作废的长期记忆。"
-            "quote 逐字引用本轮正文。",
+            "按记忆 ID 提议忘掉用户要求删除或已改口作废的长期记忆，须用户确认。"
+            "quote 须逐字引用本轮正文的完整句子。",
             ForgetArgs,
             record_memory,
         ),
         _register(
             "set_writing_preference",
             ToolCategory.RECORD,
-            "按本轮正文自动设置长期简历写作偏好，可用 null 恢复默认。"
+            "按本轮正文设置长期简历写作偏好，可用 null 恢复默认。"
+            "quote 须逐字引用本轮正文的完整句子；"
+            "来源干净时自动记录，否则转为确认卡。"
             + "；".join(
                 f"{field}：{'、'.join(choices)}"
                 for field, choices in WRITING_CHOICE_TYPES.items()

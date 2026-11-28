@@ -8,9 +8,11 @@ import pytest
 
 from jobpilot.api.deps import get_model_client
 from jobpilot.config import settings
+from jobpilot.db.memory_schema import MEMORY_AUTO_MAX_BODY_CHARS
 from jobpilot.main import app
 from jobpilot.tests.test_agent_api import (
     batch,
+    card_of,
     conversation,
     done_of,
     events,
@@ -111,16 +113,32 @@ async def test_record_duplicate_and_undo_add_replace_forget(
     assert (await entries(async_client))[0]["content"] == CONTENT
 
     forget = ("forget", {"memory_id": memory_id, "quote": "忘掉外包偏好"})
-    (deleted,) = await call(async_client, path, "忘掉外包偏好", forget)
-    assert deleted["status"] == "forgotten"
+    async with fake_upstream(
+        lambda request: (
+            reply()
+            if loads(request.content)["messages"][-1]["role"] == "tool"
+            else batch(forget)
+        )
+    ) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        forget_response = await send(async_client, path, "忘掉外包偏好")
+        card = card_of(forget_response)
+        assert card["tool"] == "forget"
+        assert card["args"]["content"] == CONTENT
+        assert card["args"]["quote"] == "忘掉外包偏好"
+        assert len(await entries(async_client)) == 1
+        confirmed = await async_client.post(
+            f"{path}/actions/{card['action_id']}", json={"decision": "confirm"}
+        )
+    assert done_of(confirmed)["status"] == "succeeded"
     assert await entries(async_client) == []
-    assert (
-        await async_client.post(f"/api/actions/{deleted['detail']['action_id']}/undo")
-    ).json()["result"]["revision"] == 5
+    assert (await async_client.post(f"/api/actions/{card['action_id']}/undo")).json()[
+        "result"
+    ]["revision"] == 5
     assert (await entries(async_client))[0]["content"] == CONTENT
     assert set((await async_client.get(path)).json()["undone_record_actions"]) == {
         replacement["detail"]["action_id"],
-        deleted["detail"]["action_id"],
+        card["action_id"],
     }
 
     (new,) = await call(async_client, path, QUOTE, remember(content="排除劳务派遣"))
@@ -128,6 +146,102 @@ async def test_record_duplicate_and_undo_add_replace_forget(
         f"/api/actions/{new['detail']['action_id']}/undo"
     )
     assert undo_add.json()["result"]["revision"] == 2
+    assert len(await entries(async_client)) == 1
+
+
+@pytest.mark.parametrize(
+    ("body", "quote"),
+    [
+        ("不要忘掉外包那条", "忘掉外包那条"),
+        ("我接受外包，但仅限暑期岗。", "我接受外包"),
+    ],
+)
+async def test_partial_sentence_quote_is_rejected(
+    async_client: httpx.AsyncClient, body: str, quote: str
+):
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    (step,) = await call(async_client, path, body, remember(quote))
+    assert step["status"] == 422
+    assert await entries(async_client) == []
+
+
+async def test_suspicious_body_and_attachments_require_confirmation_card(
+    async_client: httpx.AsyncClient,
+):
+    await sign_in(async_client)
+    path = await conversation(async_client)
+    long_jd = "岗位职责：负责后端开发。" * 25 + "\n" + QUOTE
+    assert len(long_jd) > MEMORY_AUTO_MAX_BODY_CHARS
+
+    def respond(request: httpx.Request):
+        messages = loads(request.content)["messages"]
+        if messages[-1]["role"] == "tool":
+            return reply()
+        return batch(remember())
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        first = await send(async_client, path, long_jd)
+        card = card_of(first)
+        assert card["tool"] == "remember"
+        assert card["args"]["content"] == CONTENT
+        assert card["args"]["quote"] == QUOTE
+        assert await entries(async_client) == []
+        confirmed = await async_client.post(
+            f"{path}/actions/{card['action_id']}", json={"decision": "confirm"}
+        )
+        assert done_of(confirmed)["status"] == "succeeded"
+        (saved,) = await entries(async_client)
+        assert saved["content"] == CONTENT
+        undo = await async_client.post(f"/api/actions/{card['action_id']}/undo")
+        assert undo.status_code == 200
+        assert await entries(async_client) == []
+
+        with_attachment = await send(
+            async_client, path, QUOTE, attachments=[{"text": "岗位附件文本"}]
+        )
+        att_card = card_of(with_attachment)
+        assert att_card["tool"] == "remember"
+        rejected = await async_client.post(
+            f"{path}/actions/{att_card['action_id']}", json={"decision": "reject"}
+        )
+        assert done_of(rejected)["status"] == "succeeded"
+        assert await entries(async_client) == []
+
+
+async def test_external_tool_in_same_turn_forces_confirmation_card(
+    async_client: httpx.AsyncClient,
+):
+    await sign_in(async_client)
+    other_path = await conversation(async_client)
+    path = await conversation(async_client)
+    other_id = other_path.rsplit("/", 1)[-1]
+
+    def respond(request: httpx.Request):
+        messages = loads(request.content)["messages"]
+        if messages[-1]["role"] == "tool":
+            if len([m for m in messages if m["role"] == "tool"]) == 1:
+                return batch(remember())
+            return reply()
+        return batch(
+            (
+                "read_conversation_history",
+                {"conversation_id": other_id, "start_seq": 1},
+            )
+        )
+
+    async with fake_upstream(respond) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        await send(async_client, other_path, "旧对话里的内容")
+        res = await send(async_client, path, QUOTE)
+        card = card_of(res)
+        assert card["tool"] == "remember"
+        assert await entries(async_client) == []
+        confirmed = await async_client.post(
+            f"{path}/actions/{card['action_id']}", json={"decision": "confirm"}
+        )
+    assert done_of(confirmed)["status"] == "succeeded"
     assert len(await entries(async_client)) == 1
 
 

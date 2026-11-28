@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jobpilot.config import ModelPurpose, settings
+from jobpilot.db.accounts import lock_active_account
 from jobpilot.db.conversations import (
     add_message,
     agent_input,
@@ -42,7 +43,8 @@ from jobpilot.services.agent.context import (
     serialize_tool_result,
     summarize_tool_call,
 )
-from jobpilot.services.agent.memory_actions import RECORD_TOOLS
+from jobpilot.services.agent.history import HistoryArgs
+from jobpilot.services.agent.memory_actions import RECORD_TOOLS, prepare_memory
 from jobpilot.services.agent.questions import (
     JOB_CHOICE_QUESTION,
     JobSelection,
@@ -292,13 +294,45 @@ async def _call_model(
     }
 
 
+_EXTERNAL_CONTEXT_TOOLS = frozenset({"parse_jd", "read_job", "search_conversations"})
+
+
+def _reads_external_context(agent: AgentDeps, call: ToolCall) -> bool:
+    if call["name"] in _EXTERNAL_CONTEXT_TOOLS:
+        return True
+    if call["name"] != "read_conversation_history":
+        return False
+    try:
+        args = TOOLS["read_conversation_history"].parse_arguments(call["arguments"])
+    except ToolError:
+        return False
+    return (
+        isinstance(args, HistoryArgs)
+        and args.conversation_id is not None
+        and args.conversation_id != agent.conversation_id
+    )
+
+
+def _needs_memory_confirmation(state: AgentState, name: str) -> bool:
+    if name not in RECORD_TOOLS:
+        return False
+    if name == "forget":
+        return True
+    return not state.get("input_clean", False) or state.get(
+        "external_context_read", False
+    )
+
+
 def _select_tool(state: AgentState) -> AgentState:
     if not state["calls"]:
         return {"next_tool": "call_model"}
     if state["tools_left"] < 1:
         return _answer_without_tools(state)
     tool = TOOLS.get(state["calls"][0]["name"])
-    if tool is not None and tool.category in (ToolCategory.WRITE, ToolCategory.ASK):
+    if tool is not None and (
+        tool.category in (ToolCategory.WRITE, ToolCategory.ASK)
+        or _needs_memory_confirmation(state, tool.name)
+    ):
         return {"next_tool": "propose_action"}
     return {"next_tool": "execute_tool"}
 
@@ -487,6 +521,8 @@ async def _execute_tool(agent: AgentDeps, state: AgentState) -> AgentState:
     }
     if result.get("status") == "budget_exhausted":
         return {**updates, **_exhausted()}
+    if _reads_external_context(agent, call) and "error" not in result:
+        updates["external_context_read"] = True
     if call["name"] == "parse_jd" and tool_update and (job_id := result.get("job_id")):
         if await _bind_parsed_job(agent, UUID(job_id)):
             updates["switch_job_id"] = job_id
@@ -545,14 +581,26 @@ async def _propose(agent: AgentDeps, state: AgentState) -> AgentState:
                 if state["asked"]
                 else await _ask_arguments(agent, state)
             )
+        elif call["name"] in RECORD_TOOLS:
+            parsed_args = TOOLS[call["name"]].parse_arguments(call["arguments"])
+            args = await prepare_memory(
+                ToolContext(
+                    agent,
+                    call,
+                    message_used_as_jd=state.get("message_used_as_jd", False),
+                ),
+                parsed_args,
+            )
         else:
             args = await _result_for(
                 agent, call, message_used_as_jd=state.get("message_used_as_jd", False)
             )
+    except ToolError as error:
+        args = {"status": error.status, "error": str(error)}
     except BudgetExhaustedError:
         await _record(agent, call, {"status": "budget_exhausted"})
         return {"seconds_left": agent.seconds_left, **_exhausted()}
-    if "error" in args:
+    if "error" in args or args.get("status") == "exists":
         await _record(agent, call, args)
         return {
             "seconds_left": agent.seconds_left,
@@ -619,6 +667,10 @@ async def _apply(agent: AgentDeps, state: AgentState) -> AgentState:
     ask = call["name"] == "ask_user"
     calls = state["calls"][: state["tools_left"]] if ask else [call]
     async with agent.sessions.begin() as session:
+        if not await lock_active_account(
+            session, agent.user_id, exclusive=call["name"] in RECORD_TOOLS
+        ):
+            raise ToolError("账号当前无法执行对话操作", 403)
         conversation = await find_conversation(
             agent.user_id, session, agent.conversation_id, lock=True
         )

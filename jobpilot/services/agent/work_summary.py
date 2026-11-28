@@ -1,7 +1,6 @@
 """校验和渲染有来源的滚动工作摘要。"""
 
-import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from json import dumps
 from typing import Annotated
 from uuid import UUID
@@ -9,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from jobpilot.services.llm_gateway import preview_text, wrap_untrusted_text
-from jobpilot.services.text_clauses import CLAUSE_PUNCTUATION
+from jobpilot.services.text_clauses import contains_complete_sentence
 
 MAX_ITEMS = 12
 MAX_REQUIREMENTS = 24
@@ -17,7 +16,6 @@ MAX_ITEM_CHARACTERS = 240
 MAX_QUOTE_CHARACTERS = 100
 MAX_QUESTION_CHARACTERS = 2000
 _LOOKUP_HINT = "可以用 read_conversation_history 按消息序号或关键词查原文。"
-_BOUNDARY = frozenset(CLAUSE_PUNCTUATION + ".")
 
 SummaryText = Annotated[
     str,
@@ -99,25 +97,8 @@ class StoredWorkSummary(WorkSummary):
 
 
 def contains_complete_quote(body: str, quote: str) -> bool:
-    """逐字核对一条或相邻几条短句，允许省略末尾的分句标点。"""
-    quote = quote.strip()
-    if not quote or not set(quote) - _BOUNDARY:
-        return False
-    for match in re.finditer(re.escape(quote), body):
-        if _touches_boundary(reversed(body[: match.start()])) and (
-            quote[-1] in _BOUNDARY or _touches_boundary(body[match.end() :])
-        ):
-            return True
-    return False
-
-
-def _touches_boundary(characters: Iterable[str]) -> bool:
-    for character in characters:
-        if character in _BOUNDARY:
-            return True
-        if not character.isspace():
-            return False
-    return True
+    """逐字核对一条或相邻几条完整句子，保留含限定语的整句。"""
+    return contains_complete_sentence(body, quote)
 
 
 def _has_quote(

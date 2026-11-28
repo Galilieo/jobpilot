@@ -156,7 +156,7 @@ async def revision_memory(
     return row
 
 
-def _check_capacity(
+def check_memory_capacity(
     rows: list[Memory],
     entry: MemoryInput,
     current: Memory | None,
@@ -187,7 +187,7 @@ async def save_memory(
     source: dict[str, str],
     current: Memory | None = None,
 ) -> tuple[Memory, bool]:
-    existing = _check_capacity(rows, entry, current)
+    existing = check_memory_capacity(rows, entry, current)
     if existing is not None:
         return existing, False
     if current is None:
@@ -222,7 +222,7 @@ async def restore_memory(
     source: dict[str, str],
 ) -> None:
     rows = await list_memories(row.user_id, session)
-    existing = _check_capacity(rows, previous, row)
+    existing = check_memory_capacity(rows, previous, row)
     if existing is not None and existing is not row:
         raise MemoryError("已有相同的记忆，无法撤销", 409)
     row.category = previous.category

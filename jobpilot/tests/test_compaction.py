@@ -52,17 +52,37 @@ def test_summary_requirements_use_complete_source_clauses() -> None:
                     "statement": "颠倒了原话",
                     "source": {"message_seq": 1},
                 },
+                {
+                    "id": "r5",
+                    "quote": "我接受外包",
+                    "statement": "无条件接受外包",
+                    "source": {"message_seq": 3},
+                },
+                {
+                    "id": "r6",
+                    "quote": "我接受外包，但仅限有转正机会的暑期岗",
+                    "statement": "有条件接受外包",
+                    "source": {"message_seq": 3},
+                },
             ],
         }
     )
     checked = checked_summary(
         summary,
-        {1: "期望条件。　我不接受外包。下次再说", 2: "北京或上海都可以，但不去深圳！"},
+        {
+            1: "期望条件。　我不接受外包。下次再说",
+            2: "北京或上海都可以，但不去深圳！",
+            3: "我接受外包，但仅限有转正机会的暑期岗。",
+        },
         {},
-        through_seq=2,
+        through_seq=3,
     )
-    assert [requirement.id for requirement in checked.requirements] == ["r2", "r4"]
-    assert checked.unverified == ["用户接受外包", "用户要去深圳"]
+    assert [requirement.id for requirement in checked.requirements] == [
+        "r2",
+        "r4",
+        "r6",
+    ]
+    assert checked.unverified == ["用户接受外包", "用户要去深圳", "无条件接受外包"]
     rendered = render_summary(checked)
     assert "- 北京或上海都可以，但不去深圳" in rendered
     assert "- 我不接受外包。" in rendered

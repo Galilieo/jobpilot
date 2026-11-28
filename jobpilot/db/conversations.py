@@ -183,14 +183,18 @@ async def pending_action(
 async def latest_decided_action(
     user_id: UUID, session: AsyncSession, conversation_id: UUID
 ) -> AgentAction | None:
-    """已决定卡可跨轮回读，包含后来撤销的动作。"""
+    """已决定卡可跨轮回读，包含后来撤销的动作，不包括未出卡的自动记录。"""
     return await session.scalar(
         select(AgentAction)
+        .join(
+            Message,
+            (Message.run_id == AgentAction.run_id)
+            & (Message.event_key == func.concat("confirm:", AgentAction.action_id)),
+        )
         .where(
             AgentAction.user_id == user_id,
             AgentAction.conversation_id == conversation_id,
             AgentAction.decided_at.is_not(None),
-            AgentAction.undo_json["record_type"].astext.is_(None),
         )
         .order_by(AgentAction.decided_at.desc(), AgentAction.action_id.desc())
         .limit(1)

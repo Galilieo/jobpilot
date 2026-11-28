@@ -217,12 +217,50 @@ it('升级前尚未决定的记忆卡可关闭', async () => {
     ...base,
     kind: 'confirmation',
     tool: 'remember',
-    args: {},
+    args: { key: 'excluded_types' },
   }
   renderWithProviders(<PendingCard card={card} title={title} decide={decide} />)
   expect(screen.getByText('旧版记忆确认')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /关\s?闭/ }))
   expect(decide).toHaveBeenCalledWith({ decision: 'reject' })
+})
+
+it('新版记忆和遗忘确认卡标明记忆与来源原话，忘记显示待删原文', async () => {
+  const user = userEvent.setup()
+  const decide = vi.fn(async () => null)
+  const rememberCard: AgentActionCard = {
+    ...base,
+    kind: 'confirmation',
+    tool: 'remember',
+    args: { category: 'job_pref', content: '不投外包公司', quote: '我不投外包' },
+  }
+  const forgetCard: AgentActionCard = {
+    ...base,
+    action_id: 'a2',
+    kind: 'confirmation',
+    tool: 'forget',
+    args: {
+      memory_id: 'm1',
+      category: 'job_pref',
+      content: '不投外包公司',
+      quote: '外包也可以看看',
+    },
+  }
+  renderWithProviders(
+    <>
+      <PendingCard card={rememberCard} title={title} decide={decide} />
+      <PendingCard card={forgetCard} title={title} decide={decide} />
+    </>,
+  )
+  expect(screen.getByText('记住记忆')).toBeInTheDocument()
+  expect(screen.getByText('忘记记忆')).toBeInTheDocument()
+  expect(screen.getAllByText('不投外包公司')).toHaveLength(2)
+  expect(screen.getByText('你说的「我不投外包」')).toBeInTheDocument()
+  expect(screen.getByText('你说的「外包也可以看看」')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: '确认记住' }))
+  expect(decide).toHaveBeenCalledWith({ decision: 'confirm' })
+  await user.click(screen.getByRole('button', { name: '确认忘记' }))
+  expect(decide).toHaveBeenCalledTimes(2)
 })
 
 it('shows the application details and offers undo after the confirmed write', async () => {

@@ -13,6 +13,7 @@ from jobpilot.config import settings
 from jobpilot.db.conversations import find_conversation
 from jobpilot.db.history import unsummarized_messages
 from jobpilot.db.memories import list_memories
+from jobpilot.db.memory_schema import MEMORY_AUTO_MAX_BODY_CHARS
 from jobpilot.db.models import Conversation, Message, MessageRole
 from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.read_tools import current_job_summary
@@ -233,6 +234,19 @@ async def build_context(agent: AgentDeps) -> AgentState:
         through = conversation.summary_through_seq if conversation else 0
         rows = await unsummarized_messages(user_id, session, conversation_id, through)
     messages, boundaries = _render_history(rows, agent.run_id)
+    current_user = next(
+        (
+            row
+            for row in rows
+            if row.run_id == agent.run_id and row.role == MessageRole.USER
+        ),
+        None,
+    )
+    input_clean = bool(
+        current_user is not None
+        and not current_user.attachments_json
+        and len(current_user.content) <= MEMORY_AUTO_MAX_BODY_CHARS
+    )
     return {
         "messages": messages,
         "history_boundaries": boundaries,
@@ -242,6 +256,8 @@ async def build_context(agent: AgentDeps) -> AgentState:
         "calls": [],
         "asked": False,
         "message_used_as_jd": False,
+        "input_clean": input_clean,
+        "external_context_read": False,
         "clarification": None,
         "action_id": "",
         "switch_job_id": None,

@@ -84,6 +84,8 @@ class AgentState(TypedDict, total=False):
     tool_limit_reached: bool
     asked: bool
     message_used_as_jd: bool
+    input_clean: bool
+    external_context_read: bool
     clarification: str | None
     switch_job_id: str | None
     generation_results: dict[str, dict[str, Payload]]

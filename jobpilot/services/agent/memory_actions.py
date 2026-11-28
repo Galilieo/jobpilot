@@ -20,7 +20,11 @@ from jobpilot.db.memories import (
     find_writing_preference,
     list_memories,
 )
-from jobpilot.db.memory_schema import MEMORY_WRITES_PER_RUN, WritingField
+from jobpilot.db.memory_schema import (
+    MEMORY_WRITES_PER_RUN,
+    WRITING_LABELS,
+    WritingField,
+)
 from jobpilot.db.models import (
     ActionStatus,
     AgentAction,
@@ -28,6 +32,7 @@ from jobpilot.db.models import (
     MessageRole,
     RunStatus,
 )
+from jobpilot.db.runs import ACTIVE_RUN_STATUSES
 from jobpilot.services.agent.context import summarize_tool_call
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext, ToolError
 from jobpilot.services.memories import (
@@ -36,11 +41,13 @@ from jobpilot.services.memories import (
     MemoryInput,
     MemoryReference,
     active_memory,
+    check_memory_capacity,
     delete_memory,
     require_memory_account,
     restore_memory,
     save_memory,
 )
+from jobpilot.services.text_clauses import contains_complete_sentence
 from jobpilot.services.writing_preferences import (
     WritingPreferences,
     options_from_row,
@@ -91,15 +98,62 @@ def _source(message: Message, quote: str) -> dict[str, str]:
     }
 
 
+def _memory_error_payload(error: MemoryError) -> Payload:
+    result: Payload = {"status": error.status, "error": str(error)}
+    if error.entries is not None:
+        result["entries"] = error.entries
+    return result
+
+
+def _validate_quote(
+    message: Message | None, quote: str, *, message_used_as_jd: bool
+) -> Message:
+    if (
+        message is None
+        or message_used_as_jd
+        or not contains_complete_sentence(message.content, quote)
+    ):
+        raise MemoryError(
+            "记忆依据必须逐字来自本轮用户正文的完整句子，且正文未被用作 JD", 422
+        )
+    return message
+
+
+async def _validate_run_limit(
+    session: AsyncSession, user_id: UUID, run_id: UUID
+) -> None:
+    if await count_record_actions(session, user_id, run_id) >= MEMORY_WRITES_PER_RUN:
+        raise MemoryError("本轮已达到记忆写入上限", 422)
+
+
+def _validate_writing_values(
+    previous: WritingPreferences, field: WritingField, value: str | None
+) -> WritingPreferences:
+    try:
+        return WritingPreferences.model_validate(
+            {**previous.model_dump(), field: value}
+        )
+    except ValidationError:
+        raise MemoryError("写作偏好必须使用给定选项或默认值", 422) from None
+
+
 async def _change_entry(
     session: AsyncSession,
     user_id: UUID,
     args: RememberArgs | ForgetArgs,
     source: dict[str, str],
+    *,
+    expected_revision: int | None = None,
 ) -> tuple[Payload, Payload | None]:
     rows = await list_memories(user_id, session)
     reference = args.memory_id if isinstance(args, ForgetArgs) else args.replaces
     current = active_memory(rows, reference) if reference else None
+    if (
+        expected_revision is not None
+        and current is not None
+        and current.revision != expected_revision
+    ):
+        raise MemoryError("记忆已在别处更新，请刷新后重试", 409)
     previous = (
         MemoryInput(category=current.category, content=current.content)
         if current
@@ -141,12 +195,7 @@ async def _change_preference(
     row = await find_writing_preference(session, user_id)
     previous = options_from_row(row)
     old_source = row.source if row else MANUAL_SOURCE
-    try:
-        values = WritingPreferences.model_validate(
-            {**previous.model_dump(), args.field: args.value}
-        )
-    except ValidationError:
-        raise MemoryError("写作偏好必须使用给定选项或默认值", 422) from None
+    values = _validate_writing_values(previous, args.field, args.value)
     result = {"field": args.field, "value": args.value}
     if previous == values:
         return {"status": "exists", **result}, None
@@ -160,6 +209,138 @@ async def _change_preference(
     }
 
 
+async def prepare_memory(
+    context: ToolContext,
+    args: RememberArgs | ForgetArgs | SetWritingPreferenceArgs,
+) -> Payload:
+    """确认卡出卡前校验来源整句、上限与现有条目，并返回展示所需参数。"""
+    agent = context.agent
+    try:
+        async with agent.sessions() as session:
+            run = await owned_agent_run(
+                agent.user_id, session, agent.conversation_id, agent.run_id
+            )
+            if run is None or run.status not in ACTIVE_RUN_STATUSES:
+                raise MemoryError("对话运行已结束", 409)
+            message = _validate_quote(
+                await agent_input(agent.user_id, session, run.run_id),
+                args.quote,
+                message_used_as_jd=context.message_used_as_jd,
+            )
+            await _validate_run_limit(session, agent.user_id, run.run_id)
+            return await _prepare_card_args(session, agent.user_id, args, message)
+    except MemoryError as error:
+        return _memory_error_payload(error)
+
+
+async def _prepare_card_args(
+    session: AsyncSession,
+    user_id: UUID,
+    args: RememberArgs | ForgetArgs | SetWritingPreferenceArgs,
+    message: Message,
+) -> Payload:
+    del message
+    if isinstance(args, SetWritingPreferenceArgs):
+        row = await find_writing_preference(session, user_id)
+        previous = options_from_row(row)
+        values = _validate_writing_values(previous, args.field, args.value)
+        if previous == values:
+            return {"status": "exists", "field": args.field, "value": args.value}
+        return {
+            "field": args.field,
+            "field_label": WRITING_LABELS[args.field],
+            "value": args.value,
+            "previous_value": getattr(previous, args.field),
+            "quote": args.quote,
+        }
+    rows = await list_memories(user_id, session)
+    if isinstance(args, ForgetArgs):
+        current = active_memory(rows, args.memory_id)
+        return {
+            "memory_id": str(current.memory_id),
+            "category": current.category,
+            "content": current.content,
+            "expected_revision": current.revision,
+            "quote": args.quote,
+        }
+    current = active_memory(rows, args.replaces) if args.replaces else None
+    existing = check_memory_capacity(
+        rows, MemoryInput(category=args.category, content=args.content), current
+    )
+    if existing is not None:
+        return {
+            "status": "exists",
+            "content": existing.content,
+            "memory_id": str(existing.memory_id),
+        }
+    payload: Payload = {
+        "category": args.category,
+        "content": args.content,
+        "quote": args.quote,
+    }
+    if current is not None:
+        payload.update(
+            {
+                "replaces": str(current.memory_id),
+                "previous_content": current.content,
+                "expected_revision": current.revision,
+            }
+        )
+    return payload
+
+
+async def apply_memory_card(
+    session: AsyncSession, action: AgentAction
+) -> tuple[Payload, Payload | None]:
+    """确认卡批准后在主事务内执行记忆写入，并返回工具结果与撤销信息。"""
+    args_json = action.args_json
+    quote = str(args_json["quote"])
+    message = _validate_quote(
+        await agent_input(action.user_id, session, action.run_id),
+        quote,
+        message_used_as_jd=False,
+    )
+    await _validate_run_limit(session, action.user_id, action.run_id)
+    source = _source(message, quote)
+    if action.tool == "set_writing_preference":
+        parsed = SetWritingPreferenceArgs.model_validate(
+            {
+                "field": args_json["field"],
+                "value": args_json.get("value"),
+                "quote": quote,
+            }
+        )
+        result, undo = await _change_preference(session, action.user_id, parsed, source)
+    elif action.tool == "forget":
+        parsed = ForgetArgs.model_validate(
+            {"memory_id": args_json["memory_id"], "quote": quote}
+        )
+        result, undo = await _change_entry(
+            session,
+            action.user_id,
+            parsed,
+            source,
+            expected_revision=args_json.get("expected_revision"),
+        )
+    else:
+        parsed = RememberArgs.model_validate(
+            {
+                "category": args_json["category"],
+                "content": args_json["content"],
+                "quote": quote,
+                "replaces": args_json.get("replaces"),
+            }
+        )
+        result, undo = await _change_entry(
+            session,
+            action.user_id,
+            parsed,
+            source,
+            expected_revision=args_json.get("expected_revision"),
+        )
+    return {**result, "quote": quote, "action_id": str(action.action_id)}, undo
+
+
 async def record_memory(
     context: ToolContext,
     args: RememberArgs | ForgetArgs | SetWritingPreferenceArgs,
@@ -169,10 +350,7 @@ async def record_memory(
         async with agent.sessions.begin() as session:
             return await _record(session, context, args)
     except MemoryError as error:
-        result = {"status": error.status, "error": str(error)}
-        if error.entries is not None:
-            result["entries"] = error.entries
-        return result
+        return _memory_error_payload(error)
 
 
 async def _record(
@@ -190,19 +368,12 @@ async def _record(
     prior = await find_tool_action(session, agent.user_id, run.run_id, call["key"])
     if prior is not None:
         return prior.result_json or {"status": 409, "error": "旧版记忆操作已失效"}
-    message = await agent_input(agent.user_id, session, run.run_id)
-    if (
-        message is None
-        or context.message_used_as_jd
-        or not args.quote.strip()
-        or args.quote not in message.content
-    ):
-        raise MemoryError("记忆依据必须逐字来自本轮用户正文，且正文未被用作 JD", 422)
-    if (
-        await count_record_actions(session, agent.user_id, run.run_id)
-        >= MEMORY_WRITES_PER_RUN
-    ):
-        raise MemoryError("本轮已达到记忆写入上限", 422)
+    message = _validate_quote(
+        await agent_input(agent.user_id, session, run.run_id),
+        args.quote,
+        message_used_as_jd=context.message_used_as_jd,
+    )
+    await _validate_run_limit(session, agent.user_id, run.run_id)
 
     source = _source(message, args.quote)
     if isinstance(args, SetWritingPreferenceArgs):

@@ -43,6 +43,12 @@ const MEMORY_LABEL_FALLBACK: Record<string, string> = {
   tech_terms: '技术名写法',
 }
 
+const WRITING_FIELD_LABEL: Record<string, string> = {
+  tone: '语气',
+  bullet_length: '每条长度',
+  tech_terms: '技术名写法',
+}
+
 /** 点下后立即禁用（React 对点击同步更新），失败才恢复；同一张卡不会因为连点提交两次。 */
 function useOnceSubmit(decide: Decide) {
   const { message } = App.useApp()
@@ -215,16 +221,76 @@ function confirmationView(card: AgentActionCard, title: JobTitle) {
       reject: '不记录',
     }
   }
-  if (card.tool === 'remember' || card.tool === 'forget') {
+  if (
+    card.tool === 'remember' ||
+    card.tool === 'forget' ||
+    card.tool === 'set_writing_preference'
+  ) {
+    const quote = typeof args.quote === 'string' ? args.quote : null
+    if (quote === null) {
+      return {
+        kind: '旧版记忆确认',
+        body: (
+          <div className="action-card-content">
+            关闭这张确认卡后，可以直接在对话里说出想记住或忘掉的偏好。
+          </div>
+        ),
+        confirm: null,
+        reject: '关闭',
+      }
+    }
+    if (card.tool === 'forget') {
+      return {
+        kind: '忘记记忆',
+        subtitle: '长期记忆',
+        body: (
+          <div className="action-card-content">
+            <p>{String(args.content ?? '')}</p>
+            <Typography.Text type="secondary">你说的「{quote}」</Typography.Text>
+          </div>
+        ),
+        confirm: '确认忘记',
+        reject: '保留',
+      }
+    }
+    if (card.tool === 'set_writing_preference') {
+      const label =
+        typeof args.field_label === 'string'
+          ? args.field_label
+          : (WRITING_FIELD_LABEL[String(args.field ?? '')] ?? '写作偏好')
+      const value = typeof args.value === 'string' ? args.value : '默认'
+      return {
+        kind: '设置写作偏好',
+        subtitle: '长期记忆',
+        body: (
+          <div className="action-card-content">
+            <p>
+              {label}设为「{value}」
+            </p>
+            <Typography.Text type="secondary">你说的「{quote}」</Typography.Text>
+          </div>
+        ),
+        confirm: '确认设置',
+        reject: '不改了',
+      }
+    }
+    const previous = typeof args.previous_content === 'string' ? args.previous_content : null
     return {
-      kind: '旧版记忆确认',
+      kind: '记住记忆',
+      subtitle: previous ? '替换记忆' : '长期记忆',
       body: (
         <div className="action-card-content">
-          关闭这张确认卡后，可以直接在对话里说出想记住或忘掉的偏好。
+          {previous && (
+            <p>
+              <del>{previous}</del>
+            </p>
+          )}
+          <p>{String(args.content ?? '')}</p>
+          <Typography.Text type="secondary">你说的「{quote}」</Typography.Text>
         </div>
       ),
-      confirm: null,
-      reject: '关闭',
+      confirm: '确认记住',
+      reject: '不记了',
     }
   }
   return {
@@ -247,7 +313,7 @@ function ConfirmationCard(props: {
   const { submitting, submit } = useOnceSubmit(props.decide)
   const view = confirmationView(props.card, props.title)
   return (
-    <CardFrame kind={view.kind}>
+    <CardFrame kind={view.kind} subtitle={view.subtitle}>
       {view.body}
       <div className="action-card-actions">
         <Button
@@ -382,7 +448,14 @@ export function PendingCard(props: {
 
 // ---------- 决定之后 ----------
 
-const UNDOABLE_TOOLS = new Set(['set_current_job', 'edit_resume_item', 'record_application'])
+const UNDOABLE_TOOLS = new Set([
+  'set_current_job',
+  'edit_resume_item',
+  'record_application',
+  'remember',
+  'forget',
+  'set_writing_preference',
+])
 
 function canUndo(action: AgentDecidedAction): boolean {
   if (action.status !== 'executed') return false
@@ -413,6 +486,9 @@ function executedText(tool: string, result: Record<string, unknown>, title: JobT
     )
   }
   if (tool === 'remember' || tool === 'forget') {
+    if (typeof result.content === 'string') {
+      return tool === 'remember' ? `已记住：${result.content}` : `已忘记：${result.content}`
+    }
     const key = typeof result.key === 'string' ? result.key : ''
     const label = MEMORY_LABEL_FALLBACK[key]
     return tool === 'remember'
@@ -422,6 +498,11 @@ function executedText(tool: string, result: Record<string, unknown>, title: JobT
       : label
         ? `已忘掉「${label}」`
         : '已忘掉这项偏好'
+  }
+  if (tool === 'set_writing_preference') {
+    const label = WRITING_FIELD_LABEL[String(result.field ?? '')] ?? '写作偏好'
+    const value = typeof result.value === 'string' ? result.value : '默认'
+    return `已更新写作偏好：${label}为「${value}」`
   }
   if (tool === 'ask_user') {
     if (result.decision === 'switch') return `已切换到新岗位「${jobId && title(jobId)}」`

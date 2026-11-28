@@ -14,10 +14,11 @@ from jobpilot.services import drafts
 from jobpilot.services.agent.application_actions import undo_application
 from jobpilot.services.agent.arguments import EditResumeArgs, SetJobArgs, ShortText
 from jobpilot.services.agent.edit_request import authorized_edit
-from jobpilot.services.agent.memory_actions import undo_memory
+from jobpilot.services.agent.memory_actions import apply_memory_card, undo_memory
 from jobpilot.services.agent.types import Payload, ToolContext, ToolError
 from jobpilot.services.grounding import GroundingFact, organizations_of
 from jobpilot.services.jobs import effective_parsed_job
+from jobpilot.services.memories import MemoryError
 from jobpilot.services.resume_content import (
     Bullet,
     BulletCheck,
@@ -73,7 +74,7 @@ class ResumeUndo(BaseModel):
 @dataclass(frozen=True)
 class AppliedAction:
     result: Payload
-    undo: Payload
+    undo: Payload | None
 
 
 def _bullet(content: ResumeContent, bullet_id: UUID) -> Bullet:
@@ -259,22 +260,33 @@ async def verify_action_version(session: AsyncSession, action: AgentAction) -> N
             raise ToolError("简历已在别处保存，请重新发起修改", 409)
 
 
+async def _apply_memory(session: AsyncSession, action: AgentAction) -> AppliedAction:
+    result, undo = await apply_memory_card(session, action)
+    return AppliedAction(result, undo)
+
+
 async def apply_write(session: AsyncSession, action: AgentAction) -> Payload:
     """锁由调用方持有，重复运行时直接读取已提交结果。"""
     if action.result_json is not None:
         return action.result_json
-    apply = {"set_current_job": _apply_job, "edit_resume_item": _apply_resume}[
-        action.tool
-    ]
+    apply = {
+        "set_current_job": _apply_job,
+        "edit_resume_item": _apply_resume,
+        "remember": _apply_memory,
+        "forget": _apply_memory,
+        "set_writing_preference": _apply_memory,
+    }[action.tool]
     try:
         applied = await apply(session, action)
-    except (VersionConflictError, ResumeNotFoundError, ToolError) as error:
+    except (VersionConflictError, ResumeNotFoundError, ToolError, MemoryError) as error:
         if isinstance(error, VersionConflictError):
             result = {"error": "简历已在别处保存，请重新发起修改", "status": 409}
         elif isinstance(error, ResumeNotFoundError):
             result = {"error": "定制简历不存在", "status": 404}
         else:
             result = {"error": str(error), "status": error.status}
+            if isinstance(error, MemoryError) and error.entries is not None:
+                result["entries"] = error.entries
         action.status = ActionStatus.FAILED
     else:
         result = applied.result

@@ -245,7 +245,7 @@ async def _store_decision(
     action.decided_at = func.now()
     if body.decision != Decision.CONFIRM:
         return
-    if action.tool in RECORD_TOOLS:
+    if action.tool in RECORD_TOOLS and "quote" not in action.args_json:
         action.status = ActionStatus.REJECTED
         action.decision_json = {"decision": Decision.REJECT}
         return
