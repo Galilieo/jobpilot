@@ -1,0 +1,63 @@
+{
+  "dev": {
+    "dataset": {
+      "version": "e5-v1/e3-v1",
+      "sha256": "db86c20c1319185d5aa001f2852f0112781ca5145a5eb54c32de095de30e1a60"
+    },
+    "inputs": [
+      "evals/datasets/e3-split.json",
+      "evals/datasets/e4/sections.json",
+      "evals/datasets/resumes/resume-001.txt",
+      "evals/datasets/resumes/resume-002.txt",
+      "evals/datasets/resumes/resume-003.txt",
+      "evals/datasets/resumes/resume-011.txt",
+      "evals/datasets/resumes/resume-015.txt",
+      "evals/datasets/jds/jd-syn-01.txt",
+      "evals/datasets/jds/jd-syn-02.txt",
+      "evals/datasets/jds/jd-syn-03.txt",
+      "evals/datasets/jds/jd-syn-04.txt",
+      "evals/datasets/jds/jd-syn-05.txt",
+      "evals/datasets/annotations/resume-001.json",
+      "evals/datasets/annotations/resume-002.json",
+      "evals/datasets/annotations/resume-003.json",
+      "evals/datasets/annotations/resume-011.json",
+      "evals/datasets/annotations/resume-015.json",
+      "evals/datasets/annotations/jd-syn-01.json",
+      "evals/datasets/annotations/jd-syn-02.json",
+      "evals/datasets/annotations/jd-syn-03.json",
+      "evals/datasets/annotations/jd-syn-04.json",
+      "evals/datasets/annotations/jd-syn-05.json"
+    ]
+  },
+  "test": {
+    "dataset": {
+      "version": "e5-v1/e3-v1",
+      "sha256": "a13e645a5a48567a5c14a6b919aa9035a18516581ddc80c31f4f265b48ab07bd"
+    },
+    "inputs": [
+      "evals/datasets/e3-split.json",
+      "evals/datasets/e4/sections.json",
+      "evals/datasets/resumes/resume-006.txt",
+      "evals/datasets/resumes/resume-007.txt",
+      "evals/datasets/resumes/resume-009.txt",
+      "evals/datasets/resumes/resume-012.txt",
+      "evals/datasets/resumes/resume-017.txt",
+      "evals/datasets/jds/jd-syn-01.txt",
+      "evals/datasets/jds/jd-syn-02.txt",
+      "evals/datasets/jds/jd-syn-03.txt",
+      "evals/datasets/jds/jd-syn-04.txt",
+      "evals/datasets/jds/jd-syn-05.txt",
+      "evals/datasets/annotations/resume-006.json",
+      "evals/datasets/annotations/resume-007.json",
+      "evals/datasets/annotations/resume-009.json",
+      "evals/datasets/annotations/resume-012.json",
+      "evals/datasets/annotations/resume-017.json",
+      "evals/datasets/annotations/jd-syn-01.json",
+      "evals/datasets/annotations/jd-syn-02.json",
+      "evals/datasets/annotations/jd-syn-03.json",
+      "evals/datasets/annotations/jd-syn-04.json",
+      "evals/datasets/annotations/jd-syn-05.json"
+    ]
+  },
+  "rules": "evals/prompts/e5_judge.txt"
+}

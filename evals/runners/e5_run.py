@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
 from fcntl import LOCK_EX, LOCK_NB, flock
+from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 from typing import Annotated, Any
@@ -22,6 +23,7 @@ from evals.runners.e3_dataset import Split
 from evals.runners.e3_match import RESULT_DIR, _write_output
 from evals.runners.e5_dataset import Pair, dataset_version, pairs_for
 from evals.runners.e5_store import Factory, calls_of, remove_run_account, seed_run
+from evals.runners.w_budget import evaluation_http_client
 from jobpilot.api.tailoring import _MAX_CONCURRENT_REQUESTS, _TAILOR_BUDGET
 from jobpilot.config import REPO_ROOT, ModelPurpose, settings
 from jobpilot.db.models import STOP_REASON_STATUS, CheckStatus, RunStatus, StopReason
@@ -35,7 +37,12 @@ from jobpilot.services.llm_gateway import (
 )
 from jobpilot.services.prompts import Prompt, load_prompt
 from jobpilot.services.tailoring import MODEL_ERRORS, CheckLevel
-from jobpilot.services.tailoring_graph import TailorDeps, TailorState, run_tailoring
+from jobpilot.services.tailoring_graph import (
+    TailorDeps,
+    TailorReplay,
+    TailorState,
+    run_tailoring,
+)
 from jobpilot.services.tailoring_store import stop_reason_of
 
 PROMPT_DIR = REPO_ROOT / "evals" / "prompts"
@@ -78,6 +85,12 @@ class EvalBullet(BaseModel):
     check_status: CheckStatus | None = None
 
 
+class SharedDraft(BaseModel):
+    replay: TailorReplay
+    remaining_calls: int
+    remaining_tokens: int | None
+
+
 class Attempt(BaseModel):
     pair_id: str
     run_id: UUID
@@ -86,6 +99,9 @@ class Attempt(BaseModel):
     bullets: list[EvalBullet] = Field(default_factory=list)
     wall_seconds: float
     calls: list[dict[str, Any]]
+    shared_draft: SharedDraft | None = None
+    shared_calls: list[dict[str, Any]] = Field(default_factory=list)
+    shared_wall_seconds: float = 0
 
 
 def eval_prompt(name: str) -> Prompt:
@@ -172,27 +188,27 @@ async def _run_pair(
     client: AsyncOpenAI,
     pair: Pair,
     version: Version,
+    source: Attempt | None = None,
 ) -> Attempt:
     level = CHECK_LEVEL.get(version)
     user_id, run_id = await seed_run(factory, pair, product=level is not None)
     started = monotonic()
     bullets, status, error = [], RunStatus.SUCCEEDED, None
+    shared = source.shared_draft if source is not None else None
+    draft = None
     try:
         if level is None:
             bullets = await _baseline(factory, client, user_id, run_id, pair, version)
         else:
-            deps = TailorDeps(
-                factory,
-                client,
-                ModelBudget(**_TAILOR_BUDGET),
-                asyncio.Semaphore(_MAX_CONCURRENT_REQUESTS),
-                check_level=level,
+            state, budget = await _product(
+                factory, client, user_id, run_id, level, shared
             )
-            state = await run_tailoring(deps, user_id, run_id)
             reason = state.get("stop_reason") or stop_reason_of(state["outcomes"])
             if reason:
                 status, error = STOP_REASON_STATUS[reason], reason.value
             bullets = _product_bullets(state)
+            if level is CheckLevel.NONE:
+                draft = _shared_draft(state, budget)
     except BudgetExhaustedError:
         status, error = RunStatus.BUDGET_EXHAUSTED, StopReason.BUDGET_EXHAUSTED.value
     except MODEL_ERRORS as exc:
@@ -210,6 +226,46 @@ async def _run_pair(
         bullets=bullets,
         wall_seconds=wall_seconds,
         calls=calls,
+        shared_draft=draft,
+        shared_calls=source.calls if source else [],
+        shared_wall_seconds=source.wall_seconds if source else 0,
+    )
+
+
+async def _product(
+    factory: Factory,
+    client: AsyncOpenAI,
+    user_id: UUID,
+    run_id: UUID,
+    level: CheckLevel,
+    shared: SharedDraft | None,
+) -> tuple[TailorState, ModelBudget]:
+    budget = (
+        ModelBudget(shared.remaining_calls, shared.remaining_tokens)
+        if shared is not None
+        else ModelBudget(**_TAILOR_BUDGET)
+    )
+    deps = TailorDeps(
+        factory,
+        client,
+        budget,
+        asyncio.Semaphore(_MAX_CONCURRENT_REQUESTS),
+        check_level=level,
+        replay=shared.replay if shared is not None else None,
+    )
+    return await run_tailoring(deps, user_id, run_id), budget
+
+
+def _shared_draft(state: TailorState, budget: ModelBudget) -> SharedDraft:
+    return SharedDraft(
+        replay=TailorReplay(
+            match_items=state.get("match_items", []),
+            plan=state.get("plan", []),
+            outcomes={item.key: item for item in state["outcomes"]},
+            match_failure=state.get("stop_reason") if "plan" not in state else None,
+        ),
+        remaining_calls=budget.remaining_calls,
+        remaining_tokens=budget.remaining_tokens,
     )
 
 
@@ -219,9 +275,11 @@ def _require_e3_final() -> None:
     if "匹配提示词定稿" not in notes or not e3_path.is_file():
         raise ValueError("E5 测试集须等 E3 正式测试结束且 README 记录匹配提示词定稿")
     e3 = json.loads(e3_path.read_text(encoding="utf-8"))
-    if e3.get("prompt_version") != load_prompt("match_job").label or len(
-        e3.get("attempts", ())
-    ) != 3 * len(pairs_for("test")):
+    if (
+        e3.get("git") != git_state()
+        or e3.get("prompt_version") != load_prompt("match_job").label
+        or len(e3.get("attempts", ())) != 3 * len(pairs_for("test"))
+    ):
         raise ValueError("当前匹配提示词与已完成的 E3 正式测试不一致")
 
 
@@ -302,6 +360,7 @@ async def _run_batch(
     pairs: list[Pair],
     version: Version,
     output: dict[str, Any],
+    sources: dict[str, Attempt],
 ) -> None:
     api_key = settings.deepseek_api_key.get_secret_value()
     if not api_key:
@@ -312,15 +371,22 @@ async def _run_batch(
     )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        with path.open("x", encoding="utf-8") as stream:
-            json.dump(output, stream, ensure_ascii=False, indent=2)
+        http_client, batch_budget = evaluation_http_client()
         async with AsyncOpenAI(
-            api_key=api_key, base_url=settings.deepseek_base_url
+            api_key=api_key,
+            base_url=settings.deepseek_base_url,
+            http_client=http_client,
         ) as client:
+            with path.open("x", encoding="utf-8") as stream:
+                json.dump(output, stream, ensure_ascii=False, indent=2)
             for pair in pairs:
-                attempt = await _run_pair(factory, client, pair, version)
+                attempt = await _run_pair(
+                    factory, client, pair, version, sources.get(pair.key)
+                )
                 output["attempts"].append(attempt.model_dump(mode="json"))
                 _write_output(path, output)
+                if batch_budget is not None:
+                    batch_budget.check()
                 print(
                     f"{version} {pair.key} {attempt.status} "
                     f"({len(attempt.bullets)} 条)",
@@ -330,11 +396,29 @@ async def _run_batch(
         await engine.dispose()
 
 
+def _shared_attempts(path: Path, record: dict[str, Any]) -> dict[str, Attempt]:
+    content = path.read_bytes()
+    raw = json.loads(content)
+    if raw["version"] != Version.B or any(
+        raw[field] != record[field]
+        for field in ("split", "dataset", "planned_pairs", "git", "models", "prompts")
+    ):
+        raise ValueError("B 须来自同一批次、配对和配置")
+    attempts = [Attempt.model_validate(item) for item in raw["attempts"]]
+    if [attempt.pair_id for attempt in attempts] != record["planned_pairs"] or any(
+        attempt.shared_draft is None for attempt in attempts
+    ):
+        raise ValueError("B 未完整记录匹配、计划和初稿")
+    record["shared_from"] = {"file": path.name, "sha256": sha256(content).hexdigest()}
+    return {attempt.pair_id: attempt for attempt in attempts}
+
+
 async def main(
     version: Version,
     split: Split,
     selected: list[str] | None,
     output_path: Path | None,
+    shared_from: Path | None = None,
 ) -> None:
     if split == "test":
         if selected is not None or output_path is not None:
@@ -347,8 +431,18 @@ async def main(
     pairs = pairs_for(split, selected)
     record = _run_metadata(version, split)
     record["planned_pairs"] = [pair.key for pair in pairs]
+    if version in {Version.C, Version.D}:
+        if split == "test":
+            if shared_from is not None:
+                raise ValueError("测试集 C、D 固定沿用正式 B 初稿")
+            shared_from = RESULT_DIR / "e5-test-B-official.json"
+        elif shared_from is None:
+            raise ValueError("开发集 C、D 需要 --shared-from 指定 B 结果")
+    elif shared_from is not None:
+        raise ValueError("只有 C、D 可以沿用 B 初稿")
     with evaluation_lock():
-        await _run_batch(path, pairs, version, record)
+        sources = _shared_attempts(shared_from, record) if shared_from else {}
+        await _run_batch(path, pairs, version, record, sources)
     print(f"结果已写入 {path}")
 
 
@@ -358,8 +452,11 @@ if __name__ == "__main__":
     parser.add_argument("--split", choices=("dev", "test"), required=True)
     parser.add_argument("--pairs", nargs="+", help="只运行指定开发集配对")
     parser.add_argument("--output", type=Path, help="只用于开发集")
+    parser.add_argument("--shared-from", type=Path, help="开发集 C、D 沿用的 B 结果")
     args = parser.parse_args()
     try:
-        asyncio.run(main(args.version, args.split, args.pairs, args.output))
+        asyncio.run(
+            main(args.version, args.split, args.pairs, args.output, args.shared_from)
+        )
     except (ValueError, FileExistsError) as error:
         parser.exit(1, f"{error}\n")

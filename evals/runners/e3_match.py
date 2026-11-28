@@ -27,6 +27,8 @@ from evals.runners.e3_dataset import (
     load_split,
     pair_id,
 )
+from evals.runners.e3_match_io import write_record as _write_output
+from evals.runners.w_budget import BatchBudget, evaluation_http_client
 from jobpilot.config import REPO_ROOT, ModelPurpose, settings
 from jobpilot.db.models import AiRun, ModelCall, RunStatus
 from jobpilot.db.runs import set_run_status
@@ -157,14 +159,6 @@ def _output_path(split: Split, runs: int, output: Path | None) -> Path:
     return output or RESULT_DIR / f"e3-dev-{stamp}.json"
 
 
-def _write_output(path: Path, record: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    temporary.replace(path)
-
-
 async def _run_pairs(
     session_factory: async_sessionmaker[AsyncSession],
     client: AsyncOpenAI,
@@ -172,6 +166,7 @@ async def _run_pairs(
     split: Split,
     path: Path,
     output: dict[str, Any],
+    budget: BatchBudget | None = None,
 ) -> None:
     resume_ids, jd_ids = load_split(split)
     resumes = {name: load_resume(name, user_id) for name in resume_ids}
@@ -189,6 +184,8 @@ async def _run_pairs(
                     {"run_index": index, "pair_id": pair, **result}
                 )
                 _write_output(path, output)
+                if budget is not None:
+                    budget.check()
                 print(f"第 {index} 次 {pair} {result['error'] or '完成'}", flush=True)
 
 
@@ -224,10 +221,15 @@ async def main(split: Split, runs: int, output_path: Path | None) -> int:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         user_id = await eval_user_id(session_factory)
+        http_client, budget = evaluation_http_client()
         async with AsyncOpenAI(
-            api_key=api_key, base_url=settings.deepseek_base_url
+            api_key=api_key,
+            base_url=settings.deepseek_base_url,
+            http_client=http_client,
         ) as client:
-            await _run_pairs(session_factory, client, user_id, split, path, output)
+            await _run_pairs(
+                session_factory, client, user_id, split, path, output, budget
+            )
     finally:
         await engine.dispose()
     print(f"结果已写入 {path}")

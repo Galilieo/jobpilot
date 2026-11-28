@@ -82,3 +82,32 @@ async def test_five_versions_record_final_bullets_and_model_calls(
             CheckStatus.PASSED,
             CheckStatus.FALLBACK,
         }
+
+
+async def test_checked_groups_reuse_the_same_match_and_drafts(
+    session_factory: Factory,
+) -> None:
+    pair = pairs_for("dev", ["resume-011__jd-syn-03"])[0]
+    async with fake_upstream(_fake_model) as model:
+        shared = await _run_pair(session_factory, model, pair, Version.B)
+        reloaded = type(shared).model_validate_json(shared.model_dump_json())
+        checked = [
+            await _run_pair(session_factory, model, pair, version, reloaded)
+            for version in (Version.C, Version.D)
+        ]
+
+    assert reloaded.shared_draft is not None
+    assert reloaded.shared_draft.replay.match_items
+    assert reloaded.shared_draft.replay.plan
+    for result in checked:
+        assert result.status is RunStatus.SUCCEEDED
+        assert result.shared_calls == shared.calls
+        assert not {"match", "rewrite"} & {
+            call["purpose"]
+            for call in result.calls
+            if call["prompt_version"] != "revise_bullet@1"
+        }
+        assert [(row.experience, row.fact_ids) for row in result.bullets] == [
+            (row.experience, row.fact_ids) for row in shared.bullets
+        ]
+    assert any(call["purpose"] == "ground_check" for call in checked[1].calls)

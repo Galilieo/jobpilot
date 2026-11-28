@@ -232,6 +232,27 @@ def _matrix_lines(score: Score) -> list[str]:
     return lines
 
 
+def _class_rates(score: Score) -> list[str]:
+    lines = [
+        "",
+        "## 各类精确率与召回率",
+        "",
+        "| 范围 | 分类 | 精确率 | 召回率 |",
+        "| --- | --- | ---: | ---: |",
+    ]
+    for group in ("总计", "模型"):
+        matrix = score.overall[group].matrix
+        for verdict in VERDICTS:
+            correct = matrix[verdict, verdict]
+            predicted = sum(matrix[actual, verdict] for actual in VERDICTS)
+            annotated = sum(matrix[verdict, actual] for actual in VERDICTS)
+            lines.append(
+                f"| {group} | {VERDICT_TEXT[verdict]} | "
+                f"{_percent(correct, predicted)} | {_percent(correct, annotated)} |"
+            )
+    return lines
+
+
 def _stability_lines(score: Score) -> list[str]:
     runs = len(score.by_run)
     comparable = [
@@ -246,6 +267,7 @@ def report_lines(raw: dict[str, Any], score: Score) -> list[str]:
     return [
         *_summary_lines(raw, score),
         *_matrix_lines(score),
+        *_class_rates(score),
         *_stability_lines(score),
         "",
         "## 分类不一致明细",

@@ -15,6 +15,7 @@ from evals.runners.e3_dataset import DATASETS
 from evals.runners.e3_match import RESULT_DIR
 from evals.runners.e5_judge import (
     Candidate,
+    EvidenceBasis,
     Verdict,
     _batches,
     input_digests,
@@ -245,22 +246,64 @@ def _read_human(path: Path, expected: list[str]) -> list[bool]:
 def calibrate(
     judging_path: Path, sample_map: Path, human_path: Path, output: Path
 ) -> None:
-    sample = _read_json(sample_map)
     judging = _read_json(judging_path)
+    _compare_labels(
+        _read_json(sample_map), judging, human_path, output, judging_path.name
+    )
+
+
+def validate_challenge(
+    cases: Path, judging_path: Path, human_path: Path, output: Path
+) -> None:
+    from evals.runners.e5_validation import candidates, sample_of
+
+    judging = _read_json(judging_path)
+    if judging.get("input_digests") != input_digests([cases]):
+        raise ValueError("挑战数据与裁判运行时的文件不一致")
+    basis = EvidenceBasis(judging["evidence_basis"])
+    sample = sample_of(candidates(cases), basis, cases)
+    _compare_labels(sample, judging, human_path, output, judging_path.name)
+
+
+def _compare_labels(sample, judging, human_path, output, judging_filename):
     if judging["split"] != "dev" or any(
         sample[field] != judging[field] for field in ("dataset", "inputs")
     ):
         raise ValueError("校准必须使用生成盲标表时的开发集")
+    if (
+        "input_digests" in sample
+        and sample["input_digests"] != judging.get("input_digests")
+    ) or (
+        "evidence_basis" in sample
+        and sample["evidence_basis"] != judging.get("evidence_basis")
+    ):
+        raise ValueError("盲标表与裁判的证据口径或改写文件不一致")
     human = _read_human(human_path, sample["row_hashes"])
     verdicts = _verdicts(judging)
     model = [bool(verdicts[key].types) for key in sample["keys"]]
-    observed, kappa = agreement(human, model)
+    try:
+        observed, kappa = agreement(human, model)
+    except ValueError:
+        if human != model or len(set(human)) != 1:
+            raise
+        observed, kappa = 1.0, None
+    labels = list(zip(human, model, strict=True))
     result = dict(
         count=len(human),
         agreement=observed,
         kappa=kappa,
         human_positive=sum(human),
         judge_positive=sum(model),
+        missed_rows=[
+            i
+            for i, (human_label, predicted) in enumerate(labels, 2)
+            if human_label and not predicted
+        ],
+        false_alarm_rows=[
+            i
+            for i, (human_label, predicted) in enumerate(labels, 2)
+            if predicted and not human_label
+        ],
         disagreement_rows=[
             index
             for index, labels in enumerate(zip(human, model, strict=True), start=2)
@@ -269,12 +312,15 @@ def calibrate(
         judge_prompt=judging["judge_prompt"],
         judge_prompt_sha256=judging.get("judge_prompt_sha256"),
         judge_model=judging["model"]["model_name"],
-        judging=judging_path.name,
-        sample_map=sample_map.name,
+        judging=judging_filename,
+        evidence_basis=judging.get("evidence_basis", EvidenceBasis.CONFIRMED),
+        source=sample.get("source", "regression"),
+        passes=kappa is not None and kappa >= 0.6,
         strata=sample["strata"],
     )
     _save_json(output, result)
-    print(f"一致率 {observed:.1%}，Cohen’s kappa {kappa:.3f} ({len(human)} 条)")
+    display = f"{kappa:.3f}" if kappa is not None else "无法计算"
+    print(f"一致率 {observed:.1%}，Cohen’s kappa {display} ({len(human)} 条)")
 
 
 @dataclass
@@ -284,7 +330,11 @@ class Metrics:
 
     @property
     def calls(self) -> list[dict[str, Any]]:
-        return [call for attempt in self.attempts for call in attempt.calls]
+        return [
+            call
+            for attempt in self.attempts
+            for call in (*attempt.shared_calls, *attempt.calls)
+        ]
 
     def summary(self) -> dict[str, Any]:
         starts = len(self.attempts)
@@ -315,7 +365,12 @@ class Metrics:
             average_model_seconds=sum(c["latency_ms"] or 0 for c in self.calls)
             / 1000
             / starts,
-            average_wall_seconds=sum(a.wall_seconds for a in self.attempts) / starts,
+            average_wall_seconds=sum(
+                a.wall_seconds + a.shared_wall_seconds for a in self.attempts
+            )
+            / starts,
+            billed_calls=sum(len(a.calls) for a in self.attempts),
+            shared_calls=sum(len(a.shared_calls) for a in self.attempts),
             unknown_usage=sum(
                 c["prompt_tokens"] is None or c["completion_tokens"] is None
                 for c in self.calls
@@ -326,8 +381,6 @@ class Metrics:
 def score(inputs: list[Path], judging_path: Path, output: Path) -> None:
     judging = _read_json(judging_path)
     split, records, candidates = _candidates(inputs, judging)
-    if split == "test" and judging.get("calibration", {}).get("kappa", 0) < 0.6:
-        raise ValueError("正式结果须使用通过人工校准的裁判")
     verdicts = _verdicts(judging)
     if verdicts.keys() != {item.key for item in candidates}:
         raise ValueError("裁判必须覆盖全部定稿条目")
@@ -363,6 +416,8 @@ def score(inputs: list[Path], judging_path: Path, output: Path) -> None:
             split=split,
             dataset=judging["dataset"],
             contrast=metrics,
+            evidence_basis=judging.get("evidence_basis", EvidenceBasis.CONFIRMED),
+            validation_passed=judging.get("calibration", {}).get("passes"),
             judging=judging_path.name,
             examples=examples,
         ),
@@ -377,14 +432,17 @@ if __name__ == "__main__":
     prepare_args.add_argument("--sheet", type=Path, default=CALIBRATION_SHEET)
     calibration_args = modes.add_parser("calibrate", help="和人工结果算一致率及 kappa")
     calibration_args.add_argument("--human", type=Path, default=HUMAN_LABELS)
+    validate_args = modes.add_parser("validate", help="计算独立挑战样本上的裁判一致性")
+    validate_args.add_argument("--cases", required=True, type=Path)
+    validate_args.add_argument("--human", required=True, type=Path)
     score_args = modes.add_parser("score", help="计算五个对照组的指标")
     for mode in (prepare_args, score_args):
         mode.add_argument("inputs", type=Path, nargs=5)
     for mode in (prepare_args, calibration_args):
         mode.add_argument("--sample-map", type=Path, default=CALIBRATION_MAP)
-    for mode in (prepare_args, calibration_args, score_args):
+    for mode in (prepare_args, calibration_args, validate_args, score_args):
         mode.add_argument("--judging", type=Path, required=True)
-    for mode in (calibration_args, score_args):
+    for mode in (calibration_args, validate_args, score_args):
         mode.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -392,6 +450,8 @@ if __name__ == "__main__":
             prepare(args.inputs, args.judging, args.sheet, args.sample_map)
         elif args.operation == "calibrate":
             calibrate(args.judging, args.sample_map, args.human, args.output)
+        elif args.operation == "validate":
+            validate_challenge(args.cases, args.judging, args.human, args.output)
         else:
             score(args.inputs, args.judging, args.output)
     except (ValueError, FileExistsError, KeyError) as error:

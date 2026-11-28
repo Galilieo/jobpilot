@@ -271,7 +271,7 @@ E3 用 E1 的事实、求职条件、教育标注以及合成 JD 的要求标注
 | 已覆盖依据多引率 | 29.7%（35/118） | 19.2%（19/99） |
 | 跨轮结论不一致 | 7/200 | 4/200 |
 
-正式测试只跑了一个三轮批次（`e3-test-official.json`，运行代码 `09555e7`）。模型分类一致率低于 85% 预期约 0.2 个百分点，其余预期达到。完整分项、混淆矩阵与案例见 [开发集报告](reports/e3-dev-20261126.md)和[测试集报告](reports/e3-test-20261126.md)。第二人盲标材料已准备好，标注一致性待测。
+正式测试只跑了一个三轮批次（`e3-test-v2-official.json`，运行代码 `09555e7`）。模型分类一致率低于 85% 预期约 0.2 个百分点，其余预期达到。完整分项、混淆矩阵与案例见 [开发集报告](reports/e3-dev-20261126.md)和[测试集报告](reports/e3-test-20261126.md)。第二人盲标材料已准备好，标注一致性待测。
 
 ### 匹配提示词 v3（任务 L，2026-11-26）
 
@@ -319,7 +319,7 @@ v2 的总一致率主要来自容易判的「未覆盖」。开发集上模型�
 
 其余为 `resume-003 / jd-syn-04-r01`（React 页面推出三项前端基础，2/3 次判已覆盖）和 `resume-015 / jd-syn-05-r02`（1 次判未覆盖）。剩余错误集中在两条口径有歧义的要求上，再按这两条改提示词就是照着开发集补特例，所以不做第二轮。
 
-**v3 开发集定稿：`match_job@3`，提示词提交 `1d13116`。** 测试集用 v3 再跑一次，放到全部优化完成后的统一评测批次（见 06 T2.6 2026-11-26 调整）。那是测试集第二次使用，报告同时列出 v2、v3。运行前要把现在的 `e3-test-official.json`（v2）改名保留，因为脚本在文件已存在时拒绝运行，E5 也会检查这个文件的提示词版本。
+**v3 开发集定稿：`match_job@3`，提示词提交 `1d13116`。** 测试集用 v3 再跑一次，放到全部优化完成后的统一评测批次（见 06 T2.6 2026-11-26 调整）。那是测试集第二次使用，报告同时列出 v2、v3。v2 原始结果已改存为 `e3-test-v2-official.json`，v3 输出沿用正式测试路径。
 
 ### 运行、计分与第二人盲标
 
@@ -532,28 +532,47 @@ uv run --project jobpilot python -m evals.runners.e4_score
 
 ### 运行与校准
 
-在仓库根目录运行。每个版本一次尝试用单独的评测账号登记调用，落盘后保留结果与匿名用量。测试集要求已经完成 E3 正式测试，并使用 README 记录的定稿匹配提示词。测试结果和测试裁判输出用固定文件名，存在时会拒绝重跑。
+在仓库根目录运行。每次尝试使用独立评测账号。B 生成一次匹配结果和每块初稿，C、D 读取 B 的同一份初稿和剩余额度分别检查；两组结果记录其依赖的 B 文件指纹。分组成本包含共用成本，批次实付只把它算一次。A' 和 D 比较完整链路。
 
 ```sh
-for version in A A2 B C D; do
-  uv run --project jobpilot python -m evals.runners.e5_run --version "$version" --split dev
+for version in A A2 B; do
+  uv run --project jobpilot python -m evals.runners.e5_run --version "$version" --split dev --output "evals/results/e5-w-dev-$version.json"
 done
-uv run --project jobpilot python -m evals.runners.e5_judge <开发集五份改写结果> --output evals/results/e5-judge-dev-v1.json
-uv run --project jobpilot python -m evals.runners.e5_score prepare <同一批五份结果> --judging evals/results/e5-judge-dev-v1.json
+for version in C D; do
+  uv run --project jobpilot python -m evals.runners.e5_run --version "$version" --split dev --shared-from evals/results/e5-w-dev-B.json --output "evals/results/e5-w-dev-$version.json"
+done
 ```
 
-裁判默认使用 `deepseek-v4-pro`，产品试跑使用 `deepseek-flash`。每次裁判调用最多放入同一份简历下的 8 条句子，给全部已确认的事实、教育和求职条件。请求与回复保存在本地裁判结果。抽样每组 8 条，按裁判的初判优先抽两类，某组某类不足时从另一类补足，键表记录实际配比。人工表经打乱，在 `datasets/e5/calibration-sheet.csv` 中每行只填写「有编造」或「没有」，保持顺序，另存为 `evals/private/e5-calibration.csv`。
+每条定稿用两份证据独立评判。原文口径只提供整份合成简历原文，已确认事实口径只提供确认事实、求职条件和教育记录。裁判为 `e5_judge@2`，默认使用 `deepseek-v4-pro`。证据未注明熟练程度时可概括到「熟悉」，证据明确写了「了解」时不升级。每个口径下，裁判按配对分批收候选条目，最多 8 条一批，请求与回复保存在本地结果。
+
+旧盲标 40 条只用于 `e5_judge@2` 的确认事实口径回归。从两个试跑配对之外选取合成开发材料，离线撰写了 [40 条独立挑战样句](datasets/e5/independent-cases.jsonl)，五个版本标签各 8 条。版本标签用于样本均衡，句子由人工构造。挑战样本衡量裁判与用户对新句子的口径一致性，无法代表模型实际生成条目的频率分布。
+
+人工按 [原文表](datasets/e5/independent-resume.csv) 和 [确认事实表](datasets/e5/independent-confirmed.csv) 各判 40 条，只在最后一列填「有编造」或「没有」，保持顺序，另存为 `evals/private/e5-independent-resume.csv` 和 `evals/private/e5-independent-confirmed.csv`。每个口径独立计算一致率、Cohen's kappa、漏判和误判。kappa 小于 0.6 或无法计算时，该口径的编造率作为探索性结果报告。
+
+全量开发集生成后，以下命令从未参与试跑的实际输出中均匀抽 40 条，每组 8 条。抽样不读取裁判结论。分别在两张输出盲标表上标注，用对应键表和全量开发集裁判结果执行 `e5_score calibrate`。报告保留挑战与实际输出的样本来源。最终裁判可靠性以实际输出的独立盲标为主。
 
 ```sh
-uv run --project jobpilot python -m evals.runners.e5_score calibrate --judging evals/results/e5-judge-dev-v1.json --output evals/results/e5-calibration-v1.json
+uv run --project jobpilot python -m evals.runners.e5_validation evals/results/e5-w-dev-{A,A2,B,C,D}.json --map-dir evals/results --sheet-dir <共享盲标表目录>
 ```
 
-Cohen’s kappa 低于 0.6 时，只在开发集修订判据，升级裁判提示词版本号，用 `--sample-map evals/results/e5-calibration-map.json` 重判同一批条目，再用同一份人工表计算。达到门槛后，五个版本各跑一次 `--split test`，然后以同一裁判模型和提示词运行下列命令。
+旧表回归读取试跑存档中的原始证据和候选条目，避免现有数据修订影响对比。
 
 ```sh
-uv run --project jobpilot python -m evals.runners.e5_judge evals/results/e5-test-{A,A2,B,C,D}-official.json --calibration evals/results/e5-calibration-v1.json
-uv run --project jobpilot python -m evals.runners.e5_score score evals/results/e5-test-{A,A2,B,C,D}-official.json --judging evals/results/e5-judge-test-official.json --output evals/results/e5-test-score.json
+uv run --project jobpilot python -m evals.runners.e5_judge --archived-judge evals/results/e5-pilot-judge.json --sample-map evals/results/e5-calibration-map.json --output evals/results/e5-w-regression.json
+uv run --project jobpilot python -m evals.runners.e5_score calibrate --judging evals/results/e5-w-regression.json --output evals/results/e5-w-regression-score.json
 ```
+
+
+```sh
+for basis in resume confirmed; do
+  uv run --project jobpilot python -m evals.runners.e5_judge --basis "$basis" --challenge evals/datasets/e5/independent-cases.jsonl --output "evals/results/e5-w-challenge-$basis.json"
+  uv run --project jobpilot python -m evals.runners.e5_score validate --cases evals/datasets/e5/independent-cases.jsonl --judging "evals/results/e5-w-challenge-$basis.json" --human "evals/private/e5-independent-$basis.csv" --output "evals/results/e5-w-validation-$basis.json"
+  uv run --project jobpilot python -m evals.runners.e5_judge evals/results/e5-w-dev-{A,A2,B,C,D}.json --basis "$basis" --output "evals/results/e5-w-judge-dev-$basis.json"
+  uv run --project jobpilot python -m evals.runners.e5_score score evals/results/e5-w-dev-{A,A2,B,C,D}.json --judging "evals/results/e5-w-judge-dev-$basis.json" --output "evals/results/e5-w-score-dev-$basis.json"
+done
+```
+
+E3 v3 同集复测完成后，五个版本按 A、A2、B、C、D 顺序各执行一次 `--split test`。C、D 自动读取正式 B 输出。对每个 `--basis` 各判一次，提供用开发集实际输出盲标算出的 `--calibration evals/results/e5-w-validation-output-<口径>.json`。随后使用 `e5_score score`，输入五份 `evals/results/e5-test-{A,A2,B,C,D}-official.json` 和对应裁判产物 `evals/results/e5-judge-test-<口径>-official.json`。
 
 预算中断、失败和零产出全计入启动次数。编造率和回退率以已定稿条目为分母，待处理项另计。带【待补】的句子仍检查其中的实际断言，单独的【待补】计入产出并统计占位数。调用耗时取 `model_call.latency_ms`，与含并行、数据库和本地处理的墙钟耗时同时列出。对没有使用量的请求报告缺失次数，token 汇总只能覆盖已知用量。
 
@@ -588,3 +607,17 @@ C 首次试跑发现 `resume-011` 的混合栏目被评测导入切成了只有�
 - 「做过模型输出的离线评测」（A'）：人工判有编造，裁判认为整理离线评测集、对比检索方案就是对模型输出做离线评测。这和 E3 `jd-syn-01-r08` 是同一类口径歧义。
 - 「针对文件超时被重复上传的问题，补充……重复导入校验」（A）：裁判认为「文件超时被重复上传」这个背景不在已确认事实里，人工判没有。这就是 06 记下的 A、A' 公平性问题：原文里有、事实没拆出来的细节。
 - 「熟悉 Python、SQL」（A，技能概述）：裁判按「使用写成熟悉」判程度升级，人工判没有。**这一条和产品规则冲突**：依据检查第二层允许没写程度的事实概括到「熟悉」（`unstated_degree_max: 熟悉`），裁判却把它算作编造，C、D 会因为产品允许的写法被扣分。统一评测批次前要先统一口径。**决定（2026-11-26，用户确认）**：裁判改成和产品一致。没写程度的事实最多概括到「熟悉」，简历技能栏通常就这么写；原文明写了「了解」的（如同一份简历的「了解 Docker Compose」）仍不能升级。裁判升为 `e5_judge@2`，批次时用同一份人工表和 `--sample-map` 重判这 40 条，确认 kappa 仍然达标。人工标注不因看到裁判结果而改。
+
+
+### 任务 W 费用预估与批次约束
+
+按上文 Flash 每百万输入 2 元、输出 8 元，Pro 每百万输入 9 元、输出 27 元，均按未命中缓存计价。E3 取 v3 开发集三轮用量，E5 用两组试跑外推，两种证据口径各判一次。改写组使用一次共用初稿，裁判计入旧表回归和独立挑战样本。实际开发集输出盲标复用全量裁判结果。
+
+| 项目 | 预计调用次数 | 输入 token | 输出 token | 估算费用 |
+| --- | ---: | ---: | ---: | ---: |
+| E3 v3 同集复测 | 75 | 26.8 万 | 8.0 万 | 1.18 元 |
+| E5 五组改写，两组数据 | 约 1,050 | 约 95 万 | 约 13 万 | 2.94 元 |
+| E5 两种裁判口径和验证 | 约 1,076 | 约 253 万 | 约 24 万 | 29.25 元 |
+| 合计 | 约 2,200 | 约 375 万 | 约 45 万 | 约 33.4 元 |
+
+正式运行在第一阶段提交的独立检出上。用户批准后用 `python -m evals.runners.w_budget` 创建批次账本，设置 `JOBPILOT_W_BUDGET` 指向这个文件。上限取批准金额与预估金额的 120% 中较低的值。网关前按该调用的输入体和最大输出预留，收到供应商实际用量再结算；未知用量保留预留。每步写出实际输入、输出、已知调用数、未知调用数与未命中缓存金额估计。工作目录和账本绑定同一个提交。

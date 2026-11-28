@@ -101,9 +101,9 @@ class WriteContext:
     writing_preferences: WritingPreferences = field(default_factory=WritingPreferences)
 
 
-async def write_block(ctx: WriteContext, block: PlanBlock) -> BlockOutcome:
-    """改写一块并逐条定稿。只有预算用完和改写调用失败会让这块不完整。"""
-    facts = [ctx.available[fact_id] for fact_id in block.fact_ids]
+async def _draft_block(
+    ctx: WriteContext, block: PlanBlock, facts: Sequence[GroundingFact]
+) -> list[DraftBullet]:
     task = RewriteTask(
         section=block.bullet_section,
         experience=block.experience,
@@ -113,21 +113,33 @@ async def write_block(ctx: WriteContext, block: PlanBlock) -> BlockOutcome:
         keywords=ctx.keywords,
         max_bullets=block.max_bullets,
     )
-    try:
-        async with ctx.limiter:
-            drafts = await rewrite_section(
-                ctx.session_factory,
-                ctx.user_id,
-                ctx.run_id,
-                client=ctx.client,
-                budget=ctx.budget,
-                task=task,
-                writing_preferences=ctx.writing_preferences,
-            )
-    except BudgetExhaustedError:
-        return BlockOutcome(key=block.key, status=BlockStatus.INTERRUPTED)
-    except MODEL_ERRORS:
-        return BlockOutcome(key=block.key, status=BlockStatus.FAILED)
+    async with ctx.limiter:
+        return await rewrite_section(
+            ctx.session_factory,
+            ctx.user_id,
+            ctx.run_id,
+            client=ctx.client,
+            budget=ctx.budget,
+            task=task,
+            writing_preferences=ctx.writing_preferences,
+        )
+
+
+async def write_block(
+    ctx: WriteContext,
+    block: PlanBlock,
+    *,
+    drafts: Sequence[DraftBullet] | None = None,
+) -> BlockOutcome:
+    """生成初稿并逐条定稿。评测可以重用同一份初稿以比较检查层。"""
+    facts = [ctx.available[fact_id] for fact_id in block.fact_ids]
+    if drafts is None:
+        try:
+            drafts = await _draft_block(ctx, block, facts)
+        except BudgetExhaustedError:
+            return BlockOutcome(key=block.key, status=BlockStatus.INTERRUPTED)
+        except MODEL_ERRORS:
+            return BlockOutcome(key=block.key, status=BlockStatus.FAILED)
 
     if ctx.check_level is CheckLevel.NONE:
         return BlockOutcome(

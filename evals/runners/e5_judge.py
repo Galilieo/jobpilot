@@ -34,6 +34,7 @@ from evals.runners.e5_run import (
     evaluation_lock,
 )
 from evals.runners.e5_store import Factory, calls_of, remove_run_account, seed_run
+from evals.runners.w_budget import evaluation_http_client
 from jobpilot.config import ModelPurpose, settings
 from jobpilot.db.models import CheckStatus
 from jobpilot.db.session import create_database_engine
@@ -50,6 +51,15 @@ from jobpilot.services.tailoring import MODEL_ERRORS
 JUDGE_MODEL = "deepseek-v4-pro"
 JUDGE_BATCH_SIZE = 8
 JUDGE_TOKEN_BUDGET = 200_000
+
+
+class EvidenceBasis(StrEnum):
+    CONFIRMED = "confirmed"
+    RESUME = "resume"
+
+    @property
+    def label(self) -> str:
+        return "已确认事实" if self is EvidenceBasis.CONFIRMED else "简历原文"
 
 
 class Fabrication(StrEnum):
@@ -101,6 +111,7 @@ class JudgeBatch:
     pair: Pair
     candidates: tuple[Candidate, ...]
     requests: list[dict[str, Any]] = field(default_factory=list)
+    archived_evidence: str | None = None
 
     def parse(self, completion: ChatCompletion) -> JudgeReply:
         choice = completion.choices[0]
@@ -169,6 +180,24 @@ def read_outputs(paths: list[Path]) -> tuple[str, list[dict[str, Any]]]:
     ):
         raise ValueError("每个版本须恰好提供一个结果文件")
     split = splits.pop()
+    by_version = {Version(row["version"]): row for row in records}
+    if by_version[Version.B]["attempts"] and by_version[Version.B]["attempts"][0].get(
+        "shared_draft"
+    ):
+        source = next(
+            path
+            for path, row in zip(paths, records, strict=True)
+            if row["version"] == Version.B
+        )
+        expected_source = {
+            "file": source.name,
+            "sha256": sha256(source.read_bytes()).hexdigest(),
+        }
+        if any(
+            by_version[version].get("shared_from") != expected_source
+            for version in (Version.C, Version.D)
+        ):
+            raise ValueError("C、D 必须使用所提供 B 结果的同一初稿")
     if split not in ("test", "dev"):
         raise ValueError("未知数据分组")
     expected = dataset_version(split)
@@ -214,17 +243,20 @@ def _batches(
     return batches
 
 
-def _messages(batch: JudgeBatch, prompt: Prompt) -> list[ChatCompletionMessageParam]:
+def _messages(
+    batch: JudgeBatch, prompt: Prompt, basis: EvidenceBasis
+) -> list[ChatCompletionMessageParam]:
     candidates = [
         dict(id=item.index, experience=item.bullet.experience, text=item.bullet.text)
         for item in batch.candidates
     ]
+    evidence = batch.archived_evidence
+    if evidence is None:
+        evidence = _evidence_text(batch.pair, basis)
     content = "\n\n".join(
         [
-            wrap_untrusted_text(
-                "evidence",
-                json.dumps(confirmed_evidence(batch.pair), ensure_ascii=False),
-            ),
+            f"证据口径：{basis.label}。只根据下面的证据判定。",
+            wrap_untrusted_text("evidence", evidence),
             wrap_untrusted_text(
                 "candidates", json.dumps(candidates, ensure_ascii=False)
             ),
@@ -236,12 +268,19 @@ def _messages(batch: JudgeBatch, prompt: Prompt) -> list[ChatCompletionMessagePa
     ]
 
 
+def _evidence_text(pair: Pair, basis: EvidenceBasis) -> str:
+    if basis is EvidenceBasis.RESUME:
+        return pair.resume_text
+    return json.dumps(confirmed_evidence(pair), ensure_ascii=False)
+
+
 async def _judge_batch(
     factory: Factory,
     client: AsyncOpenAI,
     log: JudgeTransportLog,
     batch: JudgeBatch,
     prompt: Prompt,
+    basis: EvidenceBasis,
 ) -> dict[str, Any]:
     user_id, run_id = await seed_run(factory, batch.pair, product=False)
     started = monotonic()
@@ -256,7 +295,7 @@ async def _judge_batch(
             client=client,
             purpose=ModelPurpose.GROUND_CHECK,
             prompt_version=prompt.label,
-            messages=_messages(batch, prompt),
+            messages=_messages(batch, prompt, basis),
             json_output=True,
             validate=batch.parse,
             budget=ModelBudget(settings.model_max_attempts + 1, JUDGE_TOKEN_BUDGET),
@@ -290,23 +329,84 @@ def _judging_path(
     calibration: Path | None,
     prompt: Prompt,
     model: str,
+    basis: EvidenceBasis,
 ) -> Path:
     if split == "dev":
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-        return override or RESULT_DIR / f"e5-judge-dev-{stamp}.json"
+        return override or RESULT_DIR / f"e5-judge-dev-{basis}-{stamp}.json"
     if override is not None or calibration is None:
-        raise ValueError("测试集只判一次，使用固定输出并提供通过的校准 JSON")
+        raise ValueError("测试集只判一次，使用固定输出并提供独立验证记录")
     outcome = json.loads(calibration.read_text(encoding="utf-8"))
     if (
-        outcome.get("kappa", 0) < 0.6
-        or outcome.get("count", 0) < 40
+        outcome.get("count", 0) < 40
+        or outcome.get("source") != "generated_dev"
+        or outcome.get("evidence_basis") != basis
         or outcome.get("judge_prompt") != prompt.label
         or outcome.get("judge_prompt_sha256")
         != sha256(prompt.text.encode()).hexdigest()
         or outcome.get("judge_model") != model
     ):
-        raise ValueError("正式裁判的模型和提示词须与已通过的校准一致")
-    return RESULT_DIR / "e5-judge-test-official.json"
+        raise ValueError("正式裁判的口径、模型和提示词须与独立验证一致")
+    return RESULT_DIR / f"e5-judge-test-{basis}-official.json"
+
+
+def _challenge_batches(path: Path) -> list[JudgeBatch]:
+    from evals.runners.e5_validation import candidates
+
+    groups: dict[str, list[Candidate]] = {}
+    for candidate in candidates(path):
+        groups.setdefault(candidate.pair.resume_id, []).append(candidate)
+    return [
+        JudgeBatch(group[0].version, group[0].pair, group)
+        for items in groups.values()
+        for group in batched(items, JUDGE_BATCH_SIZE)
+    ]
+
+
+def _archived_batches(archive: dict, sample: dict) -> list[JudgeBatch]:
+    if archive.get("split") != "dev" or any(
+        archive[field] != sample[field] for field in ("inputs", "dataset")
+    ):
+        raise ValueError("旧裁判输出与原盲标键表不一致")
+    keys = set(sample["keys"])
+    pairs = {pair.key: pair for pair in pairs_for("dev")}
+    batches = [
+        _archived_batch(row, keys, pairs[row["pair_id"]])
+        for row in archive["batches"]
+        if keys.intersection(row["keys"])
+    ]
+    if {item.key for batch in batches for item in batch.candidates} != keys:
+        raise ValueError("旧裁判记录缺少盲标条目")
+    return batches
+
+
+def _archived_block(content: str, label: str) -> str:
+    _, sep, block = content.partition(f'<untrusted_data label="{label}">\n')
+    body, end, _ = block.partition("\n</untrusted_data>")
+    if not (sep and end):
+        raise ValueError(f"旧裁判请求缺少 {label} 区块")
+    return body
+
+
+def _archived_batch(row: dict, keys: set[str], pair: Pair) -> JudgeBatch:
+    content = row["requests"][0]["messages"][1]["content"]
+    version = Version(row["version"])
+    candidates = tuple(
+        Candidate(
+            version,
+            pair,
+            item["id"],
+            EvalBullet(experience=item["experience"], text=item["text"]),
+        )
+        for item in json.loads(_archived_block(content, "candidates"))
+        if f"{version}/{pair.key}/{item['id']}" in keys
+    )
+    return JudgeBatch(
+        version,
+        pair,
+        candidates,
+        archived_evidence=_archived_block(content, "evidence"),
+    )
 
 
 async def main(
@@ -315,36 +415,67 @@ async def main(
     model: str,
     sample_map: Path | None,
     calibration: Path | None,
+    basis: EvidenceBasis = EvidenceBasis.CONFIRMED,
+    challenge: Path | None = None,
+    archived_judge: Path | None = None,
 ) -> None:
-    split, records = read_outputs(paths)
     prompt = eval_prompt("e5_judge")
-    path = _judging_path(split, output, calibration, prompt, model)
-    if split == "test" and sample_map is not None:
-        raise ValueError("正式测试必须判完所有条目")
-    keys = (
-        set(json.loads(sample_map.read_text(encoding="utf-8"))["keys"])
-        if sample_map
-        else None
-    )
-    batches = _batches(split, records, keys)
-    metadata = dict(
+    if archived_judge:
+        if (
+            paths
+            or challenge
+            or calibration
+            or not sample_map
+            or basis is not EvidenceBasis.CONFIRMED
+        ):
+            raise ValueError("旧盲标回归只用原裁判存档和盲标键表，按已确认事实口径")
+        archive = json.loads(archived_judge.read_text(encoding="utf-8"))
+        sample = json.loads(sample_map.read_text(encoding="utf-8"))
+        split, batches = "dev", _archived_batches(archive, sample)
+    elif challenge:
+        if paths or sample_map or calibration:
+            raise ValueError("独立挑战单独运行")
+        paths, split, batches = [challenge], "dev", _challenge_batches(challenge)
+    else:
+        split, records = read_outputs(paths)
+        if split == "test" and sample_map is not None:
+            raise ValueError("正式测试必须判完所有条目")
+        keys = (
+            set(json.loads(sample_map.read_text(encoding="utf-8"))["keys"])
+            if sample_map
+            else None
+        )
+        batches = _batches(split, records, keys)
+    path = _judging_path(split, output, calibration, prompt, model, basis)
+    metadata = _metadata(paths, split, batches, prompt, basis)
+    if archived_judge:
+        metadata.update(
+            dataset=archive["dataset"],
+            inputs=archive["inputs"],
+            archived_input=input_digests([archived_judge, sample_map]),
+        )
+    if calibration:
+        metadata["calibration"] = json.loads(calibration.read_text(encoding="utf-8"))
+    with evaluation_lock():
+        await _judge_all(path, metadata, batches, prompt, model, basis)
+    print(f"裁判结果已写入 {path}")
+
+
+def _metadata(paths, split, batches, prompt, basis):
+    return dict(
         eval="E5-judge",
         split=split,
-        dataset=records[0]["dataset"],
+        dataset=dataset_version(split),
         inputs=[source.name for source in paths],
         input_digests=input_digests(paths),
         planned_batches=len(batches),
+        evidence_basis=basis,
         judge_prompt=prompt.label,
         judge_prompt_sha256=sha256(prompt.text.encode()).hexdigest(),
         repair_prompt=load_prompt("repair_json").label,
         git=git_state(),
         batches=[],
     )
-    if calibration:
-        metadata["calibration"] = json.loads(calibration.read_text(encoding="utf-8"))
-    with evaluation_lock():
-        await _judge_all(path, metadata, batches, prompt, model)
-    print(f"裁判结果已写入 {path}")
 
 
 async def _judge_all(
@@ -353,6 +484,7 @@ async def _judge_all(
     batches: list[JudgeBatch],
     prompt: Prompt,
     model: str,
+    basis: EvidenceBasis,
 ) -> None:
     api_key = settings.deepseek_api_key.get_secret_value()
     if not api_key:
@@ -370,22 +502,20 @@ async def _judge_all(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     log = JudgeTransportLog()
     try:
-        with path.open("x", encoding="utf-8") as stream:
-            json.dump(output, stream, ensure_ascii=False, indent=2)
+        http_client, batch_budget = evaluation_http_client(log.request, log.response)
         async with AsyncOpenAI(
             api_key=api_key,
             base_url=settings.deepseek_base_url,
-            http_client=httpx.AsyncClient(
-                event_hooks={
-                    "request": [log.request],
-                    "response": [log.response],
-                }
-            ),
+            http_client=http_client,
         ) as client:
+            with path.open("x", encoding="utf-8") as stream:
+                json.dump(output, stream, ensure_ascii=False, indent=2)
             for index, batch in enumerate(batches, start=1):
-                result = await _judge_batch(factory, client, log, batch, prompt)
+                result = await _judge_batch(factory, client, log, batch, prompt, basis)
                 output["batches"].append(result)
                 _write_output(path, output)
+                if batch_budget is not None:
+                    batch_budget.check()
                 print(
                     f"裁判 {index}/{len(batches)} {result['error'] or '完成'}",
                     flush=True,
@@ -397,16 +527,33 @@ async def _judge_all(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("inputs", type=Path, nargs=5)
+    parser.add_argument("inputs", type=Path, nargs="*")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--model", default=JUDGE_MODEL)
     parser.add_argument("--sample-map", type=Path, help="开发集仅重判指定校准样本")
-    parser.add_argument("--calibration", type=Path, help="正式测试使用的通过校准记录")
+    parser.add_argument(
+        "--calibration", type=Path, help="正式测试使用的同口径独立验证记录"
+    )
+    parser.add_argument(
+        "--basis",
+        type=EvidenceBasis,
+        choices=list(EvidenceBasis),
+        default=EvidenceBasis.CONFIRMED,
+    )
+    parser.add_argument("--challenge", type=Path, help="独立裁判挑战样本")
+    parser.add_argument("--archived-judge", type=Path, help="从旧裁判请求重判原盲标")
     args = parser.parse_args()
     try:
         asyncio.run(
             main(
-                args.inputs, args.output, args.model, args.sample_map, args.calibration
+                args.inputs,
+                args.output,
+                args.model,
+                args.sample_map,
+                args.calibration,
+                args.basis,
+                args.challenge,
+                args.archived_judge,
             )
         )
     except (ValueError, FileExistsError) as error:

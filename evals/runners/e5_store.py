@@ -132,7 +132,10 @@ def _add_criteria(
     for education, row in zip(
         sample.inputs.education, pair.annotation["education"], strict=True
     ):
-        fields = {key: value for key, value in row.items() if key != "source_quote"}
+        fields = {
+            key: row.get(key)
+            for key in ("school", "major", "degree", "status", "start_text", "end_text")
+        }
         session.add(
             FactSetEducation(
                 fact_set_id=fact_set.fact_set_id,
