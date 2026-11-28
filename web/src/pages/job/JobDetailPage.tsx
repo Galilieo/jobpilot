@@ -15,7 +15,7 @@ import {
   Typography,
 } from 'antd'
 import { useState, type ReactElement } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { jobs } from '../../api/endpoints'
 import { EmptyHint } from '../../components/EmptyHint'
 import { MetaList } from '../../components/MetaList'
@@ -39,7 +39,11 @@ type DetailTab = 'match' | 'info' | 'raw'
 export function JobDetailPage(): ReactElement {
   const { message, modal } = App.useApp()
   const { jobId = '' } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
+  const stateBackTo = (location.state as { backTo?: unknown } | null)?.backTo
+  const backTo =
+    typeof stateBackTo === 'string' && stateBackTo.startsWith('/jobs') ? stateBackTo : '/jobs'
   const queryClient = useQueryClient()
   const screens = Grid.useBreakpoint()
   const isNarrow = screens.lg === false
@@ -81,7 +85,7 @@ export function JobDetailPage(): ReactElement {
         queryClient.invalidateQueries({ queryKey: APPLICATIONS_QUERY }),
       ])
       message.success('已删除岗位')
-      void navigate('/jobs', { replace: true })
+      void navigate(backTo, { replace: true })
     },
     onError: (error) => {
       void message.error(error.message)
@@ -116,12 +120,12 @@ export function JobDetailPage(): ReactElement {
     <section className="page page-wide">
       {job.isPending ? (
         <>
-          <PageHeader title="岗位详情" backTo="/jobs" backLabel="岗位库" />
+          <PageHeader title="岗位详情" backTo={backTo} backLabel="岗位库" />
           <Skeleton active />
         </>
       ) : job.isError ? (
         <>
-          <PageHeader title="岗位详情" backTo="/jobs" backLabel="岗位库" />
+          <PageHeader title="岗位详情" backTo={backTo} backLabel="岗位库" />
           <Card>
             <EmptyHint
               description={job.error.message}
@@ -132,7 +136,7 @@ export function JobDetailPage(): ReactElement {
       ) : (
         <>
           <PageHeader
-            backTo="/jobs"
+            backTo={backTo}
             backLabel="岗位库"
             title={fields?.title ?? '未命名岗位'}
             subtitle={subtitle}

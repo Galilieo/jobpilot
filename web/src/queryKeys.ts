@@ -2,6 +2,7 @@
 export const OVERVIEW_QUERY = ['overview'] as const
 export const LIBRARY_QUERY = ['library'] as const
 export const JOBS_QUERY = ['jobs'] as const
+export const jobsQuery = (q?: string) => (q ? (['jobs', { q }] as const) : JOBS_QUERY)
 export const TAILORED_RESUMES_QUERY = ['tailored-resumes'] as const
 
 export const jobQuery = (jobId: string) => ['jobs', jobId] as const

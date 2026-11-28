@@ -174,7 +174,11 @@ export const facts = {
 // ---------- 岗位与匹配 ----------
 
 export const jobs = {
-  list: (signal?: AbortSignal) => request<JobSummary[]>('/api/jobs', { signal }),
+  list: (q?: string, signal?: AbortSignal) => {
+    const trimmed = q?.trim()
+    const query = trimmed ? `?q=${encodeURIComponent(trimmed)}` : ''
+    return request<JobSummary[]>(`/api/jobs${query}`, { signal })
+  },
   get: (jobId: string, signal?: AbortSignal) => request<Job>(`/api/jobs/${jobId}`, { signal }),
   create: (rawText: string, idempotencyKey: string) =>
     request<Job>('/api/jobs', { json: { raw_text: rawText }, idempotencyKey }),

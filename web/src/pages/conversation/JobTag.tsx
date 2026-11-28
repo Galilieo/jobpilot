@@ -19,7 +19,10 @@ interface JobTagProps {
 
 export function JobTag(props: JobTagProps): ReactElement {
   const { message } = App.useApp()
-  const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
+  const list = useQuery({
+    queryKey: JOBS_QUERY,
+    queryFn: ({ signal }) => jobs.list(undefined, signal),
+  })
   const bind = useMutation({
     mutationFn: (jobId: string | null) =>
       conversations.update(props.conversationId, { current_job_id: jobId }),

@@ -1,0 +1,41 @@
+.job-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  margin-block-end: 12px;
+}
+
+.job-search-input {
+  width: 260px;
+}
+
+.job-facet-select {
+  min-width: 148px;
+}
+
+.job-sort-select {
+  min-width: 124px;
+  margin-inline-start: auto;
+}
+
+.job-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-block-end: 14px;
+}
+
+.job-active-filters .ant-tag {
+  margin-inline-end: 0;
+}
+
+@media (max-width: 767px) {
+  .job-search-input,
+  .job-facet-select,
+  .job-sort-select {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+}

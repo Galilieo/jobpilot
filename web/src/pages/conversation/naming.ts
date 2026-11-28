@@ -73,6 +73,9 @@ export function titleFrom(input: LiveInput): string {
 }
 
 export function useJobTitle(): (jobId: string) => string {
-  const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
+  const list = useQuery({
+    queryKey: JOBS_QUERY,
+    queryFn: ({ signal }) => jobs.list(undefined, signal),
+  })
   return (jobId) => list.data?.find((job) => job.job_id === jobId)?.title ?? '未命名岗位'
 }

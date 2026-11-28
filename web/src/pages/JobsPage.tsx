@@ -1,18 +1,26 @@
-// 岗位库：岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
+// 岗位库：搜索、多维筛选、排序与岗位卡片列表；「添加岗位」支持粘贴、上传文件或截图，解析完进入岗位详情。
 import { PlusOutlined, WarningOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Modal, Select, Skeleton, Tag, Typography, theme } from 'antd'
-import { useRef, useState, type ReactElement } from 'react'
-import { useNavigate } from 'react-router'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { App, Button, Card, Modal, Skeleton, Tag, Typography, theme } from 'antd'
+import { useCallback, useMemo, useRef, useState, type ReactElement } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { jobs } from '../api/endpoints'
-import type { JobStage } from '../api/types'
 import { ApiError, newIdempotencyKey } from '../api/http'
 import { EmptyHint } from '../components/EmptyHint'
 import { MetaList } from '../components/MetaList'
 import { PageHeader } from '../components/PageHeader'
 import { TextSourceInput } from '../components/TextSourceInput'
 import { JOB_STAGE, formatMatchSummary, jobMetaParts } from '../labels'
-import { JOBS_QUERY } from '../queryKeys'
+import { JOBS_QUERY, jobsQuery } from '../queryKeys'
+import { JobsFilterBar } from './job/JobsFilterBar'
+import {
+  buildFacetOptions,
+  buildJobSearchParams,
+  filterAndSortJobs,
+  hasActiveJobFilters,
+  parseJobFilters,
+  type JobFilterState,
+} from './job/jobFilters'
 
 const JD_COPY = {
   filePrompt: '点击或拖入 JD 文件',
@@ -24,15 +32,38 @@ const JD_COPY = {
 export function JobsPage(): ReactElement {
   const { token } = theme.useToken()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [adding, setAdding] = useState(false)
-  const [stage, setStage] = useState<JobStage>()
-  const list = useQuery({ queryKey: JOBS_QUERY, queryFn: ({ signal }) => jobs.list(signal) })
-  const hasJobs = Boolean(list.data?.length)
-  const shown = list.data?.filter((job) => !stage || job.stage === stage) ?? []
-  const stages = (Object.keys(JOB_STAGE) as JobStage[]).map((value) => ({
-    value,
-    label: `${JOB_STAGE[value]}（${list.data?.filter((job) => job.stage === value).length ?? 0}）`,
-  }))
+
+  const filters = useMemo(() => parseJobFilters(searchParams), [searchParams])
+  const updateFilters = useCallback(
+    (next: JobFilterState, replace = false) => {
+      setSearchParams(buildJobSearchParams(next), { replace })
+    },
+    [setSearchParams],
+  )
+  const clearFilters = useCallback(() => {
+    updateFilters({
+      q: '',
+      directions: [],
+      cities: [],
+      techs: [],
+      stages: [],
+      sort: filters.sort,
+    })
+  }, [filters.sort, updateFilters])
+
+  const list = useQuery({
+    queryKey: jobsQuery(filters.q),
+    queryFn: ({ signal }) => jobs.list(filters.q || undefined, signal),
+    placeholderData: keepPreviousData,
+  })
+  const allJobs = useMemo(() => list.data ?? [], [list.data])
+  const active = hasActiveJobFilters(filters)
+  const showToolbar = allJobs.length > 0 || active
+  const facetOptions = useMemo(() => buildFacetOptions(allJobs, filters), [allJobs, filters])
+  const shown = useMemo(() => filterAndSortJobs(allJobs, filters), [allJobs, filters])
 
   return (
     <section className="page">
@@ -40,22 +71,19 @@ export function JobsPage(): ReactElement {
         title="岗位库"
         subtitle="贴入 JD 整理岗位要求，再用确认过的经历做匹配、生成定制简历。"
         extra={
-          hasJobs ? (
+          showToolbar ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setAdding(true)}>
               添加岗位
             </Button>
           ) : undefined
         }
       />
-      {hasJobs && (
-        <Select<JobStage>
-          aria-label="按岗位进度筛选"
-          placeholder="全部进度"
-          className="job-stage-filter"
-          allowClear
-          value={stage}
-          options={stages}
-          onChange={setStage}
+      {showToolbar && (
+        <JobsFilterBar
+          filters={filters}
+          options={facetOptions}
+          onChange={updateFilters}
+          onClearAll={clearFilters}
         />
       )}
       {list.isPending ? (
@@ -67,7 +95,7 @@ export function JobsPage(): ReactElement {
             action={<Button onClick={() => void list.refetch()}>重试</Button>}
           />
         </Card>
-      ) : list.data.length === 0 ? (
+      ) : !active && allJobs.length === 0 ? (
         <Card>
           <EmptyHint
             description="还没有岗位。贴入一份 JD 开始。"
@@ -80,7 +108,10 @@ export function JobsPage(): ReactElement {
         </Card>
       ) : shown.length === 0 ? (
         <Card>
-          <EmptyHint description="这个进度下没有岗位。" />
+          <EmptyHint
+            description="没有符合条件的岗位"
+            action={<Button onClick={clearFilters}>清除筛选</Button>}
+          />
         </Card>
       ) : (
         <div className="job-grid">
@@ -91,7 +122,11 @@ export function JobsPage(): ReactElement {
                 key={job.job_id}
                 hoverable
                 className="job-card"
-                onClick={() => void navigate(`/jobs/${job.job_id}`)}
+                onClick={() =>
+                  void navigate(`/jobs/${job.job_id}`, {
+                    state: { backTo: `/jobs${location.search}` },
+                  })
+                }
               >
                 <div className="job-card-head">
                   <Typography.Text strong className="job-card-title">

@@ -379,8 +379,11 @@ export interface JobSummary {
   education: string | null
   stage: JobStage
   keywords: string[]
+  directions: string[]
+  cities: string[]
   injection_count: number
   match_summary: JobMatchSummary | null
+  created_at: string
   updated_at: string
 }
 
