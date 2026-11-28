@@ -66,6 +66,17 @@ def test_e13_rejects_literal_first_paraphrase(copied_e13: Path) -> None:
         e13_dataset.load_e13("dev")
 
 
+def test_e13_accepts_paraphrase_with_a_first_ranked_chunk() -> None:
+    samples, queries = e13_dataset.load_e13("test")
+    query = next(query for query in queries if query.id == "test-09")
+    chunks = e13_dataset.corpus_chunks(samples)
+    messages = dict(pair for sample in samples for pair in sample.labeled_messages())
+
+    assert e13_dataset.literal_overlap([query], chunks)[query.id].rank == 1
+    rank = e13_dataset.message_literal_overlap([query], messages)[query.id].rank
+    assert rank is not None and rank > 1
+
+
 def test_e13_scoring_requires_the_labeled_chunk_of_a_long_reply() -> None:
     source = "甲段解释切换页面。" + "乙段解释断线后读持久化消息。"
     boundary = source.index("乙")

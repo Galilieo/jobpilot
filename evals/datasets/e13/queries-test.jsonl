@@ -6,14 +6,14 @@
 {"id": "test-06", "query": "FFmpeg", "type": "exact", "relevant": ["c21:u01"]}
 {"id": "test-07", "query": "resume_version", "type": "exact", "relevant": ["c22:u02"]}
 {"id": "test-08", "query": "DuckDB", "type": "exact", "relevant": ["c30:u01@0", "c30:u01@181", "c30:u03", "c30:a07", "c30:a09"]}
-{"id": "test-09", "query": "用一个人的身份打开别人的备忘，你建议让拒绝结果和哪种失败保持一致？", "type": "paraphrase", "relevant": ["c16:a02@0", "c16:a02@158"]}
-{"id": "test-10", "query": "人工应答本来是一整句，被截成两份都上了榜，应当算多少份独立依据？", "type": "paraphrase", "relevant": ["c17:u03", "c17:a03@0", "c17:a03@41"]}
-{"id": "test-11", "query": "某辆卡车用的机器临近中午才把清早的登记送到，业务看板要挂在哪一个区间？", "type": "paraphrase", "relevant": ["c18:u02", "c18:a02@0", "c18:a02@44"]}
-{"id": "test-12", "query": "早期版本提交的那列信息是空的，怎样让它仍被计入整体，并单独划归一类？", "type": "paraphrase", "relevant": ["c19:u02", "c19:a02@0", "c19:a02@145"]}
-{"id": "test-13", "query": "刚进去只看得到导览按钮，后来才用得上的代码怎样从一开始要下的东西里挪出去？", "type": "paraphrase", "relevant": ["c20:u02", "c20:a02@0", "c20:a02@45", "c20:u03"]}
-{"id": "test-14", "query": "人在公共汽车里没下去，系统却算成搭了两班，当时要认哪一个不变的代号？", "type": "paraphrase", "relevant": ["c24:u02", "c24:a02@0", "c24:a02@52", "c24:a06"]}
-{"id": "test-15", "query": "同样把位置往东挪一点，南北量出的路程为何不同，当时固定找周围商户的尺度怎么改？", "type": "paraphrase", "relevant": ["c25:u02", "c25:a02@46", "c25:a03"]}
-{"id": "test-16", "query": "页面保存出来的假文书外观看起来合法，服务端要确认容器的哪部分再交给提取器？", "type": "paraphrase", "relevant": ["c28:u02", "c28:a02@0", "c28:a02@47"]}
+{"id": "test-09", "query": "之前聊权限那个例子，换成另一个人的资料编号，要和哪种情况显示一样的提示？", "type": "paraphrase", "relevant": ["c16:a02@0", "c16:a02@158"]}
+{"id": "test-10", "query": "上回聊搜历史，同一次回答出来两小段，还都挺靠前，这个怎么算成绩来着？", "type": "paraphrase", "relevant": ["c17:u03", "c17:a03@0", "c17:a03@41"]}
+{"id": "test-11", "query": "之前聊物流报表，有一笔上午发生的事快中午才传回来，应该算到哪个时间段？", "type": "paraphrase", "relevant": ["c18:u02", "c18:a02@0", "c18:a02@44"]}
+{"id": "test-12", "query": "上次有个客户端升级后的统计问题，我记得旧手机少传一个值，后来怎么让那批数据没被漏掉？", "type": "paraphrase", "relevant": ["c19:u02", "c19:a02@0", "c19:a02@145"]}
+{"id": "test-13", "query": "上回说那个活动页，用户没点进去之前，怎么让它别下载后面才用到的东西？", "type": "paraphrase", "relevant": ["c20:u02", "c20:a02@0", "c20:a02@45", "c20:u03"]}
+{"id": "test-14", "query": "我记得有条公交行程被画成两截，实际上没转车，我们拿什么信息判断的？", "type": "paraphrase", "relevant": ["c24:u02", "c24:a02@0", "c24:a02@52", "c24:a06"]}
+{"id": "test-15", "query": "上次说找附近店铺时，地图上差不多隔那么远，到了别的地方距离却不一样。你当时建议怎么改？", "type": "paraphrase", "relevant": ["c25:u02", "c25:a02@46", "c25:a03"]}
+{"id": "test-16", "query": "上次有个上传的东西看着是文档，其实内容是网页，我们在打开之前具体查了什么？", "type": "paraphrase", "relevant": ["c28:u02", "c28:a02@0", "c28:a02@47"]}
 {"id": "test-17", "query": "耳机拔掉以后，播放器怎样知道该用哪个输出，还能从之前听的位置继续？", "type": "gist", "relevant": ["c21:u02", "c21:a02@0"]}
 {"id": "test-18", "query": "以前那份求职申请删掉对应岗位后还查得到吗，系统保存了什么来找回当时简历？", "type": "gist", "relevant": ["c22:u02", "c22:u03", "c22:a03@0"]}
 {"id": "test-19", "query": "删掉对话能让当天剩余额度变多吗，真正销户后系统还保存哪种用量？", "type": "gist", "relevant": ["c23:u02", "c23:a02@0", "c23:u03"]}

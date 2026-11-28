@@ -6,14 +6,14 @@
 {"id": "dev-06", "query": "OpenSearch", "type": "exact", "relevant": ["c10:u01", "c10:a01"]}
 {"id": "dev-07", "query": "PostGIS", "type": "exact", "relevant": ["c11:u01"]}
 {"id": "dev-08", "query": "WOFF2", "type": "exact", "relevant": ["c14:u02", "c14:a05@0"]}
-{"id": "dev-09", "query": "掉线时那段生成没看全，重进来时靠哪里取回写完的内容？", "type": "paraphrase", "relevant": ["c01:u02", "c01:u03", "c01:a04@0", "c01:a04@175"]}
-{"id": "dev-10", "query": "先按通过，通信中途失灵，事后改点不放行，这下到底采信哪一个？", "type": "paraphrase", "relevant": ["c02:u02", "c02:a06@0", "c02:a06@38"]}
-{"id": "dev-11", "query": "退回的钱产生了两张一样的报文，应该拿哪两个值找出后来的是否仅为抄件？", "type": "paraphrase", "relevant": ["c04:u02", "c04:a02@0", "c04:a02@164"]}
-{"id": "dev-12", "query": "大促那次只有一个处理单元一直落后，是哪项路由选择困住了商户的请求？", "type": "paraphrase", "relevant": ["c05:u02", "c05:a02@0", "c05:a02@151"]}
-{"id": "dev-13", "query": "当时点开旁栏会一顿一顿的，换块更快出图的屏，你教我怎么比才公平？", "type": "paraphrase", "relevant": ["c06:a05@0", "c06:a05@43"]}
-{"id": "dev-14", "query": "点进某件货品时，最显眼的那张该先传，横着划才露出的其余几张如何安排？", "type": "paraphrase", "relevant": ["c07:a02@0", "c07:a02@165", "c07:u06"]}
-{"id": "dev-15", "query": "教学楼边取水的那个图钉落进海里，应该依次去哪些环节核查它被挪偏的原因？", "type": "paraphrase", "relevant": ["c11:a02@0"]}
-{"id": "dev-16", "query": "负责从影印件找字的程序预备得太久，实机核对最后安排在一天里什么时段？", "type": "paraphrase", "relevant": ["c12:u02", "c12:a02@0", "c12:a02@173"]}
+{"id": "dev-09", "query": "之前聊天断了，重新打开页面还能看到回复，是从哪里读回来的？", "type": "paraphrase", "relevant": ["c01:u02", "c01:u03", "c01:a04@0", "c01:a04@175"]}
+{"id": "dev-10", "query": "上次说的那个确认弹窗，我先点了允许，后来又点了不允许，系统会按哪次来？", "type": "paraphrase", "relevant": ["c02:u02", "c02:a06@0", "c02:a06@38"]}
+{"id": "dev-11", "query": "之前聊到退款的通知可能会发重，后来又有新的进展时，系统怎么分清这两种情况？", "type": "paraphrase", "relevant": ["c04:u02", "c04:a02@0", "c04:a02@164"]}
+{"id": "dev-12", "query": "之前大促那回，一家店的单子多了好多，为什么没法分给几个地方一起处理？", "type": "paraphrase", "relevant": ["c05:u02", "c05:a02@0", "c05:a02@151"]}
+{"id": "dev-13", "query": "之前你说卡不卡的结果别只看一款手机，我在另一款机型上要怎么复现？", "type": "paraphrase", "relevant": ["c06:a05@0", "c06:a05@43"]}
+{"id": "dev-14", "query": "之前聊过商品页面打开慢，你建议让哪张照片先出来，另外几张怎么办？", "type": "paraphrase", "relevant": ["c07:a02@0", "c07:a02@165", "c07:u06"]}
+{"id": "dev-15", "query": "学校那张图上有个点跑到水里了，你之前教我从哪儿查起，下一步看什么？", "type": "paraphrase", "relevant": ["c11:a02@0"]}
+{"id": "dev-16", "query": "上次有个识别扫描件的测试要等挺久，你说把实际跑模型的那组留到什么时间？", "type": "paraphrase", "relevant": ["c12:u02", "c12:a02@0", "c12:a02@173"]}
 {"id": "dev-17", "query": "长聊天里地点约束改口了，还能不能直接拿压缩后的旧说法？", "type": "gist", "relevant": ["c03:u02", "c03:u03", "c03:a03@0"]}
 {"id": "dev-18", "query": "投张江那家数据岗前想确认排班，我那两门课挡住哪几天？", "type": "gist", "relevant": ["c04:u05"]}
 {"id": "dev-19", "query": "两个订单流职位都想面，我为什么对要轮守的那家犹豫？", "type": "gist", "relevant": ["c05:u05", "c05:a06"]}

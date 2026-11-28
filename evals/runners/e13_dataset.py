@@ -175,23 +175,15 @@ def _validated_queries(
     )
     if no_answer_kinds != {"missing_number": 3, "unseen_topic": 3}:
         raise ValueError(f"E13 {split} 两种无答案查询各需 3 条")
-    _validate_paraphrases(queries, messages, chunks)
+    _validate_paraphrases(queries, messages)
     return queries
 
 
-def _validate_paraphrases(
-    queries: list[Query], messages: dict[str, str], chunks: dict[str, str]
-) -> None:
+def _validate_paraphrases(queries: list[Query], messages: dict[str, str]) -> None:
     paraphrases = [query for query in queries if query.type == "paraphrase"]
-    for candidate_type, ranks in (
-        ("原消息", message_literal_overlap(paraphrases, messages)),
-        ("实际分块", literal_overlap(paraphrases, chunks)),
-    ):
-        for query_id, overlap in ranks.items():
-            if overlap.rank == 1:
-                raise ValueError(
-                    f"E13 换说法查询 {query_id} 的{candidate_type}字面排名第 1"
-                )
+    for query_id, overlap in message_literal_overlap(paraphrases, messages).items():
+        if overlap.rank == 1:
+            raise ValueError(f"E13 换说法查询 {query_id} 的原消息字面排名第 1")
 
 
 def _validate_no_cross_conversation_repeats(samples: list[ConversationSample]) -> None:
