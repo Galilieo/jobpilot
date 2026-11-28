@@ -24,7 +24,7 @@ from jobpilot.db.account_export import export_business_records
 from jobpilot.db.models import FactSet, ResumeDocument
 from jobpilot.main import app
 from jobpilot.tests.test_agent_api import conversation
-from jobpilot.tests.test_agent_memories import call, remember
+from jobpilot.tests.test_agent_memories import call, remember, send
 from jobpilot.tests.test_auth import login, register
 from jobpilot.tests.test_facts_api import new_idempotency_headers
 from jobpilot.tests.test_tailored_resumes_api import _seed_tailored_resume
@@ -1146,3 +1146,60 @@ async def test_job_search_only_returns_callers_jobs(
         assert (await user_a.get("/api/jobs", params={"q": query})).json() == []
         matched_b = (await user_b.get("/api/jobs", params={"q": query})).json()
         assert [row["job_id"] for row in matched_b] == [b_job_id]
+
+
+# 这两个工具走既有的 POST /conversations/{id}/messages，归属在工具执行层校验。
+@pytest.mark.parametrize("ollama_available", [False, True], ids=["keyword", "vector"])
+async def test_conversation_search_tools_only_read_callers_history(
+    user_a: httpx.AsyncClient,
+    user_b: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    ollama_available: bool,
+) -> None:
+    from jobpilot.api.deps import get_model_client
+    from jobpilot.config import settings
+    from jobpilot.tests.test_agent_api import reply
+    from jobpilot.tests.test_call_accounting import fake_upstream
+
+    if ollama_available:
+
+        async def embed(
+            _transport: httpx.AsyncHTTPTransport, request: httpx.Request
+        ) -> httpx.Response:
+            assert request.url == f"{settings.ollama_base_url}/api/embed"
+            count = len(json.loads(request.content)["input"])
+            return httpx.Response(200, json={"embeddings": [[1] + [0] * 1023] * count})
+
+        monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", embed)
+
+    target, current = await conversation(user_a), await conversation(user_a)
+    other = await conversation(user_b)
+    secret = "星光项目　乙方内部资料"
+    async with fake_upstream(lambda _: reply()) as fake:
+        app.dependency_overrides[get_model_client] = lambda: fake
+        for client, path, content in (
+            (user_a, target, "星光项目　本人历史"),
+            (user_a, current, "星光项目　当前对话"),
+            (user_b, other, secret),
+        ):
+            assert (await send(client, path, content)).is_success
+            await app.state.run_launcher.wait_all()
+
+    target_id, other_id = target.rsplit("/", 1)[-1], other.rsplit("/", 1)[-1]
+    search, foreign, missing, owned = await call(
+        user_a,
+        current,
+        "查之前各种记录",
+        ("search_conversations", {"query": "星光项目"}),
+        ("read_conversation_history", {"conversation_id": other_id, "start_seq": 1}),
+        (
+            "read_conversation_history",
+            {"conversation_id": str(uuid4()), "start_seq": 1},
+        ),
+        ("read_conversation_history", {"conversation_id": target_id, "start_seq": 1}),
+    )
+    assert search["detail"]["degraded"] is not ollama_available
+    assert [hit["conversation_id"] for hit in search["detail"]["hits"]] == [target_id]
+    assert foreign["status"] == missing["status"] == 404
+    assert foreign["error"] == missing["error"]
+    assert owned.get("error") is None

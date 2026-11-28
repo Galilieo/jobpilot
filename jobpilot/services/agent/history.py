@@ -1,14 +1,16 @@
-"""把当前对话的原文分来源返回，工具输出继续由网关包装为不可信数据。"""
+"""把本人对话的原文分来源返回，工具输出由网关包装为不可信数据。"""
 
 from collections.abc import Iterator
 from contextlib import aclosing
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
+from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
 from jobpilot.config import settings
+from jobpilot.db.conversations import find_conversation
 from jobpilot.db.history import history_rows, legacy_question_card
 from jobpilot.db.models import AgentAction, Message, MessageRole
 from jobpilot.services.agent.context import serialize
@@ -18,7 +20,7 @@ from jobpilot.services.agent.questions import (
     question_results,
 )
 from jobpilot.services.agent.step_details import model_view
-from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext
+from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext, ToolError
 from jobpilot.services.llm_gateway import (
     pii_at_boundary,
     pii_spans,
@@ -52,6 +54,7 @@ class HistoryCursor(BaseModel):
 
 
 class HistoryArgs(ToolArgs):
+    conversation_id: UUID | None = None
     start_seq: int | None = Field(default=None, ge=1)
     end_seq: int | None = Field(default=None, ge=1)
     query: str | None = Field(default=None, min_length=1, max_length=120)
@@ -211,16 +214,21 @@ def _search_offset(part: HistoryPart, needle: str) -> int:
 
 async def read_history(context: ToolContext, args: HistoryArgs) -> Payload:
     agent = context.agent
+    conversation_id = args.conversation_id or agent.conversation_id
     cursor = args.cursor or HistoryCursor(seq=args.start_seq or 1, part=0)
     rows: list[Payload] = []
     budget = min(MAX_HISTORY_BYTES, settings.agent_limits.tool_result_bytes)
     limit = min(MAX_HISTORY_PART_BYTES, budget // 3)
     needle = args.query.casefold() if args.query else None
     async with agent.sessions() as session:
+        if args.conversation_id is not None and not await find_conversation(
+            agent.user_id, session, conversation_id
+        ):
+            raise ToolError("对话不存在", 404)
         messages = history_rows(
             agent.user_id,
             session,
-            agent.conversation_id,
+            conversation_id,
             start_seq=max(args.start_seq or 1, cursor.seq),
             end_seq=args.end_seq,
         )

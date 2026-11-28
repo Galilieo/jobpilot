@@ -37,6 +37,8 @@ def block_external_http(monkeypatch: pytest.MonkeyPatch) -> None:
     async def reject_async(
         transport: httpx.AsyncHTTPTransport, request: httpx.Request
     ) -> httpx.Response:
+        if request.url == f"{settings.ollama_base_url}/api/embed":
+            raise httpx.ConnectError("测试默认模拟本机 Ollama 未启动")
         raise AssertionError("测试禁止外部 HTTP 请求，请使用假模型客户端")
 
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", reject_sync)
@@ -124,7 +126,10 @@ async def async_client(
         async with httpx.AsyncClient(
             transport=transport, base_url="http://testserver"
         ) as client:
-            yield client
+            try:
+                yield client
+            finally:
+                await app.state.run_launcher.wait_all()
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(previous_overrides)

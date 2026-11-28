@@ -1,4 +1,4 @@
-"""工具步骤给界面展开看的细节：读了哪些岗位、事实库第几版、多少条。
+"""整理工具步骤展开时显示的业务摘要和会话搜索出处。
 
 只存在消息的步骤记录里给前端显示，回传模型前用 ``model_view`` 去掉，模型输入不变。
 不负责步骤摘要本身（见 ``context.summarize_tool``）。
@@ -62,6 +62,10 @@ def _read_resume(result: Payload) -> Payload:
     return {"version": result.get("version")}
 
 
+def _conversation_search(result: Payload) -> Payload:
+    return {key: result[key] for key in ("query", "hits", "degraded")}
+
+
 def _memory_record(result: Payload) -> Payload:
     return {
         key: result[key]
@@ -76,6 +80,7 @@ _DETAILS: dict[str, Callable[[Payload], Payload]] = {
     "read_facts": _read_facts,
     "read_match_report": _read_match_report,
     "read_resume": _read_resume,
+    "search_conversations": _conversation_search,
     "remember": _memory_record,
     "forget": _memory_record,
     "set_writing_preference": _memory_record,

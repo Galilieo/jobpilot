@@ -24,6 +24,10 @@ from jobpilot.services.agent.arguments import (
     SetJobArgs,
     TailorArgs,
 )
+from jobpilot.services.agent.conversation_search import (
+    SearchConversationArgs,
+    search_conversations,
+)
 from jobpilot.services.agent.history import HistoryArgs, read_history
 from jobpilot.services.agent.memory_actions import (
     ForgetArgs,
@@ -129,9 +133,19 @@ TOOLS = {
         _register(
             "read_conversation_history",
             ToolCategory.READ,
-            "按序号范围或关键词查当前对话原文，按 next_cursor 续读",
+            "按序号范围或关键词查对话原文，按 next_cursor 续读。默认当前对话，"
+            "也可传 search_conversations 找到的 conversation_id 读本人其他对话。",
             HistoryArgs,
             read_history,
+        ),
+        _register(
+            "search_conversations",
+            ToolCategory.READ,
+            "查本人其他对话的原文。用户提到上次或之前说过的内容，或需要补足记忆、"
+            "事实库、岗位库缺少的历史信息时使用。以简短关键词或具体描述作为 query；"
+            "引用时注明（来自《对话标题》），degraded 为 true 时说明结果可能不全。",
+            SearchConversationArgs,
+            search_conversations,
         ),
         _register(
             "parse_jd",

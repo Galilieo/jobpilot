@@ -47,6 +47,7 @@ from jobpilot.services.agent.questions import load_question_card
 from jobpilot.services.agent.types import AgentDeps, Payload
 from jobpilot.services.agent.window_messages import CurrentInputOverflow
 from jobpilot.services.llm_gateway import DailyModelQuotaError
+from jobpilot.services.message_index import index_finished_run
 
 logger = logging.getLogger("uvicorn.error").getChild("agent")
 _TIMEOUT_REPLY = "本轮已达到时长上限。已完成的步骤保留在对话中。"
@@ -272,6 +273,7 @@ class AgentRuntime:
             if self.streams.get(run.run_id) is stream:
                 self.streams.pop(run.run_id)
             stream.close()
+        await index_finished_run(sessions, run.user_id, run.run_id)
 
 
 async def _auto_compact(schedule: CompactSchedule) -> None:
