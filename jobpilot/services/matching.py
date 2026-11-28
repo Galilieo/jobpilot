@@ -17,11 +17,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from jobpilot.config import ModelPurpose
-from jobpilot.db.models import Fact, FactKind, FactSource, Responsibility
+from jobpilot.db.models import (
+    CriterionField,
+    Fact,
+    FactKind,
+    FactSource,
+    Responsibility,
+)
 from jobpilot.services import drafts
 from jobpilot.services.criteria_match import (
     CriterionCandidate,
     EducationCandidate,
+    LocationCheck,
+    compare_location,
     evaluate_requirement,
 )
 from jobpilot.services.facts import TruncatedOutputError
@@ -123,8 +131,28 @@ class MatchInputs:
     education: tuple[EducationCandidate, ...]
 
     @property
+    def coverage_criteria(self) -> tuple[CriterionCandidate, ...]:
+        return tuple(
+            item
+            for item in self.criteria
+            if item.field
+            not in (CriterionField.TARGET_DIRECTION, CriterionField.PREFERRED_CITIES)
+        )
+
+    @property
     def is_empty(self) -> bool:
-        return not (self.facts or self.criteria or self.education)
+        return not (self.facts or self.coverage_criteria or self.education)
+
+    def location_check(self, location: str | None) -> LocationCheck | None:
+        cities = next(
+            (
+                item.list_value
+                for item in self.criteria
+                if item.field is CriterionField.PREFERRED_CITIES
+            ),
+            None,
+        )
+        return compare_location(location, cities)
 
 
 async def load_match_inputs(

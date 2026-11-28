@@ -79,6 +79,7 @@ class CriterionOut(BaseModel):
     field: CriterionField
     int_value: int | None
     text_value: str | None
+    list_value: list[str] | None = None
     source: str
     source_doc_id: UUID | None
     source_quote: str | None
@@ -142,6 +143,7 @@ class CriterionIn(BaseModel):
     field: CriterionField
     int_value: int | None = None
     text_value: str | None = Field(default=None, max_length=200)
+    list_value: list[str] | None = None
     confirmed: bool | None = None
     delete: bool = False
     expected_revision: ExpectedRevision
@@ -285,6 +287,7 @@ async def edit_criterion(
             body.field,
             int_value=body.int_value,
             text_value=body.text_value,
+            list_value=body.list_value,
             confirmed=body.confirmed,
             delete=body.delete,
             expected_revision=body.expected_revision,

@@ -189,7 +189,13 @@ async def test_export_has_all_versions_and_only_the_signed_in_owners_data(
         )
     assert archive["account"]["email"] == EMAIL
     assert {"user_sessions", "model_calls", "idempotency_keys"}.isdisjoint(archive)
-    empty = {"conversations", "messages", "agent_actions", "memories"}
+    empty = {
+        "conversations",
+        "messages",
+        "agent_actions",
+        "memory",
+        "writing_preference",
+    }
     assert all(archive[name] == [] for name in empty)
     assert all(
         archive[name] for name in archive.keys() - empty - {"account", "format_version"}

@@ -28,4 +28,4 @@ async def build_account_export(
         version["html"] = render_html(
             content, mode=RenderMode.EXPORT, version=version["version"]
         )
-    return {"format_version": 1, "account": account, **records}
+    return {"format_version": 2, "account": account, **records}

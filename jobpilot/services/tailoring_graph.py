@@ -16,6 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Send
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -40,9 +41,11 @@ from jobpilot.services.matching import (
     load_match_inputs,
     match_job,
 )
+from jobpilot.services.rewriting import DraftBullet
 from jobpilot.services.tailoring import (
     MODEL_ERRORS,
     BlockOutcome,
+    BlockStatus,
     CheckLevel,
     WriteContext,
     write_block,
@@ -59,6 +62,15 @@ from jobpilot.services.tailoring_store import (
 TAILOR_MAX_CONCURRENT_REQUESTS = 4
 
 
+class TailorReplay(BaseModel):
+    """E5 沿用一次匹配和每块未经检查的初稿。"""
+
+    match_items: list[MatchItem]
+    plan: list[PlanBlock]
+    outcomes: dict[str, BlockOutcome]
+    match_failure: StopReason | None = None
+
+
 @dataclass(frozen=True)
 class TailorDeps:
     """不放进图状态的依赖：数据库、模型客户端、预算和并发上限。"""
@@ -68,6 +80,7 @@ class TailorDeps:
     budget: ModelQuota
     limiter: asyncio.Semaphore
     check_level: CheckLevel = CheckLevel.FULL
+    replay: TailorReplay | None = None
 
 
 class TailorState(TypedDict, total=False):
@@ -100,6 +113,11 @@ def build_tailor_graph(
         return {"inputs": inputs}
 
     async def match(state: TailorState) -> dict[str, Any]:
+        if deps.replay is not None:
+            return {
+                "match_items": deps.replay.match_items,
+                "stop_reason": deps.replay.match_failure,
+            }
         inputs = state["inputs"]
         reused = await reusable_match_items(
             deps.session_factory, state["user_id"], inputs
@@ -118,6 +136,8 @@ def build_tailor_graph(
             base_text=inputs.base_text,
             section_overrides=state.get("section_overrides"),
         )
+        if deps.replay is not None and blocks != deps.replay.plan:
+            raise ValueError("当前改写计划与 E5 初稿的计划不一致")
         return {"plan": blocks}
 
     def after_match(state: TailorState) -> str:
@@ -141,7 +161,16 @@ def build_tailor_graph(
         ]
 
     async def write(task: BlockTask) -> dict[str, Any]:
-        outcome = await write_block(_context(deps, task), task["block"])
+        block = task["block"]
+        drafts = None
+        if deps.replay is not None:
+            initial = deps.replay.outcomes[block.key]
+            if initial.status is not BlockStatus.DONE:
+                return {"outcomes": [initial]}
+            drafts = [
+                DraftBullet(bullet.text, bullet.fact_ids) for bullet in initial.bullets
+            ]
+        outcome = await write_block(_context(deps, task), block, drafts=drafts)
         return {"outcomes": [outcome]}
 
     async def finalize(state: TailorState) -> dict[str, Any]:
@@ -230,7 +259,7 @@ async def run_match(
             budget=deps.budget,
             snapshot=inputs.snapshot,
             facts=match_inputs.facts,
-            criteria=match_inputs.criteria,
+            criteria=match_inputs.coverage_criteria,
             education=match_inputs.education,
         )
     except BudgetExhaustedError:

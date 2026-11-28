@@ -34,8 +34,8 @@ from jobpilot.db.models import (
 )
 from jobpilot.services.agent.actions import undo_write, verify_action_version
 from jobpilot.services.agent.application_actions import confirm_application
-from jobpilot.services.agent.context import render_user_content
-from jobpilot.services.agent.memory_actions import MEMORY_TOOLS, confirm_memory
+from jobpilot.services.agent.context import build_memory_snapshot, render_user_content
+from jobpilot.services.agent.memory_actions import RECORD_TOOLS
 from jobpilot.services.agent.questions import validate_card_decision
 from jobpilot.services.agent.runtime import (
     AgentRuntime,
@@ -153,9 +153,13 @@ def _launch(
 
 
 async def _lock_conversation(
-    user_id: UUID, db: DbSession, conversation_id: UUID
+    user_id: UUID,
+    db: DbSession,
+    conversation_id: UUID,
+    *,
+    exclusive_account: bool = False,
 ) -> Conversation:
-    if not await lock_active_account(db, user_id):
+    if not await lock_active_account(db, user_id, exclusive=exclusive_account):
         raise HTTPException(403, "账号当前无法执行对话操作")
     conversation = await find_conversation(user_id, db, conversation_id, lock=True)
     if conversation is None:
@@ -190,6 +194,8 @@ async def send_message(
                 "pending_action": card_payload(card) if card else None,
             },
         )
+    if conversation.memory_snapshot_json is None:
+        conversation.memory_snapshot_json = await build_memory_snapshot(db, user_id)
     run = AiRun(
         kind="agent",
         user_id=user_id,
@@ -239,14 +245,13 @@ async def _store_decision(
     action.decided_at = func.now()
     if body.decision != Decision.CONFIRM:
         return
-    apply = (
-        confirm_memory
-        if action.tool in MEMORY_TOOLS
-        else (confirm_application if action.tool == "record_application" else None)
-    )
-    if apply is not None:
+    if action.tool in RECORD_TOOLS:
+        action.status = ActionStatus.REJECTED
+        action.decision_json = {"decision": Decision.REJECT}
+        return
+    if action.tool == "record_application":
         try:
-            await apply(db, action)
+            await confirm_application(db, action)
         except ToolError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -290,7 +295,12 @@ async def undo_action(action_id: UUID, user: CurrentUser, db: DbSession) -> Payl
     action = await find_action(user.user_id, db, action_id)
     if action is None:
         raise HTTPException(404, "确认卡不存在")
-    await _lock_conversation(user.user_id, db, action.conversation_id)
+    await _lock_conversation(
+        user.user_id,
+        db,
+        action.conversation_id,
+        exclusive_account=action.tool in RECORD_TOOLS,
+    )
     action = await find_action(user.user_id, db, action_id, lock=True)
     if action is None:
         raise HTTPException(404, "确认卡不存在")

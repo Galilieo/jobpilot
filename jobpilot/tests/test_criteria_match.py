@@ -8,6 +8,7 @@ from jobpilot.db.models import CriterionField, DegreeLevel, EducationStatus
 from jobpilot.services.criteria_match import (
     CriterionCandidate,
     EducationCandidate,
+    compare_location,
     evaluate_requirement,
 )
 from jobpilot.services.jobs import BasicFields, Requirement, RequirementType
@@ -187,3 +188,21 @@ def test_program_defers_when_part_of_requirement_is_unrecognized(text: str) -> N
     bachelor = _edu("东澜理工", DegreeLevel.BACHELOR, EducationStatus.ENROLLED)
     decision, note = evaluate_requirement(req, [_days(5)], [bachelor])
     assert decision is None and note
+
+
+@pytest.mark.parametrize(
+    ("location", "cities", "expected"),
+    [
+        ("杭州、上海", ["宁波", "上海"], "match"),
+        ("北京市朝阳区", ["上海"], "outside"),
+        ("北京", None, None),
+        (None, ["上海"], "review"),
+        ("多地", ["上海"], "review"),
+        ("全国", ["上海"], "review"),
+        ("远程", ["上海"], "review"),
+        ("北京，可远程", ["上海"], "review"),
+    ],
+)
+def test_location_comparison(location, cities, expected):
+    result = compare_location(location, cities)
+    assert (result.status if result else None) == expected

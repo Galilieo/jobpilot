@@ -33,11 +33,15 @@ from jobpilot.db.application_schema import (
 )
 from jobpilot.db.base import Base
 from jobpilot.db.memory_schema import (
-    MEMORY_KEY_CHECK,
-    MEMORY_KEY_LENGTH,
+    MEMORY_ACTIVE_WHERE,
+    MEMORY_CATEGORY_CHECK,
+    MEMORY_CONTENT_CHECK,
+    MEMORY_NORMALIZED_CONTENT,
     MEMORY_REVISION_CHECK,
     MEMORY_SOURCE_CHECK,
-    MEMORY_VALUE_CHECK,
+    MEMORY_UNIQUE_INDEX,
+    WritingField,
+    writing_choice_check,
 )
 
 
@@ -71,23 +75,60 @@ class User(Base):
 
 
 class Memory(Base):
-    """保存已确认的偏好，删除的栏目保留修订号以拒绝过期写入。"""
+    """保存用户偏好短句，软删除保留撤销所需的修订号。"""
 
     __tablename__ = "memory"
     __table_args__ = (
-        CheckConstraint(MEMORY_KEY_CHECK, name="ck_memory_key"),
+        CheckConstraint(MEMORY_CATEGORY_CHECK, name="ck_memory_category"),
+        CheckConstraint(MEMORY_CONTENT_CHECK, name="ck_memory_content"),
         CheckConstraint(MEMORY_REVISION_CHECK, name="ck_memory_revision"),
-        CheckConstraint(MEMORY_VALUE_CHECK, name="ck_memory_value"),
         CheckConstraint(MEMORY_SOURCE_CHECK, name="ck_memory_source"),
+        Index(
+            MEMORY_UNIQUE_INDEX,
+            "user_id",
+            "category",
+            sql_text(MEMORY_NORMALIZED_CONTENT),
+            unique=True,
+            postgresql_where=sql_text(MEMORY_ACTIVE_WHERE),
+        ),
+    )
+
+    memory_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("user_account.user_id", ondelete="CASCADE")
+    )
+    category: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(BigInteger, server_default="1")
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class WritingPreference(Base):
+    """每个用户一行，保存改写程序识别的固定选项。"""
+
+    __tablename__ = "writing_preference"
+    __table_args__ = (
+        CheckConstraint(MEMORY_REVISION_CHECK, name="ck_writing_preference_revision"),
+        CheckConstraint(MEMORY_SOURCE_CHECK, name="ck_writing_preference_source"),
+        *(
+            CheckConstraint(
+                writing_choice_check(field), name=f"ck_writing_preference_{field}"
+            )
+            for field in WritingField
+        ),
     )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("user_account.user_id", ondelete="CASCADE"), primary_key=True
     )
-    key: Mapped[str] = mapped_column(String(MEMORY_KEY_LENGTH), primary_key=True)
-    value_json: Mapped[str | list[str] | None] = mapped_column(JSONB(none_as_null=True))
-    revision: Mapped[int] = mapped_column(BigInteger)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tone: Mapped[str | None] = mapped_column(Text)
+    bullet_length: Mapped[str | None] = mapped_column(Text)
+    tech_terms: Mapped[str | None] = mapped_column(Text)
+    revision: Mapped[int] = mapped_column(BigInteger, server_default="1")
     source: Mapped[dict[str, Any]] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -351,6 +392,8 @@ class CriterionField(StrEnum):
     ONSITE_DAYS_PER_WEEK = "onsite_days_per_week"
     INTERNSHIP_MONTHS = "internship_months"
     EARLIEST_START = "earliest_start"
+    TARGET_DIRECTION = "target_direction"
+    PREFERRED_CITIES = "preferred_cities"
 
 
 class DegreeLevel(StrEnum):
@@ -500,6 +543,34 @@ class Fact(Base):
     quote_verified: Mapped[bool] = mapped_column(server_default=sql_text("false"))
 
 
+TARGET_DIRECTION_CHARS = 100
+PREFERRED_CITY_CHARS = 20
+PREFERRED_CITY_COUNT = 5
+CRITERION_FIELD_CHECK = (
+    "field IN (" + ", ".join(f"'{field}'" for field in CriterionField) + ")"
+)
+CRITERION_VALUE_CHECK = f"""
+    (CASE field
+      WHEN 'onsite_days_per_week' THEN list_value IS NULL AND text_value IS NULL
+        AND int_value BETWEEN {ONSITE_DAYS_MIN} AND {ONSITE_DAYS_MAX}
+      WHEN 'internship_months' THEN list_value IS NULL AND text_value IS NULL
+        AND int_value BETWEEN {INTERNSHIP_MONTHS_MIN} AND {INTERNSHIP_MONTHS_MAX}
+      WHEN 'earliest_start' THEN list_value IS NULL AND int_value IS NULL
+        AND length(btrim(text_value)) > 0
+      WHEN 'target_direction' THEN list_value IS NULL AND int_value IS NULL
+        AND source = 'user'
+        AND length(btrim(text_value)) BETWEEN 1 AND {TARGET_DIRECTION_CHARS}
+      WHEN 'preferred_cities' THEN int_value IS NULL AND text_value IS NULL
+        AND source = 'user' AND CASE WHEN jsonb_typeof(list_value) = 'array' THEN
+            jsonb_array_length(list_value) BETWEEN 1 AND {PREFERRED_CITY_COUNT}
+            AND NOT jsonb_path_exists(list_value,
+                'strict $[*] ? (@.type() != "string" ||
+                    !(@ like_regex "^.{{1,{PREFERRED_CITY_CHARS}}}$" flag "s"))')
+          ELSE false END
+      ELSE false END) IS TRUE
+"""
+
+
 class FactSetCriterion(Base):
     """已发布的求职条件，每个事实库版本每项至多一行，只追加。"""
 
@@ -507,21 +578,8 @@ class FactSetCriterion(Base):
     __table_args__ = (
         *_provenance_constraints("fact_set_criterion"),
         UniqueConstraint("fact_set_id", "field"),
-        CheckConstraint(
-            "field IN ('onsite_days_per_week', 'internship_months', 'earliest_start')",
-            name="ck_fact_set_criterion_field",
-        ),
-        CheckConstraint(
-            f"(field = 'onsite_days_per_week' "
-            f"AND int_value BETWEEN {ONSITE_DAYS_MIN} AND {ONSITE_DAYS_MAX} "
-            f"AND text_value IS NULL) OR "
-            "(field = 'internship_months' AND int_value BETWEEN "
-            f"{INTERNSHIP_MONTHS_MIN} AND {INTERNSHIP_MONTHS_MAX} "
-            "AND text_value IS NULL) OR "
-            "(field = 'earliest_start' AND int_value IS NULL "
-            "AND text_value IS NOT NULL AND length(btrim(text_value)) > 0)",
-            name="ck_fact_set_criterion_value",
-        ),
+        CheckConstraint(CRITERION_FIELD_CHECK, name="ck_fact_set_criterion_field"),
+        CheckConstraint(CRITERION_VALUE_CHECK, name="ck_fact_set_criterion_value"),
     )
 
     criterion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -530,6 +588,7 @@ class FactSetCriterion(Base):
     field: Mapped[str] = mapped_column(String(32))
     int_value: Mapped[int | None]
     text_value: Mapped[str | None] = mapped_column(Text)
+    list_value: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
     source: Mapped[str] = mapped_column(String(16))
     source_doc_id: Mapped[UUID | None] = mapped_column(Uuid)
     source_quote: Mapped[str | None] = mapped_column(Text)
@@ -723,6 +782,9 @@ class Conversation(Base):
     current_job_id: Mapped[UUID | None] = mapped_column(Uuid)
     job_binding_revision: Mapped[int] = mapped_column(BigInteger, server_default="0")
     summary_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True)
+    )
+    memory_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB(none_as_null=True)
     )
     summary_through_seq: Mapped[int] = mapped_column(BigInteger, server_default="0")

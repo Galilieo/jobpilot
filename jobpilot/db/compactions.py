@@ -72,6 +72,7 @@ async def advance_summary(
     previous_through_seq: int,
     through_seq: int,
     summary_json: dict,
+    memory_snapshot_json: dict,
     unchanged_updated_at: datetime,
 ) -> bool:
     """摘要与覆盖点一起前进；只更新摘要时保留对话列表排序。"""
@@ -86,6 +87,7 @@ async def advance_summary(
         )
         .values(
             summary_json=summary_json,
+            memory_snapshot_json=memory_snapshot_json,
             summary_through_seq=through_seq,
             summary_revision=previous_revision + 1,
             updated_at=unchanged_updated_at,

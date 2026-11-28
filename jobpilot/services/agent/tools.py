@@ -7,6 +7,7 @@ from typing import cast
 from openai.types.chat import ChatCompletionToolUnionParam
 from pydantic import ValidationError
 
+from jobpilot.db.memory_schema import WRITING_CHOICE_TYPES
 from jobpilot.services.agent import actions, generation, read_tools
 from jobpilot.services.agent.application_actions import (
     RecordApplicationArgs,
@@ -27,7 +28,8 @@ from jobpilot.services.agent.history import HistoryArgs, read_history
 from jobpilot.services.agent.memory_actions import (
     ForgetArgs,
     RememberArgs,
-    prepare_memory,
+    SetWritingPreferenceArgs,
+    record_memory,
 )
 from jobpilot.services.agent.types import (
     Payload,
@@ -175,17 +177,32 @@ TOOLS = {
         ),
         _register(
             "remember",
-            ToolCategory.WRITE,
-            "引用本轮正文提议长期偏好，须用户确认",
+            ToolCategory.RECORD,
+            "自动记录本轮正文表达的长期偏好或对 Agent 的要求。"
+            "quote 逐字引用本轮正文；改口用 replaces 引用记忆 ID。"
+            "经历、求职条件、JD、进度和一次性要求不记；"
+            "敏感信息仅在用户明确要求时记录。",
             RememberArgs,
-            prepare_memory,
+            record_memory,
         ),
         _register(
             "forget",
-            ToolCategory.WRITE,
-            "引用本轮正文提议删除偏好，须用户确认",
+            ToolCategory.RECORD,
+            "按记忆 ID 忘掉用户要求删除或已改口作废的长期记忆。"
+            "quote 逐字引用本轮正文。",
             ForgetArgs,
-            prepare_memory,
+            record_memory,
+        ),
+        _register(
+            "set_writing_preference",
+            ToolCategory.RECORD,
+            "按本轮正文自动设置长期简历写作偏好，可用 null 恢复默认。"
+            + "；".join(
+                f"{field}：{'、'.join(choices)}"
+                for field, choices in WRITING_CHOICE_TYPES.items()
+            ),
+            SetWritingPreferenceArgs,
+            record_memory,
         ),
         _register(
             "ask_user", ToolCategory.ASK, "合并本轮需要用户回答的问题", AskArgs, _ask

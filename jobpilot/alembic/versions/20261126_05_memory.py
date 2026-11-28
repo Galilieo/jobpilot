@@ -1,7 +1,7 @@
 """创建版本化的记忆档案和改写运行的写作偏好快照列。"""
 
 import sqlalchemy as sa
-from jobpilot.db.memory_schema import (
+from jobpilot.db.legacy_memory_schema import (
     MEMORY_KEY_CHECK,
     MEMORY_KEY_LENGTH,
     MEMORY_REVISION_CHECK,
@@ -18,7 +18,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def create_legacy_memory() -> None:
     op.create_table(
         "memory",
         sa.Column(
@@ -49,6 +49,10 @@ def upgrade() -> None:
         sa.CheckConstraint(MEMORY_VALUE_CHECK, name="ck_memory_value"),
         sa.CheckConstraint(MEMORY_SOURCE_CHECK, name="ck_memory_source"),
     )
+
+
+def upgrade() -> None:
+    create_legacy_memory()
     op.add_column("ai_run", sa.Column("writing_preferences_json", JSONB()))
 
 

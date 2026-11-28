@@ -23,6 +23,7 @@ from jobpilot.db.conversations import (
     propose_action,
     set_job_binding,
 )
+from jobpilot.db.memories import count_record_actions
 from jobpilot.db.models import (
     ActionStatus,
     AgentAction,
@@ -37,9 +38,11 @@ from jobpilot.services.agent.arguments import JobArgs, ParseJobArgs
 from jobpilot.services.agent.context import (
     agent_system_message,
     build_context,
+    serialize,
     serialize_tool_result,
-    summarize_tool,
+    summarize_tool_call,
 )
+from jobpilot.services.agent.memory_actions import RECORD_TOOLS
 from jobpilot.services.agent.questions import (
     JOB_CHOICE_QUESTION,
     JobSelection,
@@ -284,7 +287,7 @@ async def _owned_run(
 
 
 async def _record(agent: AgentDeps, call: ToolCall, result: Payload) -> None:
-    summary = {**summarize_tool(call["name"], result), "tool_call_id": call["call_id"]}
+    summary = summarize_tool_call(call, result)
     async with agent.sessions.begin() as session:
         run = await _owned_run(agent, session, lock=True)
         await add_message(
@@ -294,10 +297,12 @@ async def _record(agent: AgentDeps, call: ToolCall, result: Payload) -> None:
 
 
 def _tool_message(call: ToolCall, result: Payload) -> Payload:
+    # 整理空间需要保留每个条目的 ID。只有窗口不足时才按通用规则裁剪。
+    full_result = call["name"] in RECORD_TOOLS and "entries" in result
     return {
         "role": "tool",
         "tool_call_id": call["call_id"],
-        "content": serialize_tool_result(result),
+        "content": serialize(result) if full_result else serialize_tool_result(result),
     }
 
 
@@ -349,6 +354,13 @@ async def _generate_once(
         args = tool.parse_arguments(call["arguments"])
     except ToolError as error:
         return {"status": error.status, "error": str(error)}, {}
+    if isinstance(args, ParseJobArgs) and args.source == "message":
+        async with agent.sessions() as db:
+            if await count_record_actions(db, agent.user_id, agent.run_id):
+                return {
+                    "status": 409,
+                    "error": "本轮正文已用于记忆。请单独发送 JD 或使用附件。",
+                }, {}
     if isinstance(args, JobArgs) and args.job_id is None:
         # 默认岗位会随确认卡切换。缓存和执行必须使用同一个实际岗位 ID。
         async with agent.sessions() as db:
@@ -417,11 +429,22 @@ async def _execute_tool(agent: AgentDeps, state: AgentState) -> AgentState:
         if tool and tool.category == ToolCategory.GENERATE:
             result, tool_update = await _generate_once(agent, state, call, tool)
         else:
-            result, tool_update = await _result_for(agent, call), {}
+            result, tool_update = (
+                await _result_for(
+                    agent,
+                    call,
+                    message_used_as_jd=state.get("message_used_as_jd", False),
+                ),
+                {},
+            )
     except BudgetExhaustedError:
         await _record(agent, call, {"status": "budget_exhausted"})
         return {"seconds_left": agent.seconds_left, **_exhausted()}
-    await _record(agent, call, result)
+    if call["name"] in RECORD_TOOLS and "action_id" in result:
+        # 自动记录的成功步骤已和改动一起落库。
+        agent.emit("tool_end", summarize_tool_call(call, result))
+    else:
+        await _record(agent, call, result)
     messages = [*state["messages"], _tool_message(call, result)]
     updates: AgentState = {
         **tool_update,

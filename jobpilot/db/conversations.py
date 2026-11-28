@@ -190,9 +190,27 @@ async def latest_decided_action(
             AgentAction.user_id == user_id,
             AgentAction.conversation_id == conversation_id,
             AgentAction.decided_at.is_not(None),
+            AgentAction.undo_json["record_type"].astext.is_(None),
         )
         .order_by(AgentAction.decided_at.desc(), AgentAction.action_id.desc())
         .limit(1)
+    )
+
+
+async def undone_record_actions(
+    session: AsyncSession,
+    user_id: UUID,
+    conversation_id: UUID,
+) -> list[UUID]:
+    return list(
+        await session.scalars(
+            select(AgentAction.action_id).where(
+                AgentAction.user_id == user_id,
+                AgentAction.conversation_id == conversation_id,
+                AgentAction.status == ActionStatus.UNDONE,
+                AgentAction.undo_json["record_type"].astext.is_not(None),
+            )
+        )
     )
 
 

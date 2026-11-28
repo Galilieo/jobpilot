@@ -68,12 +68,14 @@ async def lock_account_for_session(session: AsyncSession, user_id: UUID) -> bool
     return account_id is not None
 
 
-async def lock_active_account(session: AsyncSession, user_id: UUID) -> bool:
+async def lock_active_account(
+    session: AsyncSession, user_id: UUID, *, exclusive: bool = False
+) -> bool:
     """在提交本次运行前与删号互斥，避免认证后才开始的运行逃过取消。"""
     account_id = await session.scalar(
         select(User.user_id)
         .where(User.user_id == user_id, User.deletion_requested_at.is_(None))
-        .with_for_update(read=True)
+        .with_for_update(read=not exclusive)
     )
     return account_id is not None
 

@@ -1,69 +1,52 @@
-"""按用户读取记忆，用原子条件写入处理创建和更新竞争。"""
+"""提供记忆和写作偏好的按用户查询。写入由服务在账号行锁内完成。"""
 
 from uuid import UUID
 
-from sqlalchemy import func, select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jobpilot.db.memory_schema import MemoryKey
-from jobpilot.db.models import Memory
-
-type MemoryValue = str | list[str]
-
-
-class MemoryConflictError(ValueError):
-    """预期修订号已失效。"""
+from jobpilot.db.models import Memory, WritingPreference
 
 
 async def list_memories(user_id: UUID, session: AsyncSession) -> list[Memory]:
-    return list(await session.scalars(select(Memory).where(Memory.user_id == user_id)))
+    return list(
+        await session.scalars(
+            select(Memory)
+            .where(Memory.user_id == user_id, Memory.deleted_at.is_(None))
+            .order_by(Memory.created_at, Memory.memory_id)
+        )
+    )
 
 
 async def find_memory(
-    user_id: UUID, session: AsyncSession, key: MemoryKey
+    user_id: UUID, session: AsyncSession, memory_id: UUID
 ) -> Memory | None:
-    return await session.get(Memory, (user_id, key))
-
-
-async def save_memory(
-    user_id: UUID,
-    session: AsyncSession,
-    key: MemoryKey,
-    *,
-    expected_revision: int,
-    value: MemoryValue | None,
-    source: dict[str, str],
-) -> Memory:
-    """只在预期版本仍生效时写入，删除也递增版本并清空值。"""
-    values = {
-        "value_json": value,
-        "revision": expected_revision + 1,
-        "deleted_at": func.now() if value is None else None,
-        "source": source,
-        "updated_at": func.now(),
-    }
-    if expected_revision == 0:
-        if value is None:
-            raise MemoryConflictError("记忆尚未建立")
-        statement = (
-            insert(Memory)
-            .values(user_id=user_id, key=key, **values)
-            .on_conflict_do_nothing(index_elements=[Memory.user_id, Memory.key])
-        )
-    else:
-        statement = (
-            update(Memory)
-            .where(
-                Memory.user_id == user_id,
-                Memory.key == key,
-                Memory.revision == expected_revision,
-            )
-            .values(**values)
-        )
-    result = await session.scalar(
-        statement.returning(Memory).execution_options(populate_existing=True)
+    return await session.scalar(
+        select(Memory).where(Memory.user_id == user_id, Memory.memory_id == memory_id)
     )
-    if result is None:
-        raise MemoryConflictError("记忆已在别处更新，请刷新后重试")
-    return result
+
+
+async def count_record_actions(
+    session: AsyncSession, user_id: UUID, run_id: UUID
+) -> int:
+    from jobpilot.db.models import ActionStatus, AgentAction
+
+    return (
+        await session.scalar(
+            select(func.count())
+            .select_from(AgentAction)
+            .where(
+                AgentAction.user_id == user_id,
+                AgentAction.run_id == run_id,
+                AgentAction.status.in_([ActionStatus.EXECUTED, ActionStatus.UNDONE]),
+                AgentAction.undo_json["record_type"].astext.is_not(None),
+            )
+        )
+        or 0
+    )
+
+
+async def find_writing_preference(
+    session: AsyncSession, user_id: UUID
+) -> WritingPreference | None:
+    return await session.get(WritingPreference, user_id)

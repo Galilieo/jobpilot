@@ -36,7 +36,11 @@ from jobpilot.services.agent.compact_sources import (
     verified_actions,
     verified_sources,
 )
-from jobpilot.services.agent.context import read_system_context, render_turn
+from jobpilot.services.agent.context import (
+    build_memory_snapshot,
+    read_system_context,
+    render_turn,
+)
 from jobpilot.services.agent.tools import TOOL_DEFINITIONS
 from jobpilot.services.agent.types import Payload
 from jobpilot.services.agent.work_summary import (
@@ -467,5 +471,6 @@ async def _write_summary(
         previous_through_seq=work.previous_seq,
         through_seq=work.through_seq,
         summary_json=fitted.model_dump(mode="json"),
+        memory_snapshot_json=await build_memory_snapshot(session, work.user_id),
         unchanged_updated_at=conversation.updated_at,
     )

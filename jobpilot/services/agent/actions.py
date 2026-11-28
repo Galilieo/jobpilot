@@ -35,7 +35,7 @@ from jobpilot.services.resume_versions import (
 )
 from jobpilot.services.rewriting import edit_bullet
 from jobpilot.services.semantic_check import ground_check
-from jobpilot.services.writing_preferences import confirmed_writing_preferences
+from jobpilot.services.writing_preferences import load_writing_preferences
 
 
 class PreparedResume(BaseModel):
@@ -147,7 +147,7 @@ async def prepare_resume(context: ToolContext, args: EditResumeArgs) -> Payload:
                 "clarify": "请指出要改的简历条目，并给出完整替换正文或润色要求。",
             }
         facts = await _resume_facts(session, agent.user_id, args.run_id)
-        preferences = await confirmed_writing_preferences(session, agent.user_id)
+        preferences = await load_writing_preferences(session, agent.user_id)
     text = args.quote
     if args.mode == "polish":
         cited = [facts[fact_id] for fact_id in bullet.fact_ids if fact_id in facts]
@@ -333,6 +333,7 @@ async def undo_write(session: AsyncSession, action: AgentAction) -> Payload:
         "remember": undo_memory,
         "record_application": undo_application,
         "forget": undo_memory,
+        "set_writing_preference": undo_memory,
     }[action.tool]
     result = await undo(session, action, action.undo_json)
     action.undo_json = {**action.undo_json, "result": result}

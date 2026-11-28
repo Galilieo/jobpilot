@@ -1,116 +1,97 @@
-"""通过管理接口验证记忆的修订号、用户隔离和删除后的恢复。"""
+"""验证记忆接口、账号行锁与写作偏好的修订号。"""
+
+import asyncio
 
 import httpx
 
 from jobpilot.tests.test_agent_api import sign_in
 
 
-async def test_memory_delete_requires_current_revision_and_can_be_restored(
+async def test_manual_entries_deduplicate_by_category_and_trim(
     async_client: httpx.AsyncClient,
-) -> None:
+):
     await sign_in(async_client)
-    path = "/api/memories/cities"
-    created = await async_client.put(
-        path, json={"expected_revision": 0, "value": ["杭州", "上海", "杭州"]}
+    data = {"category": "job_pref", "content": "  不考虑外包  "}
+    first = (await async_client.post("/api/memories", json=data)).json()
+    duplicate = (await async_client.post("/api/memories", json=data)).json()
+    assert first["status"] == "saved"
+    assert duplicate == {"status": "exists", "entry": first["entry"]}
+    assert first["entry"]["content"] == "不考虑外包"
+    assert first["entry"]["source"] == {"kind": "manual"}
+    await async_client.post("/api/memories", json={**data, "category": "agent_rule"})
+    current = (await async_client.get("/api/memories")).json()
+    assert current["used_chars"] == 10
+    assert current["budget_chars"] == 1500
+    assert len(current["entries"]) == 2
+    path = f"/api/memories/{first['entry']['memory_id']}"
+    updated = await async_client.put(
+        path, json={**data, "content": "只考虑自研", "expected_revision": 1}
     )
-    assert created.status_code == 200
-    assert created.json()["value"] == ["杭州", "上海"]
-    assert created.json()["revision"] == 1
-
-    stale = await async_client.request("DELETE", path, json={"expected_revision": 0})
-    assert stale.status_code == 409
-    deleted = await async_client.request("DELETE", path, json={"expected_revision": 1})
-    assert deleted.status_code == 200
-    assert deleted.json()["value"] is None
-    assert deleted.json()["revision"] == 2
-    assert deleted.json()["deleted"] is True
-
-    records = (await async_client.get("/api/memories")).json()
-    assert next(item for item in records if item["key"] == "cities") == deleted.json()
-    restored = await async_client.put(
-        path, json={"expected_revision": 2, "value": ["苏州"]}
-    )
-    assert restored.status_code == 200
-    assert restored.json()["revision"] == 3
+    assert updated.json()["entry"]["revision"] == 2
+    assert (
+        await async_client.request("DELETE", path, json={"expected_revision": 1})
+    ).status_code == 409
+    assert (
+        await async_client.request("DELETE", path, json={"expected_revision": 2})
+    ).status_code == 204
+    assert (await async_client.get("/api/memories")).json()["used_chars"] == 5
+    archive = (await async_client.get("/api/account/export")).json()
+    assert archive["format_version"] == 2
+    assert len(archive["memory"]) == 2
+    assert any(item["deleted_at"] for item in archive["memory"])
 
 
-async def test_memory_values_are_validated_and_scoped_to_the_signed_in_user(
+async def test_concurrent_manual_adds_cannot_exceed_character_budget(
     async_client: httpx.AsyncClient,
-) -> None:
+):
     await sign_in(async_client)
-    created = await async_client.put(
-        "/api/memories/tone", json={"expected_revision": 0, "value": "平实"}
-    )
-    assert created.status_code == 200
-
-    await sign_in(async_client, "another-memory-owner@example.invalid")
-    for key, value in [
-        ("unknown", "平实"),
-        ("cities", ["长" * 21]),
-        ("tone", "非常活泼"),
-    ]:
-        response = await async_client.put(
-            f"/api/memories/{key}", json={"expected_revision": 0, "value": value}
+    for index in range(7):
+        saved = await async_client.post(
+            "/api/memories", json={"category": "job_pref", "content": f"{index}" * 200}
         )
-        assert response.status_code == 422
-    records = (await async_client.get("/api/memories")).json()
-    assert next(item for item in records if item["key"] == "tone")["revision"] == 0
-    wrong_owner = await async_client.request(
-        "DELETE", "/api/memories/tone", json={"expected_revision": 1}
+        assert saved.is_success
+    results = await asyncio.gather(
+        *(
+            async_client.post(
+                "/api/memories", json={"category": "agent_rule", "content": char * 100}
+            )
+            for char in ("甲", "乙")
+        )
     )
-    assert wrong_owner.status_code == 409
+    assert sorted(result.status_code for result in results) == [200, 409]
+    denied = next(
+        result.json()["detail"] for result in results if not result.is_success
+    )
+    assert len(denied["entries"]) == 8
+    assert (await async_client.get("/api/memories")).json()["used_chars"] == 1500
 
 
-async def test_get_memories_includes_field_metadata_from_schema_and_yaml(
+async def test_writing_preferences_validate_patch_and_default(
     async_client: httpx.AsyncClient,
-) -> None:
+):
     await sign_in(async_client)
-    records = (await async_client.get("/api/memories")).json()
-    assert [item["key"] for item in records] == [
-        "target_direction",
-        "cities",
-        "excluded_types",
-        "job_notes",
-        "tone",
-        "bullet_length",
-        "tech_terms",
-    ]
-    by_key = {item["key"]: item for item in records}
-    assert by_key["target_direction"] == {
-        "key": "target_direction",
-        "value": None,
-        "revision": 0,
-        "deleted": False,
-        "label": "目标方向",
-        "group": "job",
-        "type": "text",
-        "options": [],
-        "max_length": 100,
-        "max_items": None,
+    path = "/api/writing-preference"
+    initial = (await async_client.get(path)).json()
+    assert initial["revision"] == 0
+    assert initial["options"]["tone"] == ["平实", "简洁有力"]
+    assert set(initial["values"].values()) == {None}
+    assert (
+        await async_client.put(path, json={"expected_revision": 0, "tone": "非法"})
+    ).status_code == 422
+
+    response = await async_client.put(
+        path, json={"expected_revision": 0, "tone": "平实", "tech_terms": "英文原名"}
+    )
+    assert response.json()["revision"] == 1
+    assert (
+        await async_client.put(path, json={"expected_revision": 0, "tone": None})
+    ).status_code == 409
+    response = await async_client.put(path, json={"expected_revision": 1, "tone": None})
+    assert response.json()["values"] == {
+        "tone": None,
+        "tech_terms": "英文原名",
+        "bullet_length": None,
     }
-    assert by_key["cities"] == {
-        "key": "cities",
-        "value": None,
-        "revision": 0,
-        "deleted": False,
-        "label": "城市",
-        "group": "job",
-        "type": "list",
-        "options": [],
-        "max_length": 20,
-        "max_items": 5,
-    }
-    assert by_key["tone"] == {
-        "key": "tone",
-        "value": None,
-        "revision": 0,
-        "deleted": False,
-        "label": "语气",
-        "group": "writing",
-        "type": "enum",
-        "options": ["平实", "简洁有力"],
-        "max_length": None,
-        "max_items": None,
-    }
-    assert by_key["bullet_length"]["options"] == ["尽量一行", "不超过两行", "不限"]
-    assert by_key["tech_terms"]["options"] == ["英文原名", "中文", "中英并列"]
+    assert response.json()["revision"] == 2
+    archive = (await async_client.get("/api/account/export")).json()
+    assert archive["writing_preference"][0]["tech_terms"] == "英文原名"

@@ -62,12 +62,23 @@ def _read_resume(result: Payload) -> Payload:
     return {"version": result.get("version")}
 
 
+def _memory_record(result: Payload) -> Payload:
+    return {
+        key: result[key]
+        for key in ("content", "field", "value", "quote", "action_id")
+        if key in result
+    }
+
+
 _DETAILS: dict[str, Callable[[Payload], Payload]] = {
     "list_jobs": _list_jobs,
     "read_job": _read_job,
     "read_facts": _read_facts,
     "read_match_report": _read_match_report,
     "read_resume": _read_resume,
+    "remember": _memory_record,
+    "forget": _memory_record,
+    "set_writing_preference": _memory_record,
 }
 
 

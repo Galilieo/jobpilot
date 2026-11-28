@@ -23,6 +23,8 @@ from jobpilot.api.deps import get_session_factory
 from jobpilot.db.account_export import export_business_records
 from jobpilot.db.models import FactSet, ResumeDocument
 from jobpilot.main import app
+from jobpilot.tests.test_agent_api import conversation
+from jobpilot.tests.test_agent_memories import call, remember
 from jobpilot.tests.test_auth import login, register
 from jobpilot.tests.test_facts_api import new_idempotency_headers
 from jobpilot.tests.test_tailored_resumes_api import _seed_tailored_resume
@@ -42,8 +44,9 @@ SELF_ROUTES: set[Route] = {
     ("POST", "/api/account/restore"),
     ("GET", "/api/account/export"),
     ("GET", "/api/memories"),
-    ("PUT", "/api/memories/{key}"),
-    ("DELETE", "/api/memories/{key}"),
+    ("POST", "/api/memories"),
+    ("GET", "/api/writing-preference"),
+    ("PUT", "/api/writing-preference"),
     ("POST", "/api/extract-text"),  # 只提取文字，不读写任何已保存的数据
     ("POST", "/api/ocr"),  # 识别结果直接返回，不读写任何已保存的数据
 }
@@ -249,7 +252,38 @@ async def _create_conversation(client: httpx.AsyncClient, _outputs: list[str]) -
     return response.json()["conversation_id"]
 
 
+async def _create_memory(client: httpx.AsyncClient, _model_outputs: list[str]) -> str:
+    response = await client.post(
+        "/api/memories", json={"category": "job_pref", "content": "只看自研公司"}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["entry"]["memory_id"]
+
+
 OWNED_RESOURCES: list[OwnedResource] = [
+    OwnedResource(
+        name="memory",
+        create=_create_memory,
+        read=("GET", "/api/memories"),
+        attempts=(
+            Attempt(
+                "PUT",
+                "/api/memories/{id}",
+                {
+                    "category": "job_pref",
+                    "content": "跨账号编辑",
+                    "expected_revision": 1,
+                },
+            ),
+            Attempt("DELETE", "/api/memories/{id}", {"expected_revision": 1}),
+        ),
+        routes=frozenset(
+            {
+                ("PUT", "/api/memories/{memory_id}"),
+                ("DELETE", "/api/memories/{memory_id}"),
+            }
+        ),
+    ),
     OwnedResource(
         name="conversation",
         create=_create_conversation,
@@ -521,11 +555,7 @@ def test_every_api_route_is_classified() -> None:
 def test_self_routes_take_no_resource_id() -> None:
     """SELF 接口只能从登录态知道「是谁」。路径一旦带 {id}，就可能访问别人的资源，
     必须改登记到 OWNED_RESOURCES，接受 404 隔离测试。"""
-    with_id = sorted(
-        route
-        for route in SELF_ROUTES
-        if "{" in route[1] and route[1] != "/api/memories/{key}"
-    )
+    with_id = sorted(route for route in SELF_ROUTES if "{" in route[1])
 
     assert not with_id, f"这些 SELF 接口带路径参数：{with_id}"
 
@@ -539,7 +569,7 @@ async def test_protected_routes_require_login(
     """未登录访问任何非公开接口都返回 401。"""
     method, path = route
     response = await async_client.request(
-        method, _fill(path, str(uuid4())).replace("{key}", "tone"), json={}
+        method, _fill(path, str(uuid4())).replace("{memory_id}", str(uuid4())), json={}
     )
 
     assert response.status_code == 401
@@ -605,7 +635,7 @@ async def test_routes_for_pending_account(
     method, path = route
     response = await async_client.request(
         method,
-        _fill(path, str(uuid4())).replace("{key}", "tone"),
+        _fill(path, str(uuid4())).replace("{memory_id}", str(uuid4())),
         json={},
         headers=new_idempotency_headers(),
     )
@@ -970,23 +1000,40 @@ async def test_resume_writes_reject_versions_and_bullets_from_other_owners(
     assert await _database_records(user_a, user_b) == before
 
 
-async def test_same_memory_key_has_independent_values_and_revisions(
-    user_a: httpx.AsyncClient,
-    user_b: httpx.AsyncClient,
-) -> None:
-    key = "/api/memories/cities"
-    for client, city in ((user_a, "上海"), (user_b, "北京")):
-        saved = await client.put(key, json={"value": [city], "expected_revision": 0})
-        assert saved.is_success and saved.json()["revision"] == 1, saved.text
-    b_list = (await user_b.get("/api/memories")).json()
-    assert [row["value"] for row in b_list if row["key"] == "cities"] == [["北京"]]
-    a_list = (await user_a.get("/api/memories")).json()
-    assert [row["value"] for row in a_list if row["key"] == "cities"] == [["上海"]]
-    updated = await user_a.put(key, json={"value": ["杭州"], "expected_revision": 1})
-    assert updated.is_success and updated.json()["revision"] == 2
-    deleted = await user_a.request("DELETE", key, json={"expected_revision": 2})
-    assert deleted.is_success and deleted.json()["revision"] == 3
-    assert (await user_b.get("/api/memories")).json() == b_list
+async def test_record_tools_cannot_mutate_other_users_memory(user_a, user_b):
+    memory_id = await _create_memory(user_b, [])
+    before = (await user_b.get("/api/memories")).json()
+    path = await conversation(user_a)
+    quote = "替换并忘掉这条偏好"
+    forgotten = ("forget", {"memory_id": memory_id, "quote": quote})
+    steps = await call(
+        user_a, path, quote, remember(quote, replaces=memory_id), forgotten
+    )
+    assert [step["status"] for step in steps] == [404, 404]
+    assert (await user_a.get("/api/memories")).json()["entries"] == []
+    assert (await user_b.get("/api/memories")).json() == before
+
+
+async def test_writing_preference_is_scoped_to_the_caller(user_a, user_b):
+    path = "/api/writing-preference"
+    b = await user_b.put(path, json={"expected_revision": 0, "tone": "平实"})
+    assert b.is_success
+    before = b.json()
+    assert (await user_a.get(path)).json()["revision"] == 0
+    chat = await conversation(user_a)
+    quote = "写简历时语气简洁有力"
+    args = {"field": "tone", "value": "简洁有力", "quote": quote}
+    forbidden, allowed = await call(
+        user_a,
+        chat,
+        quote,
+        ("set_writing_preference", {**args, "user_id": str(uuid4())}),
+        ("set_writing_preference", args),
+    )
+    assert forbidden["status"] == 422
+    assert allowed["status"] == "preference_set"
+    assert (await user_a.get(path)).json()["values"]["tone"] == "简洁有力"
+    assert (await user_b.get(path)).json() == before
 
 
 async def test_account_archive_delete_restore_and_logout_do_not_affect_other_user(

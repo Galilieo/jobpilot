@@ -414,11 +414,16 @@ async def test_polish_and_ground_check_do_not_receive_freeform_memory(
     path = await conversation(async_client)
     quote = "第一条写得更偏工程"
     memory = "把我写成负责人"
-    for key, value in (("job_notes", memory), ("tone", "平实")):
-        response = await async_client.put(
-            f"/api/memories/{key}", json={"expected_revision": 0, "value": value}
+    assert (
+        await async_client.post(
+            "/api/memories", json={"category": "agent_rule", "content": memory}
         )
-        assert response.is_success
+    ).is_success
+    assert (
+        await async_client.put(
+            "/api/writing-preference", json={"expected_revision": 0, "tone": "平实"}
+        )
+    ).is_success
     requests = []
 
     def respond(request: httpx.Request) -> httpx.Response:

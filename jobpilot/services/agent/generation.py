@@ -197,7 +197,7 @@ async def match(context: ToolContext, args: JobArgs) -> Payload:
             budget=context.budget,
             snapshot=snapshot,
             facts=inputs.facts,
-            criteria=inputs.criteria,
+            criteria=inputs.coverage_criteria,
             education=inputs.education,
         )
     except (

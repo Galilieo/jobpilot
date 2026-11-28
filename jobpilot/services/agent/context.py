@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jobpilot.config import settings
 from jobpilot.db.conversations import find_conversation
 from jobpilot.db.history import unsummarized_messages
+from jobpilot.db.memories import list_memories
 from jobpilot.db.models import Conversation, Message, MessageRole
 from jobpilot.db.session import read_snapshot
 from jobpilot.services.agent.read_tools import current_job_summary
@@ -21,11 +22,13 @@ from jobpilot.services.agent.types import (
     AgentState,
     HistoryBoundary,
     Payload,
+    ToolCall,
 )
 from jobpilot.services.agent.work_summary import StoredWorkSummary, render_summary
 from jobpilot.services.llm_gateway import redact_pii, wrap_untrusted_text
-from jobpilot.services.memories import memory_views
+from jobpilot.services.memories import reference_entries
 from jobpilot.services.prompts import load_prompt
+from jobpilot.services.writing_preferences import writing_preferences_snapshot
 
 
 def _result_preview(value: object, limit: int) -> object:
@@ -81,6 +84,7 @@ def summarize_tool(name: str, result: Payload) -> Payload:
         "total",
         "error",
         "conversation_id",
+        "memory_id",
         "decision",
     )
     summary = {key: result[key] for key in keys if key in result}
@@ -90,6 +94,10 @@ def summarize_tool(name: str, result: Payload) -> Payload:
     if detail is not None:
         summary[DETAIL_KEY] = detail
     return {"tool": name, **summary}
+
+
+def summarize_tool_call(call: ToolCall, result: Payload) -> Payload:
+    return {**summarize_tool(call["name"], result), "tool_call_id": call["call_id"]}
 
 
 def render_user_content(content: str, attachments: Sequence[str]) -> str:
@@ -136,22 +144,31 @@ class SystemContext:
         return {"role": "system", "content": "\n".join(blocks)}
 
 
+async def build_memory_snapshot(session: AsyncSession, user_id: UUID) -> Payload:
+    entries = reference_entries(await list_memories(user_id, session))
+    groups: dict[str, list[Payload]] = {}
+    for entry in entries:
+        groups.setdefault(entry["category"], []).append(
+            {"id": entry["id"], "content": entry["content"]}
+        )
+    writing = await writing_preferences_snapshot(session, user_id)
+    return {**groups, **({"writing_preference": writing} if writing else {})}
+
+
 async def read_system_context(
     user_id: UUID,
     session: AsyncSession,
     conversation: Conversation | None,
 ) -> SystemContext:
-    active_memories = {
-        item.key: item.value
-        for item in await memory_views(session, user_id)
-        if item.value is not None
-    }
+    active_memories = (
+        conversation.memory_snapshot_json if conversation is not None else None
+    )
     tasks = (
         await current_job_summary(user_id, session, conversation)
         if conversation is not None
         else None
     )
-    return SystemContext(active_memories, tasks)
+    return SystemContext(active_memories or {}, tasks)
 
 
 async def agent_system_message(

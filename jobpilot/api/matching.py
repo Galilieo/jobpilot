@@ -36,6 +36,7 @@ from jobpilot.db.models import (
 from jobpilot.db.reports import add_match_report
 from jobpilot.db.runs import set_run_status
 from jobpilot.services import drafts
+from jobpilot.services.criteria_match import LocationCheck
 from jobpilot.services.facts import TruncatedOutputError
 from jobpilot.services.jobs import (
     ParsedJob,
@@ -133,6 +134,7 @@ class MatchReportOut(BaseModel):
     preferred_summary: CoverageCounts
     main_gaps: list[str]
     items: list[MatchItemOut]
+    location_check: LocationCheck | None = None
     created_at: datetime
 
 
@@ -175,6 +177,7 @@ def _hydrate_report_out(
     main_gaps: Sequence[str],
     cited_by_id: Mapping[UUID, CitedFactOut],
     criteria_by_id: Mapping[str, CitedCriterionOut],
+    location_check: LocationCheck | None,
 ) -> MatchReportOut:
     """用运行当时固定的岗位快照与事实版本填充报告详情。"""
     req_by_id = {req.requirement_id: req for req in snapshot.requirements}
@@ -210,6 +213,7 @@ def _hydrate_report_out(
         preferred_summary=preferred_summary,
         main_gaps=list(main_gaps),
         items=hydrated_items,
+        location_check=location_check,
         created_at=created_at,
     )
 
@@ -278,7 +282,7 @@ async def create_match_report(
             budget=ModelBudget(**_MATCH_BUDGET),
             snapshot=snapshot,
             facts=match_inputs.facts,
-            criteria=match_inputs.criteria,
+            criteria=match_inputs.coverage_criteria,
             education=match_inputs.education,
         )
     except _MODEL_ERRORS:
@@ -311,6 +315,7 @@ async def create_match_report(
         main_gaps=built.main_gaps,
         cited_by_id=cited_by_id,
         criteria_by_id=criteria_by_id,
+        location_check=match_inputs.location_check(snapshot.basic_fields.location),
     )
 
 
@@ -406,4 +411,5 @@ async def get_match_report(
         main_gaps=report.main_gaps,
         cited_by_id=cited_by_id,
         criteria_by_id=_criteria_map(match_inputs),
+        location_check=match_inputs.location_check(snapshot.basic_fields.location),
     )

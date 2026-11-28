@@ -65,3 +65,11 @@ filler_clauses:
 education_modifiers: [学历]
 education_review_cues: [全日制, 统招]
 schedule_modifiers: [可以, 可, 需, 须, 要求, 实习]
+
+indefinite_locations:
+  - 多地
+  - 全国
+  - 不限
+  - 待定
+  - 远程
+  - remote

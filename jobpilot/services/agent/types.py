@@ -23,6 +23,7 @@ class ToolCategory(StrEnum):
     READ = "read"
     GENERATE = "generate"
     WRITE = "write"
+    RECORD = "record"
     ASK = "ask"
 
 

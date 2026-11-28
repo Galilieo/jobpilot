@@ -32,7 +32,7 @@ from jobpilot.services.agent.arguments import (
     ResumeArgs,
 )
 from jobpilot.services.agent.types import Payload, ToolArgs, ToolContext, ToolError
-from jobpilot.services.jobs import effective_parsed_job
+from jobpilot.services.jobs import ParsedJob, effective_parsed_job
 from jobpilot.services.llm_gateway import preview_text
 from jobpilot.services.matching import load_match_inputs
 from jobpilot.services.resume_versions import ResumeNotFoundError, load_resume
@@ -118,10 +118,18 @@ async def read_match_report(context: ToolContext, args: MatchReportArgs) -> Payl
         if report is None:
             raise ToolError("匹配报告不存在", 404)
         run = await session.get_one(AiRun, report.run_id)
+        location = None
+        if run.fact_set_id is not None and run.job_snapshot_json is not None:
+            inputs = await load_match_inputs(
+                session, context.agent.user_id, run.fact_set_id
+            )
+            snapshot = ParsedJob.model_validate(run.job_snapshot_json)
+            location = inputs.location_check(snapshot.basic_fields.location)
     return {
         "report_id": str(report.report_id),
         "items": report.items_json,
         "main_gaps": report.main_gaps,
+        "location_check": asdict(location) if location else None,
         "job_snapshot": run.job_snapshot_json,
         "fact_set_id": str(run.fact_set_id),
     }

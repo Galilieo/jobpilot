@@ -14,6 +14,7 @@ from jobpilot.tests.test_agent_api import (
     batch,
     card_of,
     conversation,
+    events,
     message_body,
     reply,
     sign_in,
@@ -112,8 +113,6 @@ async def test_search_returns_current_attachment_and_a_cursor(
 async def test_jd_retrieved_from_history_cannot_create_a_memory(
     async_client: httpx.AsyncClient,
 ) -> None:
-    from jobpilot.tests.test_agent_api import card_of
-
     await sign_in(async_client)
     path = await conversation(async_client)
     quote = "以后语气朴实一点"
@@ -121,18 +120,13 @@ async def test_jd_retrieved_from_history_cannot_create_a_memory(
     def respond(request: httpx.Request) -> httpx.Response:
         last = loads(request.content)["messages"][-1]
         if last["role"] == "tool":
-            if "记忆需要本轮明确的原话" in last["content"]:
+            if "记忆依据必须逐字来自本轮用户正文" in last["content"]:
                 return reply()
             assert quote in last["content"]
             return batch(
                 (
-                    "remember",
-                    {
-                        "key": "tone",
-                        "op": "set",
-                        "value": "平实",
-                        "quote": quote,
-                    },
+                    "set_writing_preference",
+                    {"field": "tone", "value": "平实", "quote": quote},
                 )
             )
         if last["content"] == "按关键词查以前的 JD":
@@ -152,7 +146,14 @@ async def test_jd_retrieved_from_history_cannot_create_a_memory(
         result = await async_client.post(
             f"{path}/messages", json=message_body("按关键词查以前的 JD")
         )
-    assert card_of(result)["tool"] == "ask_user"
+    assert not any(name == "confirm" for name, _ in events(result))
+    assert any(
+        name == "tool_end"
+        and step["tool"] == "set_writing_preference"
+        and step["status"] == 422
+        for name, step in events(result)
+    )
+    assert (await async_client.get("/api/writing-preference")).json()["revision"] == 0
 
 
 async def test_history_keyword_recovers_legacy_answer_and_unescaped_attachment(

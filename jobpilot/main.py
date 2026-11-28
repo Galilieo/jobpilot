@@ -41,7 +41,6 @@ from jobpilot.services.accounts import purge_daily, purge_with_logging
 from jobpilot.services.agent.runtime import AgentRuntime
 from jobpilot.services.applications import ApplicationError
 from jobpilot.services.llm_gateway import DailyModelQuotaError
-from jobpilot.services.memory_words import memory_vocabulary
 
 logger = logging.getLogger("uvicorn.error").getChild("jobpilot")
 
@@ -56,7 +55,6 @@ async def daily_quota_response(
 
 async def _start_resources(app: FastAPI, resources: AsyncExitStack) -> None:
     """初始化服务，资源就绪后立即登记退出时的释放动作。"""
-    memory_vocabulary()
     app.state.run_launcher = RunLauncher()
     app.state.agent_runtime = AgentRuntime()
     engine = create_database_engine(

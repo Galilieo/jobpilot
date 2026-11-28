@@ -24,6 +24,12 @@ from jobpilot.db.models import (
     FactSetCriterion,
     FactSetEducation,
 )
+from jobpilot.services.job_facets import (
+    MULTI_CITY_LABEL,
+    OTHER_LABEL,
+    job_cities,
+    normalize_key,
+)
 from jobpilot.services.jobs import BasicFields, Requirement, RequirementType
 
 DEFAULT_CRITERIA_RULES = REPO_ROOT / "jobpilot" / "data" / "criteria_rules.yaml"
@@ -67,6 +73,7 @@ class CriteriaRules:
     filler_clauses: frozenset[str]
     education_modifiers: tuple[str, ...]
     schedule_modifiers: tuple[str, ...]
+    indefinite_locations: tuple[str, ...]
 
     @property
     def degree_pattern(self) -> re.Pattern[str]:
@@ -108,6 +115,7 @@ def load_criteria_rules(path: Path) -> CriteriaRules:
         filler_clauses=frozenset(data.get("filler_clauses") or ()),
         education_modifiers=tuple(data.get("education_modifiers") or ()),
         schedule_modifiers=tuple(data.get("schedule_modifiers") or ()),
+        indefinite_locations=tuple(data.get("indefinite_locations") or ()),
     )
 
 
@@ -129,6 +137,7 @@ class CriterionCandidate:
     text_value: str | None
     text: str
     label: str = "求职条件"
+    list_value: list[str] | None = None
 
     @classmethod
     def from_row(cls, row: FactSetCriterion) -> "CriterionCandidate":
@@ -137,15 +146,69 @@ class CriterionCandidate:
             display = f"每周可到岗 {row.int_value} 天"
         elif field is CriterionField.INTERNSHIP_MONTHS:
             display = f"可实习 {row.int_value} 个月"
-        else:
+        elif field is CriterionField.EARLIEST_START:
             display = f"最早 {row.text_value} 到岗"
+        elif field is CriterionField.TARGET_DIRECTION:
+            display = f"目标方向：{row.text_value}"
+        else:
+            display = "意向城市：" + "、".join(row.list_value or [])
         return cls(
             ref_id=f"criteria.{field.value}",
             field=field,
             int_value=row.int_value,
             text_value=row.text_value,
+            list_value=row.list_value,
             text=display,
         )
+
+
+class LocationVerdict(StrEnum):
+    MATCH = "match"
+    OUTSIDE = "outside"
+    REVIEW = "review"
+
+
+_LOCATION_NOTES = {
+    LocationVerdict.MATCH: "地点符合意向城市",
+    LocationVerdict.OUTSIDE: "地点不在意向城市",
+    LocationVerdict.REVIEW: "工作地点待核对",
+}
+
+
+@dataclass(frozen=True)
+class LocationCheck:
+    status: LocationVerdict
+    note: str
+    location: str | None
+    preferred_cities: list[str]
+
+
+def compare_location(
+    location: str | None, preferred_cities: list[str] | None
+) -> LocationCheck | None:
+    """地点单独提示，不进入岗位要求覆盖或改写。"""
+    if not preferred_cities:
+        return None
+    normalized = normalize_key(location or "")
+    actual = set(job_cities(location))
+    preferred = {city for name in preferred_cities for city in job_cities(name)}
+    recognized = actual - {OTHER_LABEL, MULTI_CITY_LABEL}
+    if recognized & preferred or any(
+        normalize_key(city) in normalized for city in preferred_cities
+    ):
+        verdict = LocationVerdict.MATCH
+    elif (
+        not recognized
+        or MULTI_CITY_LABEL in actual
+        or any(
+            normalize_key(marker) in normalized
+            for marker in default_criteria_rules().indefinite_locations
+        )
+    ):
+        verdict = LocationVerdict.REVIEW
+    else:
+        verdict = LocationVerdict.OUTSIDE
+    return LocationCheck(verdict, _LOCATION_NOTES[verdict], location, preferred_cities)
 
 
 @dataclass(frozen=True)

@@ -22,6 +22,9 @@ from jobpilot.db.models import (
     INTERNSHIP_MONTHS_MIN,
     ONSITE_DAYS_MAX,
     ONSITE_DAYS_MIN,
+    PREFERRED_CITY_CHARS,
+    PREFERRED_CITY_COUNT,
+    TARGET_DIRECTION_CHARS,
     CriterionField,
     DegreeLevel,
     EducationStatus,
@@ -150,6 +153,7 @@ class DraftCriterion(BaseModel):
     status: ItemStatus
     int_value: int | None = None
     text_value: str | None = None
+    list_value: list[str] | None = None
     source: FactSource
     source_doc_id: UUID | None = None
     source_quote: str | None = None
@@ -179,6 +183,7 @@ class DraftCriterion(BaseModel):
             status=status,
             int_value=row.int_value,
             text_value=row.text_value,
+            list_value=row.list_value,
             source=FactSource(row.source),
             source_doc_id=row.source_doc_id,
             source_quote=row.source_quote,
@@ -194,6 +199,7 @@ class DraftCriterion(BaseModel):
             field=self.field,
             int_value=self.int_value,
             text_value=self.text_value,
+            list_value=self.list_value,
             source=self.source,
             source_doc_id=self.source_doc_id,
             source_quote=self.source_quote,
@@ -574,15 +580,35 @@ async def _find_published_education(
 
 
 def _validate_criterion_values(
-    field: CriterionField, int_value: int | None, text_value: str | None
-) -> tuple[int | None, str | None]:
-    if field is CriterionField.EARLIEST_START:
+    field: CriterionField,
+    int_value: int | None,
+    text_value: str | None,
+    list_value: list[str] | None,
+) -> tuple[int | None, str | None, list[str] | None]:
+    if field is CriterionField.PREFERRED_CITIES:
+        if int_value is not None or text_value is not None or list_value is None:
+            raise CriterionValueError("意向城市只能填写城市列表")
+        cities = list(dict.fromkeys(city.strip() for city in list_value))
+        if not 1 <= len(cities) <= PREFERRED_CITY_COUNT or any(
+            not 1 <= len(city) <= PREFERRED_CITY_CHARS for city in cities
+        ):
+            raise CriterionValueError(
+                f"请填写 1 至 {PREFERRED_CITY_COUNT} 个城市，"
+                f"每项不超过 {PREFERRED_CITY_CHARS} 字"
+            )
+        return None, None, cities
+    if list_value is not None:
+        raise CriterionValueError("只有意向城市可以填写列表")
+    if field in (CriterionField.EARLIEST_START, CriterionField.TARGET_DIRECTION):
         if int_value is not None:
-            raise CriterionValueError("最早到岗时间不能填整数")
+            raise CriterionValueError("最早到岗时间和目标方向只能填写文字")
         cleaned = (text_value or "").strip()
-        if not cleaned or len(cleaned) > 200:
-            raise CriterionValueError("最早到岗时间不能为空且不超过 200 字")
-        return None, cleaned
+        limit = (
+            TARGET_DIRECTION_CHARS if field is CriterionField.TARGET_DIRECTION else 200
+        )
+        if not cleaned or len(cleaned) > limit:
+            raise CriterionValueError(f"该求职条件不能为空且不超过 {limit} 字")
+        return None, cleaned, None
     if text_value is not None:
         raise CriterionValueError("到岗天数和实习月数只能填整数")
     low, high = (
@@ -592,7 +618,7 @@ def _validate_criterion_values(
     )
     if int_value is None or not (low <= int_value <= high):
         raise CriterionValueError(f"{field.value} 必须在 {low} 到 {high} 之间")
-    return int_value, None
+    return int_value, None, None
 
 
 def _clean_optional_text(value: str | None) -> str | None:
@@ -868,6 +894,7 @@ async def edit_criterion(
     *,
     int_value: int | None = None,
     text_value: str | None = None,
+    list_value: list[str] | None = None,
     confirmed: bool | None = None,
     delete: bool = False,
     expected_revision: int | None = None,
@@ -890,18 +917,20 @@ async def edit_criterion(
         save_draft(draft, criteria=[*remaining, deleted])
         return deleted
 
-    has_value = int_value is not None or text_value is not None
+    values = (
+        _validate_criterion_values(field, int_value, text_value, list_value)
+        if any(value is not None for value in (int_value, text_value, list_value))
+        else None
+    )
     if existing is None and published is None:
-        if not has_value:
+        if values is None:
             raise ItemNotFoundError(field)
-        checked_int, checked_text = _validate_criterion_values(
-            field, int_value, text_value
-        )
         created = DraftCriterion(
             field=field,
             status=ItemStatus.CONFIRMED if confirmed else ItemStatus.PENDING,
-            int_value=checked_int,
-            text_value=checked_text,
+            int_value=values[0],
+            text_value=values[1],
+            list_value=values[2],
             source=FactSource.USER,
         )
         save_draft(draft, criteria=[*items, created])
@@ -914,18 +943,17 @@ async def edit_criterion(
     if existing.status is ItemStatus.DELETED:
         existing.status = ItemStatus.PENDING
 
-    if has_value:
-        checked_int, checked_text = _validate_criterion_values(
-            field, int_value, text_value
-        )
-        if (checked_int, checked_text) != (existing.int_value, existing.text_value):
-            existing.int_value = checked_int
-            existing.text_value = checked_text
-            existing.source = FactSource.USER
-            existing.source_doc_id = existing.source_quote = None
-            existing.span_start = existing.span_end = None
-            existing.quote_verified = False
-            existing.review_reasons = []
+    if values is not None and values != (
+        existing.int_value,
+        existing.text_value,
+        existing.list_value,
+    ):
+        existing.int_value, existing.text_value, existing.list_value = values
+        existing.source = FactSource.USER
+        existing.source_doc_id = existing.source_quote = None
+        existing.span_start = existing.span_end = None
+        existing.quote_verified = False
+        existing.review_reasons = []
 
     if confirmed is not None:
         if confirmed and existing.blocked:

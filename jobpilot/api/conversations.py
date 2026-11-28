@@ -18,6 +18,7 @@ from jobpilot.db.conversations import (
     latest_decided_action,
     pending_action,
     set_job_binding,
+    undone_record_actions,
 )
 from jobpilot.db.conversations import (
     list_conversations as list_owned_conversations,
@@ -88,6 +89,7 @@ class ConversationDetail(ConversationOut):
     pending_action: dict[str, Any] | None
     latest_decided_action: dict[str, Any] | None
     confirmation_status: ConfirmationStatus | None
+    undone_record_actions: list[UUID]
 
 
 async def require_conversation(
@@ -136,6 +138,7 @@ async def get_conversation(
         run = await latest_agent_run(user.user_id, db, conversation_id)
         card = await latest_confirmation(user.user_id, db, run.run_id) if run else None
         decided = await latest_decided_action(user.user_id, db, conversation_id)
+        undone = await undone_record_actions(db, user.user_id, conversation_id)
     stream = request.app.state.agent_runtime.streams.get(run.run_id) if run else None
     phase = (
         confirmation_status(run, card, stream.action_id if stream else None)
@@ -155,6 +158,7 @@ async def get_conversation(
             else None
         ),
         confirmation_status=phase,
+        undone_record_actions=undone,
     )
 
 

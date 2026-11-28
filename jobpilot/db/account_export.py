@@ -28,6 +28,7 @@ from jobpilot.db.models import (
     TailoredResume,
     User,
     UserJob,
+    WritingPreference,
 )
 
 # 只列用户拥有的业务表，会话、幂等响应和模型调用记录没有导出入口。
@@ -44,7 +45,8 @@ _EXPORT_TABLES = {
     "ai_runs": AiRun.__table__,
     "conversations": Conversation.__table__,
     "messages": Message.__table__,
-    "memories": Memory.__table__,
+    "memory": Memory.__table__,
+    "writing_preference": WritingPreference.__table__,
     "agent_actions": AgentAction.__table__,
     "tailored_bullets": TailoredBullet.__table__,
     "bullet_facts": BulletFact.__table__,

@@ -25,8 +25,13 @@ async def test_tailoring_sends_preferences_from_run_creation(
 ) -> None:
     user_id = await sign_in(async_client, "writing-snapshot@example.invalid")
     inputs = await seed_inputs(session_factory, user_id)
-    path = "/api/memories/tone"
-    old = await async_client.put(path, json={"expected_revision": 0, "value": "平实"})
+    memory = "只用记忆里的标记词甲乙丙"
+    saved = await async_client.post(
+        "/api/memories", json={"category": "agent_rule", "content": memory}
+    )
+    assert saved.is_success
+    path = "/api/writing-preference"
+    old = await async_client.put(path, json={"expected_revision": 0, "tone": "平实"})
     assert old.status_code == 200
     model = FakeModel(inputs.fact_ids)
     requests: list[str] = []
@@ -38,6 +43,7 @@ async def test_tailoring_sends_preferences_from_run_creation(
         payload = loads(request.content)
         system = payload["messages"][0]["content"]
         requests.append(system)
+        assert memory not in str(payload["messages"])
         # 假上游按提示词类型选择输出，不参与措辞检查。
         model._kinds[system] = model._kinds[system.split("\n\n写作偏好\n", 1)[0]]
         return model(request)
@@ -48,7 +54,7 @@ async def test_tailoring_sends_preferences_from_run_creation(
         assert started.status_code == 202
         try:
             new = await async_client.put(
-                path, json={"expected_revision": 1, "value": "简洁有力"}
+                path, json={"expected_revision": 1, "tone": "简洁有力"}
             )
             assert new.status_code == 200
         finally:

@@ -144,9 +144,17 @@ async def _add_user_fact(
 
 
 async def _add_job(
-    client: httpx.AsyncClient, outputs: list[str], raw_text: str = JOB_RAW
+    client: httpx.AsyncClient,
+    outputs: list[str],
+    raw_text: str = JOB_RAW,
+    *,
+    location: str | None = None,
 ) -> dict[str, Any]:
-    outputs.append(json.dumps(JOB_PARSED, ensure_ascii=False))
+    output = {
+        **JOB_PARSED,
+        "basic_fields": {**JOB_PARSED["basic_fields"], "location": location},
+    }
+    outputs.append(json.dumps(output, ensure_ascii=False))
     response = await client.post(
         "/api/jobs", json={"raw_text": raw_text}, headers=new_idempotency_headers()
     )
@@ -154,15 +162,53 @@ async def _add_job(
     return response.json()
 
 
+async def _publish_job_preferences(client: httpx.AsyncClient, lib: dict) -> dict:
+    revision = lib["draft"]["revision"]
+    for data in (
+        {"field": "target_direction", "text_value": " Agent 应用开发 "},
+        {"field": "preferred_cities", "list_value": ["上海", " 杭州 ", "上海"]},
+    ):
+        saved = await client.put(
+            "/api/facts/criteria",
+            json={
+                **data,
+                "confirmed": True,
+                "expected_revision": revision,
+            },
+        )
+        assert saved.is_success, saved.text
+        revision = saved.json()["revision"]
+    committed = await client.post(
+        "/api/facts/commit",
+        json={
+            "expected_revision": revision,
+            "base_fact_set_id": lib["fact_set"]["fact_set_id"],
+        },
+    )
+    assert committed.status_code == 200, committed.text
+    updated = (await client.get("/api/facts")).json()
+    criteria = {item["field"]: item for item in updated["criteria"]}
+    assert criteria["target_direction"]["text_value"] == "Agent 应用开发"
+    assert criteria["preferred_cities"]["list_value"] == ["上海", "杭州"]
+    assert criteria["preferred_cities"]["source"] == "user"
+    return updated
+
+
+@pytest.mark.parametrize("preferred_cities", [False, True])
 async def test_match_persists_report_separates_summaries_and_outputs_no_score(
     signed_in: httpx.AsyncClient,
     model_outputs: list[str],
     session_factory: async_sessionmaker[AsyncSession],
+    preferred_cities: bool,
 ) -> None:
     """正常生成报告：持久化运行与快照、硬性/加分分开汇总、不输出总分、可回读详情和列表。"""
     lib = await _publish_resume_facts(signed_in, model_outputs)
+    if preferred_cities:
+        lib = await _publish_job_preferences(signed_in, lib)
     resume_fact = lib["facts"][0]
-    job = await _add_job(signed_in, model_outputs)
+    job = await _add_job(
+        signed_in, model_outputs, JOB_RAW + "\n工作地点：北京", location="北京"
+    )
     r_hard, r_pref = job["parsed"]["requirements"]
 
     model_outputs.append(
@@ -206,10 +252,21 @@ async def test_match_persists_report_separates_summaries_and_outputs_no_score(
         "preferred_summary",
         "main_gaps",
         "items",
+        "location_check",
         "created_at",
     }
+    assert report["location_check"] == (
+        {
+            "status": "outside",
+            "note": "地点不在意向城市",
+            "location": "北京",
+            "preferred_cities": ["上海", "杭州"],
+        }
+        if preferred_cities
+        else None
+    )
     assert report["fact_set_id"] == lib["fact_set"]["fact_set_id"]
-    assert report["fact_set_version"] == 1
+    assert report["fact_set_version"] == (2 if preferred_cities else 1)
     assert report["hard_summary"] == {
         "total": 1,
         "covered": 1,
