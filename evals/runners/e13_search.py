@@ -18,10 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from evals.runners.e13_dataset import (
     DATASET_VERSION,
     ConversationSample,
+    NoAnswerKind,
     Query,
     Split,
+    chunk_reference,
     dataset_digest,
     load_e13,
+    matching_refs,
     seed_conversations,
 )
 from jobpilot.config import REPO_ROOT, settings
@@ -61,6 +64,7 @@ class Method(StrEnum):
 class QueryResult:
     query_id: str
     query_type: str
+    no_answer_kind: NoAnswerKind | None
     recall_at_5: float | None
     reciprocal_rank: float | None
     top_score: float | None
@@ -106,26 +110,25 @@ def score_query(
     message_labels: dict[int, str],
     elapsed_ms: float,
 ) -> QueryResult:
-    """按消息标注计分，重复命中的块占显示名次，但同一来源只计一次召回。"""
-    retrieved = [message_labels[hit.chunk.seq] for hit in hits[:TOP_K]]
+    """命中要满足标注粒度。重复块占展示名次，每个标注只计一次召回。"""
+    retrieved = [
+        chunk_reference(message_labels[hit.chunk.seq], hit.chunk.span_start)
+        for hit in hits
+    ]
     relevant = set(query.relevant)
-    recall = len(relevant.intersection(retrieved)) / len(relevant) if relevant else None
-    rank = next(
-        (
-            rank
-            for rank, hit in enumerate(hits, 1)
-            if message_labels[hit.chunk.seq] in relevant
-        ),
-        None,
-    )
+    matches = [matching_refs(label, relevant) for label in retrieved]
+    recalled = set().union(*matches[:TOP_K])
+    recall = len(recalled) / len(relevant) if relevant else None
+    rank = next((rank for rank, sources in enumerate(matches, 1) if sources), None)
     return QueryResult(
-        query.id,
-        query.type,
-        recall,
-        (1 / rank if rank else 0.0) if relevant else None,
-        hits[0].score if hits else None,
-        round(elapsed_ms, 3),
-        retrieved,
+        query_id=query.id,
+        query_type=query.type,
+        no_answer_kind=query.no_answer_kind,
+        recall_at_5=recall,
+        reciprocal_rank=(1 / rank if rank else 0.0) if relevant else None,
+        top_score=hits[0].score if hits else None,
+        elapsed_ms=round(elapsed_ms, 3),
+        hits=retrieved[:TOP_K],
     )
 
 
@@ -138,7 +141,11 @@ def _summarize(rows: list[QueryResult]) -> dict:
         "p50_ms": median(elapsed),
         "p95_ms": elapsed[ceil(len(elapsed) * 0.95) - 1],
         "no_answer_top_scores": [
-            {"query_id": row.query_id, "score": row.top_score}
+            {
+                "query_id": row.query_id,
+                "kind": row.no_answer_kind,
+                "score": row.top_score,
+            }
             for row in rows
             if row.query_type == "no_answer"
         ],

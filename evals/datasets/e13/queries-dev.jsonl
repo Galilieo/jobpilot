@@ -1,30 +1,30 @@
 {"id": "dev-01", "query": "checkpoint", "type": "exact", "relevant": ["c01:u03"]}
 {"id": "dev-02", "query": "Temporal", "type": "exact", "relevant": ["c02:u03", "c02:a03"]}
-{"id": "dev-03", "query": "Flink CDC", "type": "exact", "relevant": ["c04:u01"]}
+{"id": "dev-03", "query": "变更事件回放", "type": "exact", "relevant": ["c04:u01@165"]}
 {"id": "dev-04", "query": "Flutter DevTools", "type": "exact", "relevant": ["c06:u01", "c06:u02"]}
 {"id": "dev-05", "query": "LCP", "type": "exact", "relevant": ["c07:u01", "c07:a04"]}
 {"id": "dev-06", "query": "OpenSearch", "type": "exact", "relevant": ["c10:u01", "c10:a01"]}
 {"id": "dev-07", "query": "PostGIS", "type": "exact", "relevant": ["c11:u01"]}
-{"id": "dev-08", "query": "WOFF2", "type": "exact", "relevant": ["c14:u02", "c14:a05"]}
-{"id": "dev-09", "query": "聊天页断开又回来时，是在哪儿捞到已经跑完的那次回答？", "type": "paraphrase", "relevant": ["c01:u02", "c01:u03", "c01:a04"]}
-{"id": "dev-10", "query": "审批第一次选了同意，恢复连接后又点成不同意，会采用哪个？", "type": "paraphrase", "relevant": ["c02:u02", "c02:a06"]}
-{"id": "dev-11", "query": "同一笔退款收到两次，要用哪些值判定后到的是副本还是新变化？", "type": "paraphrase", "relevant": ["c04:u02", "c04:a02"]}
-{"id": "dev-12", "query": "活动中只有一个消费者跟不上，谁说过是哪种划分方法把大店挤在一起？", "type": "paraphrase", "relevant": ["c05:u02", "c05:a02"]}
-{"id": "dev-13", "query": "低端机上切换列表有点顿，你建议用另一种屏幕刷新率怎么复测？", "type": "paraphrase", "relevant": ["c06:a05"]}
-{"id": "dev-14", "query": "网页上的几张商品图要一起抢带宽吗，旧改动最终提前请求了哪些图？", "type": "paraphrase", "relevant": ["c07:a02", "c07:u06"]}
-{"id": "dev-15", "query": "校门口那批设施点飘到海上，你建议分别在哪几处检查坐标？", "type": "paraphrase", "relevant": ["c11:a02"]}
-{"id": "dev-16", "query": "有个认字模型启动慢，后来在哪个时间段还保留了真识别的检查？", "type": "paraphrase", "relevant": ["c12:u02", "c12:a02"]}
-{"id": "dev-17", "query": "长聊天里地点约束改口了，还能不能直接拿压缩后的旧说法？", "type": "gist", "relevant": ["c03:u02", "c03:u03", "c03:a03"]}
+{"id": "dev-08", "query": "WOFF2", "type": "exact", "relevant": ["c14:u02", "c14:a05@0"]}
+{"id": "dev-09", "query": "掉线时那段生成没看全，重进来时靠哪里取回写完的内容？", "type": "paraphrase", "relevant": ["c01:u02", "c01:u03", "c01:a04@0", "c01:a04@175"]}
+{"id": "dev-10", "query": "先按通过，通信中途失灵，事后改点不放行，这下到底采信哪一个？", "type": "paraphrase", "relevant": ["c02:u02", "c02:a06@0", "c02:a06@38"]}
+{"id": "dev-11", "query": "退回的钱产生了两张一样的报文，应该拿哪两个值找出后来的是否仅为抄件？", "type": "paraphrase", "relevant": ["c04:u02", "c04:a02@0", "c04:a02@164"]}
+{"id": "dev-12", "query": "大促那次只有一个处理单元一直落后，是哪项路由选择困住了商户的请求？", "type": "paraphrase", "relevant": ["c05:u02", "c05:a02@0", "c05:a02@151"]}
+{"id": "dev-13", "query": "当时点开旁栏会一顿一顿的，换块更快出图的屏，你教我怎么比才公平？", "type": "paraphrase", "relevant": ["c06:a05@0", "c06:a05@43"]}
+{"id": "dev-14", "query": "点进某件货品时，最显眼的那张该先传，横着划才露出的其余几张如何安排？", "type": "paraphrase", "relevant": ["c07:a02@0", "c07:a02@165", "c07:u06"]}
+{"id": "dev-15", "query": "教学楼边取水的那个图钉落进海里，应该依次去哪些环节核查它被挪偏的原因？", "type": "paraphrase", "relevant": ["c11:a02@0"]}
+{"id": "dev-16", "query": "负责从影印件找字的程序预备得太久，实机核对最后安排在一天里什么时段？", "type": "paraphrase", "relevant": ["c12:u02", "c12:a02@0", "c12:a02@173"]}
+{"id": "dev-17", "query": "长聊天里地点约束改口了，还能不能直接拿压缩后的旧说法？", "type": "gist", "relevant": ["c03:u02", "c03:u03", "c03:a03@0"]}
 {"id": "dev-18", "query": "投张江那家数据岗前想确认排班，我那两门课挡住哪几天？", "type": "gist", "relevant": ["c04:u05"]}
 {"id": "dev-19", "query": "两个订单流职位都想面，我为什么对要轮守的那家犹豫？", "type": "gist", "relevant": ["c05:u05", "c05:a06"]}
-{"id": "dev-20", "query": "生成个人档案的同时用户还在更新简历，怎么保证文件内引用的是同一版？", "type": "gist", "relevant": ["c08:u03", "c08:a03"]}
-{"id": "dev-21", "query": "一批用户的数据到期，有一个清不掉，你说该怎么安排下一次？", "type": "gist", "relevant": ["c09:a04"]}
-{"id": "dev-22", "query": "招聘搜索那个别名以前把哪类视频职位混进开发了，建议怎么给人看错例？", "type": "gist", "relevant": ["c10:u04", "c10:a07"]}
-{"id": "dev-23", "query": "手机网络错误重试时，怎样证明既少叫几次值班人员又还看得见失败？", "type": "gist", "relevant": ["c13:u02", "c13:a02", "c13:a04"]}
-{"id": "dev-24", "query": "文档进系统能直接读到字时跑哪条路径，遇到混合页还可能漏什么？", "type": "gist", "relevant": ["c15:u02", "c15:a03"]}
-{"id": "dev-25", "query": "粒子工坊的 SSE 代理把空闲连接保留多少秒？", "type": "no_answer", "relevant": []}
-{"id": "dev-26", "query": "青芒订单变更上线后维护了多少个 Kafka 分区？", "type": "no_answer", "relevant": []}
-{"id": "dev-27", "query": "棠舟那台测试机改完后 P95 帧时延是多少毫秒？", "type": "no_answer", "relevant": []}
-{"id": "dev-28", "query": "白坡删号任务固定凌晨几点开始清理？", "type": "no_answer", "relevant": []}
-{"id": "dev-29", "query": "远潮地图的岗位允许每周在家办公几天？", "type": "no_answer", "relevant": []}
-{"id": "dev-30", "query": "林畔那个扫描件项目最终采用哪一家 OCR 引擎？", "type": "no_answer", "relevant": []}
+{"id": "dev-20", "query": "生成个人档案的同时用户还在更新简历，怎么保证文件内引用的是同一版？", "type": "gist", "relevant": ["c08:u03", "c08:a03@0", "c08:a03@48"]}
+{"id": "dev-21", "query": "一批用户的数据到期，有一个清不掉，你说该怎么安排下一次？", "type": "gist", "relevant": ["c09:a04@0", "c09:a04@164", "c09:a04@280"]}
+{"id": "dev-22", "query": "招聘搜索那个别名以前把哪类视频职位混进开发了，建议怎么给人看错例？", "type": "gist", "relevant": ["c10:u04", "c10:a07@0"]}
+{"id": "dev-23", "query": "手机网络错误重试时，怎样证明既少叫几次值班人员又还看得见失败？", "type": "gist", "relevant": ["c13:u02", "c13:a02", "c13:a04@0"]}
+{"id": "dev-24", "query": "文档进系统能直接读到字时跑哪条路径，遇到混合页还可能漏什么？", "type": "gist", "relevant": ["c15:u02", "c15:a03@0", "c15:a03@47"]}
+{"id": "dev-25", "query": "粒子工坊的 SSE 代理把空闲连接保留多少秒？", "type": "no_answer", "relevant": [], "no_answer_kind": "missing_number"}
+{"id": "dev-26", "query": "青芒订单变更上线后维护了多少个 Kafka 分区？", "type": "no_answer", "relevant": [], "no_answer_kind": "missing_number"}
+{"id": "dev-27", "query": "棠舟那台测试机改完后 P95 帧时延是多少毫秒？", "type": "no_answer", "relevant": [], "no_answer_kind": "missing_number"}
+{"id": "dev-28", "query": "博物馆壁画修复的实习，搬运前说应谁来签画面状态单？", "type": "no_answer", "relevant": [], "no_answer_kind": "unseen_topic"}
+{"id": "dev-29", "query": "上回讨论的潮汐观测岗位，船上住满一季能不能换陆上岗？", "type": "no_answer", "relevant": [], "no_answer_kind": "unseen_topic"}
+{"id": "dev-30", "query": "社区戏剧的配音工作坊，实习生需要跟演到哪一站？", "type": "no_answer", "relevant": [], "no_answer_kind": "unseen_topic"}

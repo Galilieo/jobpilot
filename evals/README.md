@@ -625,29 +625,40 @@ C 首次试跑发现 `resume-011` 的混合栏目被评测导入切成了只有�
 
 ## E13 跨对话检索
 
-`e13-v2` 逐段编写 30 段合成求职对话，共 255 轮、510 则消息，每段 6～20 轮。开发与测试各使用独立的 15 段对话和 30 条查询。两边均有主题相近的对话，例如实时订单去重与分区积压、按归属读取笔记与客服语义检索，以及公交换乘与附近地点搜索。校验会去掉消息里的空白，拒绝跨对话重复的整条消息。
+`e13-v3` 沿用第二版抽查通过的 30 段合成求职对话，共 255 轮、510 则消息，每段 6～20 轮。开发与测试各使用独立的 15 段对话和 30 条查询。第三版扩写了 30 则 500 字以上的多段回复和 157 则 100～400 字的回复，保留 68 则短回复。10 段对话在用户正文里直接贴入 JD 节选，长度 296～548 字。校验检查正文跨度与分段长度，并去掉空白后拒绝跨对话重复的整条消息。
 
-每个切分含原词、换说法、只记得大意各 8 条，以及无答案 6 条。标注使用 `c08:a03` 这样的稳定消息 ID，`u` 代表用户，`a` 代表 Agent。开发集有 19 条查询引用 Agent 回复、17 条有多个相关消息，测试集分别有 17 条和 16 条。AB 可用 `e13_dataset.seed_conversations` 装入同一批起始对话。
+每个切分含原词、换说法、只记得大意各 8 条，以及无答案 6 条。无答案查询中 3 条问已有话题中从未给出的数字，3 条问语料从未聊过的行业或实习安排。标注使用 `c08:a03` 这样的稳定消息 ID。长消息可以用 `@起点` 标到实际分块，例如 `c04:u01@165` 指向正文中的 JD 段落。AB 可用 `e13_dataset.seed_conversations` 装入同一批起始对话。
 
-第一版语料和 SHA-256 作废。正式测试集已按 [e13-v2 封存指纹](datasets/e13/test-seal.json)重新封存。已准备 10 段供用户抽查，实际嵌入评测等待抽查完成。
+字面重合检查对查询与候选做 NFKC 正规化、大小写折叠，并移除非字母和非数字字符。取相邻字符组成不重复的二元组，以两边共有的二元组数除以查询的二元组数。每个切分在整条消息和产品实际分块两个层次分别排序，同分共享最佳名次。取标注来源中的最佳名次，零重合单列。换说法查询的相关来源在任一层次并列第一也会被拒绝。无答案查询没有相关来源名次，单独统计最相似候选的重合分数。分布见 [E13 第三版自查](datasets/e13/audit-v3.md)。
+
+前两版语料和指纹已作废。正式测试集已按 [e13-v3 封存指纹](datasets/e13/test-seal.json)重新封存。抽查稿沿用第二版的 10 段，附字数及字面重合排名。BGE-M3 实测等待抽查完成。
 
 ### 首次运行前的预期和取舍
 
 - A 使用 BGE-M3 向量与精确余弦排序。B 使用 jieba 分词后的 PostgreSQL 全文匹配。C 将 A、B 的前 20 个块以 RRF 融合，常数为 60。
 - 预期 B 对原词查询有竞争力，A 对换说法和只记得大意更有优势。预期 C 能提升前五条召回，幅度未知。无答案查询先记录每种方法的最高分，暂无拒答阈值。
 - 比较开发集上 C 与 A 的结果。只有 Recall@5 提升至少 12.5 个百分点，MRR@20 下降至多 0.03，且 p95 增加至多 100 ms，才将融合用作默认检索。开发集定下默认方案后，在正式测试集上各跑一遍 A、B、C 并记录结果。
-- Recall@5 按相关消息去重，消息的多个块仍占用展示名次。MRR 统计到第 20 个块。有答案查询用于汇总召回和 MRR；无答案分数独立列出，无匹配记为 `null`。逐查询记录耗时，汇总 p50/p95。A 含查询嵌入和向量 SQL，B 含分词和全文 SQL，C 计两段耗时之和再加融合，语料嵌入不计入查询耗时。
+- Recall@5 按相关标注去重。消息级标注接受任一块，段落级标注只接受指定起点的块，多个块仍各占展示名次。MRR 统计到第 20 个块。有答案查询用于汇总召回和 MRR。无答案按子类列出最高分，无匹配记为 `null`。逐查询记录耗时，汇总 p50/p95。A 含查询嵌入和向量 SQL，B 含分词和全文 SQL，C 计两段耗时之和再加融合，语料嵌入不计入查询耗时。
 
 ### 运行
 
-使用局部环境变量把 `POSTGRES_DB` 指向本机独立的 `jobpilot_e13`，迁移到最新版本。用 `OLLAMA_NO_CLOUD=1 ollama serve` 启动本机服务并准备 `bge-m3`。从仓库根目录运行。
+先在本机 PostgreSQL 创建独立数据库 `jobpilot_e13`。在评测专用终端设置对应的连接环境变量，避免把下列命令指向开发库。从仓库根目录验证迁移和数据封存。
 
 ```bash
-uv run --project jobpilot python -m evals.runners.e13_search --split dev --validate-only
-uv run --project jobpilot python -m evals.runners.e13_search --split test --validate-only
+export POSTGRES_DB=jobpilot_e13
+uv run --project jobpilot --locked alembic -c jobpilot/alembic.ini upgrade head
+uv run --project jobpilot --locked alembic -c jobpilot/alembic.ini check
+uv run --project jobpilot --locked python -m evals.runners.e13_search --split dev --validate-only
+uv run --project jobpilot --locked python -m evals.runners.e13_search --split test --validate-only
+```
 
-uv run --project jobpilot python -m evals.runners.e13_search --split dev
-uv run --project jobpilot python -m evals.runners.e13_search --split test
+用 `OLLAMA_NO_CLOUD=1 ollama serve` 启动本机服务，确认 `ollama list` 有 `bge-m3:latest`。2026-11-28 的启动检查确认模型元数据为 1,024 维，开发集和正式测试集均未执行嵌入。
+
+确认可以开跑后，先运行开发集，按上文门槛记录取舍，再运行封存的测试集。
+
+```bash
+uv run --project jobpilot --locked python -m evals.runners.e13_search --split dev
+uv run --project jobpilot --locked python -m evals.runners.e13_search --split test
 ```
 
 `--validate-only` 检查语料、切分和引用，不访问数据库或 Ollama。实际运行向独立评测库写入临时合成账号，读回每条查询的排序，最终删除该账号及派生索引。报告保存在 `evals/results/e13-<切分>-<数据指纹>.json`。正式测试沿用开发集已记录的模型与默认方案。
